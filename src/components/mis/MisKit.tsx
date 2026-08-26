@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Inbox, SlidersHorizontal } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Inbox, SlidersHorizontal, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
@@ -274,62 +274,132 @@ export function MisTable<T>({
   const firstShown = rows.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const lastShown = Math.min(safePage * pageSize, rows.length);
 
+  // Column widths are authored as percentages, meant as relative minimums
+  // (e.g. "give Member roughly twice the room of Cycle"), not as an exact
+  // partition of 100% — screens with many columns declare widths that add
+  // up well past 100% on purpose. table-fixed treats them as an exact
+  // partition and squeezes every column to fit, which overlaps text once
+  // there are more than a handful of columns. table-auto instead sizes each
+  // column to fit its (nowrap) content, using the declared width only as a
+  // floor, and lets the table grow past its card — which is what the
+  // horizontal-scroll wrapper below is for.
+  const colMinWidth = (w?: string) => (w ? `${Math.round((parseFloat(w) || 0) * 12)}px` : undefined);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    updateScrollState();
+    window.addEventListener('resize', updateScrollState);
+    return () => window.removeEventListener('resize', updateScrollState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns.length, visibleRows.length]);
+
+  const scrollByPage = (dir: 1 | -1) => {
+    scrollRef.current?.scrollBy({ left: dir * (scrollRef.current.clientWidth * 0.75), behavior: 'smooth' });
+  };
+
   return (
     <>
-      <div className="hidden rounded-lg border border-slate-200 bg-white shadow-xs md:block">
-        <table className="w-full table-fixed text-left text-[11px]">
-          <colgroup>
-            {columns.map((c) => (
-              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
-            ))}
-          </colgroup>
-          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-            <tr className="[&>th]:whitespace-nowrap">
+      <div className="relative hidden md:block">
+        <div
+          ref={scrollRef}
+          onScroll={updateScrollState}
+          className="mis-table-scrollbar overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-xs"
+        >
+          <table className="table-auto text-left text-[11px]">
+            <colgroup>
               {columns.map((c) => (
-                <th key={c.key} className={`px-2 py-2.5 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : ''}`}>
-                  {c.label}
-                </th>
+                <col key={c.key} style={c.width ? { width: colMinWidth(c.width) } : undefined} />
               ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {loading && (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-400">
-                  Loading…
-                </td>
+            </colgroup>
+            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <tr className="[&>th]:whitespace-nowrap">
+                {columns.map((c) => (
+                  <th
+                    key={c.key}
+                    style={{ minWidth: colMinWidth(c.width) }}
+                    className={`px-2 py-2.5 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : ''}`}
+                  >
+                    {c.label}
+                  </th>
+                ))}
               </tr>
-            )}
-            {(showIdle || showEmpty) && (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-400">
-                  <Inbox className="mx-auto mb-2 h-6 w-6" />
-                  {showIdle ? idleMessage : emptyMessage}
-                </td>
-              </tr>
-            )}
-            {!loading &&
-              visibleRows.map((row) => (
-                <tr
-                  key={rowKey(row)}
-                  className="hover:bg-slate-50 [&>td]:overflow-hidden [&>td]:text-ellipsis [&>td]:whitespace-nowrap"
-                >
-                  {columns.map((c) => (
-                    <td
-                      key={c.key}
-                      title={c.text ? c.text(row) : undefined}
-                      className={`px-2 py-2.5 text-slate-700 ${
-                        c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : ''
-                      }`}
-                    >
-                      {c.render(row)}
-                    </td>
-                  ))}
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading && (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-400">
+                    Loading…
+                  </td>
                 </tr>
-              ))}
-          </tbody>
-          {!loading && rows.length > 0 && footer}
-        </table>
+              )}
+              {(showIdle || showEmpty) && (
+                <tr>
+                  <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-400">
+                    <Inbox className="mx-auto mb-2 h-6 w-6" />
+                    {showIdle ? idleMessage : emptyMessage}
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                visibleRows.map((row) => (
+                  <tr key={rowKey(row)} className="hover:bg-slate-50 [&>td]:whitespace-nowrap">
+                    {columns.map((c) => (
+                      <td
+                        key={c.key}
+                        title={c.text ? c.text(row) : undefined}
+                        style={{ minWidth: colMinWidth(c.width) }}
+                        className={`px-2 py-2.5 text-slate-700 ${
+                          c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : ''
+                        }`}
+                      >
+                        {c.render(row)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+            </tbody>
+            {!loading && rows.length > 0 && footer && (
+              <tfoot>
+                <tr>
+                  <td colSpan={columns.length} className="border-t border-slate-200 bg-slate-50/60 p-0">
+                    {footer}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+
+        {canScrollLeft && (
+          <button
+            type="button"
+            onClick={() => scrollByPage(-1)}
+            aria-label="Scroll table left"
+            className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+        )}
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={() => scrollByPage(1)}
+            aria-label="Scroll table right"
+            className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       {/*
