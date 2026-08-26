@@ -179,7 +179,7 @@ export const LoWiseGroupRealizable: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <MisPageTitle right={<ReportExportButtons title="LO Wise Group Realizable" columns={columns} rows={groupRows} />}>
+      <MisPageTitle right={<ReportExportButtons title="LO Wise Group Realizable" period={`As on ${shortDate(applied.asOn || asOn)}`} columns={columns} rows={groupRows} />}>
         LO Wise Group Realizable
       </MisPageTitle>
 

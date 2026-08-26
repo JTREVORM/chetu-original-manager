@@ -108,7 +108,7 @@ export const DailyOverdueReport: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Daily Overdue Report" columns={columns} rows={filtered} />}>
+      <MisPageTitle right={<ReportExportButtons title="Daily Overdue Report" period={`As on ${shortDate(applied.asOn || asOn)}`} columns={columns} rows={filtered} />}>
         Daily Overdue Report
       </MisPageTitle>
 

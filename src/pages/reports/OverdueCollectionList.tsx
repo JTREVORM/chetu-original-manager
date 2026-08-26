@@ -105,7 +105,7 @@ export const OverdueCollectionList: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Overdue Collection List" columns={columns} rows={filtered} />}>
+      <MisPageTitle right={<ReportExportButtons title="Overdue Collection List" period={`${shortDate(applied.from || fromDate)} to ${shortDate(applied.till || tillDate)}`} columns={columns} rows={filtered} />}>
         Overdue Collection List
       </MisPageTitle>
 

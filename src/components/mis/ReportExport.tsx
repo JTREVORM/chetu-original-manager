@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { FileDown, FileSpreadsheet } from 'lucide-react';
 import type { MisColumn } from './MisKit';
 import { exportReportPDF } from '../../lib/reportPdf';
@@ -25,20 +26,37 @@ export function ReportExportButtons<T>({
   title,
   columns,
   rows,
+  period,
   subtitle,
   meta,
+  totals,
 }: {
   title: string;
   columns: MisColumn<T>[];
   rows: T[];
+  /** The window the report covers — printed in the PDF header. */
+  period?: string;
   subtitle?: string;
   meta?: [string, string][];
+  totals?: [string, string][];
 }) {
+  const { user } = useAuth();
   const disabled = rows.length === 0;
+  const [busy, setBusy] = useState(false);
 
-  const pdf = () => {
-    const { headers, rows: body } = buildExportData(columns, rows);
-    exportReportPDF({ title, headers, rows: body, subtitle, meta });
+  const pdf = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { headers, rows: body } = buildExportData(columns, rows);
+      // The logo is fetched on first use, so this is asynchronous.
+      await exportReportPDF({
+        title, headers, rows: body, period, subtitle, meta, totals,
+        generatedBy: user?.full_name,
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const csv = () => {
@@ -51,9 +69,15 @@ export function ReportExportButtons<T>({
 
   return (
     <div className="flex items-center gap-2">
-      <button type="button" onClick={pdf} disabled={disabled} title="Download PDF" className={`${base} bg-chetu-red hover:opacity-90`}>
+      <button
+        type="button"
+        onClick={pdf}
+        disabled={disabled || busy}
+        title="Download PDF"
+        className={`${base} bg-chetu-red hover:opacity-90`}
+      >
         <FileDown className="h-3.5 w-3.5" />
-        PDF
+        {busy ? 'Building…' : 'PDF'}
       </button>
       <button type="button" onClick={csv} disabled={disabled} title="Download Excel (CSV)" className={`${base} bg-emerald-600 hover:bg-emerald-700`}>
         <FileSpreadsheet className="h-3.5 w-3.5" />

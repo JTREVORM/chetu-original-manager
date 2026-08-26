@@ -149,7 +149,7 @@ export const ReversalRegister: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Reversal Register" columns={columns} rows={filtered} />}>
+      <MisPageTitle right={<ReportExportButtons title="Reversal Register" period={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`} columns={columns} rows={filtered} />}>
         Reversal Register
       </MisPageTitle>
 

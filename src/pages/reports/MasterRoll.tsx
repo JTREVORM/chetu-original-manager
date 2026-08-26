@@ -17,6 +17,7 @@ import {
 import { ReportExportButtons } from '../../components/mis/ReportExport';
 import { exportToCSV } from '../../lib/excelExporter';
 import { useDatabase } from '../../context/DatabaseContext';
+import { FEES, storedLoanFees } from '../../lib/fees';
 import { matchScope, useLoanRows, type LoanRow } from './reportData';
 
 const monthAgoISO = () => {
@@ -99,6 +100,22 @@ export const MasterRoll: React.FC = () => {
         ]),
     );
 
+  const totals = useMemo(() => {
+    const t = { principal: 0, interest: 0, processing: 0, crb: 0, security: 0, gm: 0, charges: 0, net: 0 };
+    for (const r of filtered) {
+      const f = storedLoanFees(r.loan);
+      t.principal += Number(r.loan.principal_amount || 0);
+      t.interest += Number(r.loan.total_interest_amount || 0);
+      t.processing += f.processingFee;
+      t.crb += f.crbFee;
+      t.security += f.securityDeposit;
+      t.gm += f.groupMaintenanceFee;
+      t.charges += f.totalDeductions;
+      t.net += f.netDisbursed;
+    }
+    return t;
+  }, [filtered]);
+
   const columns: MisColumn<LoanRow>[] = [
     { key: 'branch', label: 'Branch', width: '9%', render: (r) => r.branch_name, text: (r) => r.branch_name },
     { key: 'lo', label: 'LO', width: '9%', render: (r) => r.officer_name, text: (r) => r.officer_name },
@@ -115,12 +132,33 @@ export const MasterRoll: React.FC = () => {
       ),
       text: (r) => r.client.full_name,
     },
-    { key: 'disb', label: 'Disburse Date', width: '9%', render: (r) => shortDate(r.loan.disbursed_at) },
-    { key: 'prin', label: 'Principal', width: '9%', align: 'right', render: (r) => money(r.loan.principal_amount) },
-    { key: 'int', label: 'Interest', width: '8%', align: 'right', render: (r) => money(r.loan.total_interest_amount) },
-    { key: 'total', label: 'Total', width: '9%', align: 'right', render: (r) => money(r.loan.total_amount_payable) },
-    { key: 'sec', label: 'Security', width: '8%', align: 'right', render: (r) => money(r.loan.security_balance) },
-    { key: 'cycle', label: 'Cycle', width: '5%', align: 'center', render: (r) => r.loan.cycle_number || 1 },
+    { key: 'disb', label: 'Disburse Date', width: '7%', render: (r) => shortDate(r.loan.disbursed_at) },
+    { key: 'prin', label: 'Principal', width: '7%', align: 'right', render: (r) => money(r.loan.principal_amount) },
+    { key: 'int', label: 'Interest', width: '6%', align: 'right', render: (r) => money(r.loan.total_interest_amount) },
+    { key: 'total', label: 'Total Payable', width: '7%', align: 'right', render: (r) => money(r.loan.total_amount_payable) },
+    // The four charges taken at disbursement, as they were actually charged on
+    // this loan rather than recomputed from today's schedule.
+    { key: 'proc', label: `Processing ${FEES.processingFeePct}%`, width: '7%', align: 'right', render: (r) => money(storedLoanFees(r.loan).processingFee), text: (r) => money(storedLoanFees(r.loan).processingFee) },
+    { key: 'crb', label: `CRB ${FEES.crbFeePct}%`, width: '6%', align: 'right', render: (r) => money(storedLoanFees(r.loan).crbFee), text: (r) => money(storedLoanFees(r.loan).crbFee) },
+    { key: 'sec', label: `Security ${FEES.securityDepositPct}%`, width: '7%', align: 'right', render: (r) => money(storedLoanFees(r.loan).securityDeposit), text: (r) => money(storedLoanFees(r.loan).securityDeposit) },
+    { key: 'gm', label: 'Group Maint.', width: '6%', align: 'right', render: (r) => money(storedLoanFees(r.loan).groupMaintenanceFee), text: (r) => money(storedLoanFees(r.loan).groupMaintenanceFee) },
+    {
+      key: 'ded',
+      label: 'Total Charges',
+      width: '7%',
+      align: 'right',
+      render: (r) => <span className="font-semibold text-chetu-red">{money(storedLoanFees(r.loan).totalDeductions)}</span>,
+      text: (r) => money(storedLoanFees(r.loan).totalDeductions),
+    },
+    {
+      key: 'net',
+      label: 'Net Disbursed',
+      width: '8%',
+      align: 'right',
+      render: (r) => <span className="font-bold text-emerald-700">{money(storedLoanFees(r.loan).netDisbursed)}</span>,
+      text: (r) => money(storedLoanFees(r.loan).netDisbursed),
+    },
+    { key: 'cycle', label: 'Cycle', width: '4%', align: 'center', render: (r) => r.loan.cycle_number || 1 },
     {
       key: 'action',
       label: 'Action',
@@ -146,7 +184,22 @@ export const MasterRoll: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Master Roll" columns={columns} rows={filtered} />}>
+      <MisPageTitle
+        right={
+          <ReportExportButtons
+            title="Master Roll"
+            columns={columns}
+            rows={filtered}
+            period={`${shortDate(applied.from || fromDate)} to ${shortDate(applied.till || tillDate)}`}
+            meta={[
+              ['Processing fee', `${FEES.processingFeePct}% of principal`],
+              ['CRB fee', `${FEES.crbFeePct}% of principal`],
+              ['Security deposit', `${FEES.securityDepositPct}% of principal, refundable`],
+              ['Group maintenance', `UGX ${FEES.groupMaintenanceFee.toLocaleString()} per loan`],
+            ]}
+          />
+        }
+      >
         Master Roll
       </MisPageTitle>
 
@@ -177,6 +230,24 @@ export const MasterRoll: React.FC = () => {
         idleMessage="Choose From Date and Till Date, then press Search."
         mobileTitle={(r) => r.client.full_name}
         mobileSubtitle={(r) => `${r.loan.loan_number} • ${r.group_name}`}
+        footer={
+          filtered.length > 0 && (
+            <div className="space-y-1 px-4 py-3 text-xs font-bold text-slate-700">
+              <div className="flex flex-wrap justify-end gap-x-5 gap-y-1">
+                <span>Principal: {money(totals.principal)}</span>
+                <span>Interest: {money(totals.interest)}</span>
+                <span>Processing: {money(totals.processing)}</span>
+                <span>CRB: {money(totals.crb)}</span>
+                <span>Security: {money(totals.security)}</span>
+                <span>Group maint.: {money(totals.gm)}</span>
+              </div>
+              <div className="flex flex-wrap justify-end gap-x-5 gap-y-1 border-t border-slate-200 pt-1">
+                <span className="text-chetu-red">Total charges: {money(totals.charges)}</span>
+                <span className="text-emerald-700">Net disbursed: {money(totals.net)}</span>
+              </div>
+            </div>
+          )
+        }
       />
 
       <LoanDetailsModal row={detailsFor} onClose={() => setDetailsFor(null)} allRows={rows} />

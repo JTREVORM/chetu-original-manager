@@ -229,9 +229,9 @@ export const FeeCollectionReport: React.FC = () => {
         right={
           <ReportExportButtons
             title="Fee Collection Report"
+            period={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`}
             columns={columns}
             rows={filtered}
-            subtitle={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`}
             meta={[
               ['Admission fee', `UGX ${FEES.admissionFee.toLocaleString()}`],
               ['Passbook fee', `UGX ${FEES.passbookFee.toLocaleString()}`],

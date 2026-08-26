@@ -133,7 +133,7 @@ export const DayCollectionList: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Day Collection List" columns={columns} rows={filtered} />}>
+      <MisPageTitle right={<ReportExportButtons title="Day Collection List" period={`${shortDate(applied.from || fromDate)} to ${shortDate(applied.till || tillDate)}`} columns={columns} rows={filtered} />}>
         Day Collection List
       </MisPageTitle>
 

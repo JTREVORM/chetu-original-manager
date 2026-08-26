@@ -174,7 +174,7 @@ export const LoanClosureReport: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Loan Closure Report" columns={columns} rows={filtered} />}>
+      <MisPageTitle right={<ReportExportButtons title="Loan Closure Report" period={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`} columns={columns} rows={filtered} />}>
         Loan Closure Report
       </MisPageTitle>
 

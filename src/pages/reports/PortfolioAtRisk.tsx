@@ -166,7 +166,7 @@ export const PortfolioAtRisk: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Portfolio at Risk" columns={columns} rows={filtered} />}>
+      <MisPageTitle right={<ReportExportButtons title="Portfolio at Risk" period={`As on ${shortDate(applied.asOn || asOn)}`} columns={columns} rows={filtered} />}>
         Portfolio at Risk
       </MisPageTitle>
 
