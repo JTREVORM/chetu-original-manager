@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
 import { useNotifications } from '../context/NotificationContext';
 import { generateExpenseVoucherPDF } from '../lib/pdfGenerator';
 import { formatUGX } from '../lib/loanCalculations';
 import { ExpenseCategory, PaymentMethod } from '../types/database.types';
-import { CreditCard, Plus, Printer, Search, X, Tag } from 'lucide-react';
-import { PageHeader, FilterBar, FilterGroup, ChipRow, Chip, DesktopOnly, MobileOnly, RecordCard, CardList, EmptyState } from '../components/mobile/Responsive';
+import { CreditCard, Plus, Printer, Search, X, CalendarDays, Receipt } from 'lucide-react';
+import { FilterBar, FilterGroup, ChipRow, Chip, DesktopOnly, MobileOnly, RecordCard, CardList, EmptyState } from '../components/mobile/Responsive';
 
 export const Expenses: React.FC = () => {
   const { isAuditor, isAdmin } = useAuth();
@@ -39,6 +39,26 @@ export const Expenses: React.FC = () => {
     return matchesSearch && matchesCat;
   });
 
+  const thisMonthTotal = useMemo(() => {
+    const now = new Date();
+    return expenses
+      .filter(e => {
+        const d = new Date(e.expense_date);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      })
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  }, [expenses]);
+
+  // Building the voucher is asynchronous (the brand mark is rasterized on
+  // first use), so a failure would otherwise be a silently rejected promise.
+  const printVoucher = async (expense: Parameters<typeof generateExpenseVoucherPDF>[0]) => {
+    try {
+      await generateExpenseVoucherPDF(expense);
+    } catch {
+      addToast('error', 'Voucher Failed', 'Could not build the expense voucher PDF.');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -60,33 +80,53 @@ export const Expenses: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-12">
       {/* Header */}
-      <PageHeader
-        icon={CreditCard}
-        title="Expense Management System"
-        subtitle="Record, categorize, and audit operating expenses with printable expense vouchers."
-        actions={
-          isAdmin && !isAuditor ? (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2.5 bg-[#0B4394] hover:bg-blue-900 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Log New Expense
-            </button>
-          ) : null
-        }
-      />
-
-      {/* Summary Card */}
-      <div className="bg-[#083475] text-white p-5 rounded-2xl border border-blue-900 shadow-xl flex items-center justify-between">
-        <div>
-          <span className="text-[11px] font-bold text-blue-200 uppercase tracking-wider">Total System Expenses</span>
-          <h2 className="text-2xl font-black text-red-300 mt-1">{formatUGX(totalExpenses)}</h2>
+      <div className="rounded-lg bg-[#0B4394] p-5 text-white shadow-xs sm:p-6">
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
+          <CreditCard className="h-3.5 w-3.5 text-amber-400" />
+          Financial Ledger
         </div>
-        <div className="p-3 bg-red-500/20 text-red-300 rounded-xl">
-          <Tag className="w-6 h-6" />
+        <h1 className="text-2xl font-bold tracking-tight">Expense Management</h1>
+        <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
+          Record, categorize and audit every operating expense, with a printable voucher for each one.
+        </p>
+      </div>
+
+      {isAdmin && !isAuditor && (
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-[#0B4394] px-5 text-base font-semibold text-white hover:bg-[#093672] sm:h-10 sm:w-auto sm:text-[13px]"
+        >
+          <Plus className="h-4 w-4" />
+          Log new expense
+        </button>
+      )}
+
+      {/* Summary */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-blue-900 bg-[#083475] p-5 text-white shadow-xl">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Total System Expenses</span>
+          <h2 className="mt-1 text-2xl font-black text-red-300">{formatUGX(totalExpenses)}</h2>
+          <span className="mt-1 block text-[11px] text-blue-200">All branches, all time</span>
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B4394]/10 text-[#0B4394]">
+            <CalendarDays className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">This Month</p>
+            <p className="text-base font-black text-slate-900">{formatUGX(thisMonthTotal)}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0B4394]/10 text-[#0B4394]">
+            <Receipt className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Vouchers Logged</p>
+            <p className="text-base font-black text-slate-900">{expenses.length}</p>
+          </div>
         </div>
       </div>
 
@@ -117,48 +157,64 @@ export const Expenses: React.FC = () => {
       </FilterBar>
 
       {/* Expenses Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         <DesktopOnly>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
-                <th className="p-4">Voucher #</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">Description</th>
-                <th className="p-4">Amount</th>
-                <th className="p-4">Date</th>
-                <th className="p-4">Payment Method</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {filteredExpenses.map((exp) => (
-                <tr key={exp.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-4 font-bold text-[#0B4394]">{exp.expense_number}</td>
-                  <td className="p-4">
-                    <span className="px-2.5 py-0.5 bg-slate-100 font-bold text-slate-700 rounded-md text-[10px]">
-                      {exp.category}
-                    </span>
-                  </td>
-                  <td className="p-4 font-medium text-slate-900">{exp.description}</td>
-                  <td className="p-4 font-bold text-red-600">{formatUGX(exp.amount)}</td>
-                  <td className="p-4 text-slate-600">{exp.expense_date}</td>
-                  <td className="p-4 text-slate-600">{exp.payment_method}</td>
-                  <td className="p-4 text-right">
-                    <button
-                      onClick={() => generateExpenseVoucherPDF(exp)}
-                      className="p-1.5 bg-slate-100 hover:bg-[#0B4394] hover:text-white rounded-lg transition-colors text-slate-600"
-                      title="Print Expense Voucher PDF"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed border-collapse text-left">
+              <colgroup>
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[28%]" />
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[14%]" />
+                <col className="w-[8%]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-tight text-slate-600 [&>th]:whitespace-nowrap">
+                  <th className="px-3 py-3">Voucher #</th>
+                  <th className="px-3 py-3">Category</th>
+                  <th className="px-3 py-3">Description</th>
+                  <th className="px-3 py-3 text-right">Amount</th>
+                  <th className="px-3 py-3">Date</th>
+                  <th className="px-3 py-3">Payment Method</th>
+                  <th className="px-3 py-3 text-right">Voucher</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-[11px]">
+                {filteredExpenses.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-10 text-center text-slate-400">
+                      No expenses found.
+                    </td>
+                  </tr>
+                )}
+                {filteredExpenses.map((exp) => (
+                  <tr key={exp.id} className="transition-colors hover:bg-slate-50 [&>td]:whitespace-nowrap">
+                    <td className="px-3 py-3 font-bold text-[#0B4394]">{exp.expense_number}</td>
+                    <td className="px-3 py-3">
+                      <span className="rounded-md bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-700">
+                        {exp.category}
+                      </span>
+                    </td>
+                    <td className="truncate px-3 py-3 font-medium text-slate-900" title={exp.description}>{exp.description}</td>
+                    <td className="px-3 py-3 text-right font-bold text-red-600">{formatUGX(exp.amount)}</td>
+                    <td className="px-3 py-3 text-slate-600">{exp.expense_date}</td>
+                    <td className="px-3 py-3 text-slate-600">{exp.payment_method}</td>
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        onClick={() => printVoucher(exp)}
+                        className="rounded-lg bg-blue-50 p-1.5 text-[#0B4394] transition-colors hover:bg-blue-100"
+                        title="Print Expense Voucher PDF"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </DesktopOnly>
 
         <MobileOnly className="p-3">
@@ -183,7 +239,7 @@ export const Expenses: React.FC = () => {
                   ]}
                   actions={
                     <button
-                      onClick={() => generateExpenseVoucherPDF(exp)}
+                      onClick={() => printVoucher(exp)}
                       className="w-full min-h-11 flex items-center justify-center gap-1.5 p-1.5 bg-slate-100 hover:bg-[#0B4394] hover:text-white rounded-lg transition-colors text-slate-600 text-xs font-bold"
                     >
                       <Printer className="w-4 h-4" />
@@ -214,7 +270,7 @@ export const Expenses: React.FC = () => {
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value as ExpenseCategory })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                  className="form-field"
                 >
                   {categories.map(c => (
                     <option key={c} value={c}>{c}</option>
@@ -230,7 +286,7 @@ export const Expenses: React.FC = () => {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Detail exact reason for expense..."
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                  className="form-field"
                 />
               </div>
 
@@ -243,7 +299,7 @@ export const Expenses: React.FC = () => {
                     required
                     value={formData.amount}
                     onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                    className="form-field"
                   />
                 </div>
                 <div>
@@ -253,18 +309,18 @@ export const Expenses: React.FC = () => {
                     required
                     value={formData.expense_date}
                     onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                    className="form-field"
                   />
                 </div>
               </div>
 
-                      <div>
+              <div>
                 <label className="form-label">Branch *</label>
                 <select
                   required
                   value={formData.branch_id}
                   onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                  className="form-field"
                 >
                   <option value="" disabled>Select branch</option>
                   {branches.map((branch) => (
@@ -278,7 +334,7 @@ export const Expenses: React.FC = () => {
                 <select
                   value={formData.payment_method}
                   onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as PaymentMethod })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                  className="form-field"
                 >
                   <option value="Bank Transfer">Bank Transfer</option>
                   <option value="Cash">Cash</option>

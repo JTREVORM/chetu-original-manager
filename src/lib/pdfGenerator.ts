@@ -1,7 +1,149 @@
 import jsPDF from 'jspdf';
 import { autoTable } from './autoTable';
 import { formatUGX } from './loanCalculations';
+import { loadPdfLogo } from './pdfLogo';
 import { Client, Loan, LoanApplication, LoanRepayment, Expense, BankTransaction, SavingsTransaction } from '../types/database.types';
+
+const V_NAVY: [number, number, number] = [11, 67, 148];
+const V_AMBER: [number, number, number] = [245, 158, 11];
+const V_SLATE: [number, number, number] = [71, 85, 105];
+const V_MUTED: [number, number, number] = [148, 163, 184];
+const V_RED: [number, number, number] = [211, 47, 47];
+const V_GREEN: [number, number, number] = [4, 120, 87];
+
+/**
+ * Header for the two ledger vouchers (Expense, Bank Transaction) — carries
+ * the actual logo.svg mark (rasterized once, see pdfLogo.ts) rather than
+ * typed-out company text, matching how the sidebar presents the brand.
+ */
+async function drawVoucherHeader(doc: jsPDF, documentTitle: string, docNumber: string) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const logo = await loadPdfLogo();
+
+  doc.setFillColor(...V_NAVY);
+  doc.rect(0, 0, pageWidth, 32, 'F');
+  doc.setFillColor(...V_AMBER);
+  doc.rect(0, 32, pageWidth, 1.4, 'F');
+
+  // The address sits beside the logo tile, never beneath it — at this band
+  // height text under the tile would run through the mark.
+  let textLeft = 14;
+  if (logo) {
+    const tileH = 14;
+    const tileW = tileH * (logo.width / logo.height);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(12, 6, tileW + 4, tileH + 4, 2, 2, 'F');
+    try {
+      doc.addImage(logo.dataUrl, 'PNG', 14, 8, tileW, tileH);
+    } catch {
+      /* a broken image must not stop the voucher */
+    }
+    textLeft = 12 + tileW + 4 + 6;
+  } else {
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('CHETU MICROFINANCE LTD', 14, 14);
+    textLeft = 14;
+  }
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(206, 222, 245);
+  doc.text('Plot 45 Kampala Road, P.O. Box 10294, Kampala, Uganda', textLeft, logo ? 14 : 21);
+  doc.text('Tel: +256 700 123 456   |   info@chetumicrofinance.co.ug', textLeft, logo ? 19 : 26);
+
+  // Document reference badge, top right.
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(pageWidth - 68, 6, 56, 20, 2.5, 2.5, 'F');
+  doc.setTextColor(...V_RED);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text(documentTitle.toUpperCase(), pageWidth - 40, 13.5, { align: 'center' });
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...V_SLATE);
+  doc.setFontSize(8);
+  doc.text(`Ref: ${docNumber}`, pageWidth - 40, 19, { align: 'center' });
+  doc.setFontSize(7);
+  doc.setTextColor(...V_MUTED);
+  doc.text(
+    new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    pageWidth - 40,
+    23.5,
+    { align: 'center' },
+  );
+}
+
+/** Y coordinate where the last autoTable finished, without an `any` cast. */
+function lastTableEnd(doc: jsPDF): number {
+  return (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 40;
+}
+
+/** A boxed, large-print amount — the figure a voucher exists to record. */
+function drawAmountBox(doc: jsPDF, label: string, amount: number, y: number, tone: 'red' | 'green' | 'navy') {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const palette = {
+    red: { bg: [254, 242, 242] as [number, number, number], border: V_RED, text: V_RED },
+    green: { bg: [236, 253, 245] as [number, number, number], border: V_GREEN, text: V_GREEN },
+    navy: { bg: [239, 246, 255] as [number, number, number], border: V_NAVY, text: V_NAVY },
+  }[tone];
+
+  doc.setFillColor(...palette.bg);
+  doc.roundedRect(14, y, pageWidth - 28, 18, 2, 2, 'F');
+  doc.setDrawColor(...palette.border);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(14, y, pageWidth - 28, 18, 2, 2, 'D');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...V_SLATE);
+  doc.text(label.toUpperCase(), 20, y + 7);
+
+  doc.setFontSize(16);
+  doc.setTextColor(...palette.text);
+  // formatUGX already carries the "UGX" prefix — do not add another.
+  doc.text(formatUGX(amount), pageWidth - 20, y + 12.5, { align: 'right' });
+
+  return y + 18;
+}
+
+/** Signature strip + confidentiality footer shared by both ledger vouchers. */
+function drawVoucherFooter(doc: jsPDF, roles: [string, string, string]) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const startY = pageHeight - 40;
+  const cols: [number, number][] = [
+    [14, 70],
+    [pageWidth / 2 - 28, pageWidth / 2 + 28],
+    [pageWidth - 70, pageWidth - 14],
+  ];
+
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.3);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(...V_SLATE);
+  roles.forEach((role, i) => {
+    const [x1, x2] = cols[i];
+    doc.line(x1, startY, x2, startY);
+    doc.text(role, x1, startY + 5);
+    doc.text('Signature & Date', x1, startY + 9.5);
+  });
+
+  doc.setFillColor(248, 250, 252);
+  doc.rect(0, pageHeight - 16, pageWidth, 16, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.4);
+  doc.setTextColor(...V_MUTED);
+  doc.text('Chetu Microfinance Ltd — confidential, system generated voucher.', pageWidth / 2, pageHeight - 9.5, { align: 'center' });
+  const now = new Date();
+  doc.text(
+    `Printed ${now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} at ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+    pageWidth / 2,
+    pageHeight - 5,
+    { align: 'center' },
+  );
+}
 
 // Helper to draw Chetu Microfinance Ltd header
 function drawPDFHeader(doc: jsPDF, documentTitle: string, docNumber?: string) {
@@ -327,53 +469,61 @@ export function generateLoanStatementPDF(loan: Loan, repayments: LoanRepayment[]
 }
 
 // 8. Expense Voucher PDF
-export function generateExpenseVoucherPDF(expense: Expense) {
+export async function generateExpenseVoucherPDF(expense: Expense) {
   const doc = new jsPDF();
-  drawPDFHeader(doc, 'Expense Voucher', expense.expense_number);
+  await drawVoucherHeader(doc, 'Expense Voucher', expense.expense_number);
 
   autoTable(doc, {
-    startY: 48,
+    startY: 40,
     head: [['Voucher Field', 'Detail']],
     body: [
       ['Expense Number', expense.expense_number],
       ['Expense Category', expense.category],
       ['Description', expense.description],
-      ['Amount Paid', formatUGX(expense.amount)],
-      ['Date', expense.expense_date],
       ['Payment Method', expense.payment_method],
-      ['Recorded By', 'Administrator']
+      ['Expense Date', expense.expense_date]
     ],
     theme: 'grid',
-    headStyles: { fillColor: [220, 38, 38], textColor: 255 }
+    headStyles: { fillColor: V_NAVY, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 9.5, cellPadding: 3, textColor: [51, 65, 85] },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } }
   });
 
-  drawPDFFooter(doc, 'Accountant', 'Administrator');
+  const afterTable = lastTableEnd(doc) + 8;
+  drawAmountBox(doc, 'Amount Paid', expense.amount, afterTable, 'red');
+
+  drawVoucherFooter(doc, ['Prepared By: Accountant', 'Received By', 'Approved By: Administrator']);
   doc.save(`Expense_Voucher_${expense.expense_number}.pdf`);
 }
 
 // 9. Bank Transaction Voucher PDF
-export function generateBankTransactionPDF(tx: BankTransaction) {
+export async function generateBankTransactionPDF(tx: BankTransaction) {
   const doc = new jsPDF();
-  drawPDFHeader(doc, `${tx.transaction_type} Voucher`, tx.transaction_number);
+  const isDeposit = tx.transaction_type === 'Deposit';
+  await drawVoucherHeader(doc, `${tx.transaction_type} Voucher`, tx.transaction_number);
 
   autoTable(doc, {
-    startY: 48,
+    startY: 40,
     head: [['Transaction Field', 'Detail']],
     body: [
       ['Transaction Number', tx.transaction_number],
       ['Type', tx.transaction_type],
       ['Category', tx.category],
       ['Description', tx.description],
-      ['Amount', formatUGX(tx.amount)],
       ['Reference Number', tx.reference_number],
-      ['Closing Bank Balance', formatUGX(tx.balance_after)],
-      ['Date', tx.transaction_date]
+      ['Transaction Date', tx.transaction_date],
+      ['Closing Bank Balance', formatUGX(tx.balance_after)]
     ],
     theme: 'grid',
-    headStyles: { fillColor: tx.transaction_type === 'Deposit' ? [11, 67, 148] : [220, 38, 38], textColor: 255 }
+    headStyles: { fillColor: isDeposit ? V_NAVY : V_RED, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 9.5, cellPadding: 3, textColor: [51, 65, 85] },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 55 } }
   });
 
-  drawPDFFooter(doc, 'Finance Officer', 'Administrator');
+  const afterTable = lastTableEnd(doc) + 8;
+  drawAmountBox(doc, `${tx.transaction_type} Amount`, tx.amount, afterTable, isDeposit ? 'green' : 'red');
+
+  drawVoucherFooter(doc, ['Prepared By: Finance Officer', 'Verified By: Cashier', 'Approved By: Administrator']);
   doc.save(`Bank_${tx.transaction_type}_Voucher_${tx.transaction_number}.pdf`);
 }
 

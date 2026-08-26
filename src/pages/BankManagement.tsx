@@ -5,8 +5,8 @@ import { useNotifications } from '../context/NotificationContext';
 import { generateBankTransactionPDF } from '../lib/pdfGenerator';
 import { formatUGX } from '../lib/loanCalculations';
 import { TransactionType } from '../types/database.types';
-import { Building2, Plus, ArrowUpRight, ArrowDownRight, Printer, Wallet, X } from 'lucide-react';
-import { PageHeader, DesktopOnly, MobileOnly, RecordCard, CardList, EmptyState } from '../components/mobile/Responsive';
+import { Building2, Plus, ArrowUpRight, ArrowDownRight, Printer, X } from 'lucide-react';
+import { DesktopOnly, MobileOnly, RecordCard, CardList, EmptyState } from '../components/mobile/Responsive';
 
 export const BankManagement: React.FC = () => {
   const { isAdmin, isAuditor } = useAuth();
@@ -23,6 +23,16 @@ export const BankManagement: React.FC = () => {
     transaction_date: new Date().toISOString().split('T')[0],
     branch_id: ''
   });
+
+  // Building the voucher is asynchronous (the brand mark is rasterized on
+  // first use), so a failure would otherwise be a silently rejected promise.
+  const printVoucher = async (tx: Parameters<typeof generateBankTransactionPDF>[0]) => {
+    try {
+      await generateBankTransactionPDF(tx);
+    } catch {
+      addToast('error', 'Voucher Failed', 'Could not build the transaction voucher PDF.');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,105 +55,133 @@ export const BankManagement: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-12">
       {/* Header */}
-      <PageHeader
-        icon={Building2}
-        title="Bank & Liquidity Management Ledger"
-        subtitle="Monitor live institutional bank balance, capital injections, deposits, and withdrawal audit trails."
-        actions={
-          isAdmin && !isAuditor ? (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2.5 bg-[#0B4394] hover:bg-blue-900 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Record Bank Transaction
-            </button>
-          ) : null
-        }
-      />
+      <div className="rounded-lg bg-[#0B4394] p-5 text-white shadow-xs sm:p-6">
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
+          <Building2 className="h-3.5 w-3.5 text-amber-400" />
+          Financial Ledger
+        </div>
+        <h1 className="text-2xl font-bold tracking-tight">Bank Management</h1>
+        <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
+          Live institutional bank balance, capital injections, deposits and withdrawal audit trails.
+        </p>
+      </div>
+
+      {isAdmin && !isAuditor && (
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-[#0B4394] px-5 text-base font-semibold text-white hover:bg-[#093672] sm:h-10 sm:w-auto sm:text-[13px]"
+        >
+          <Plus className="h-4 w-4" />
+          Record bank transaction
+        </button>
+      )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-[#083475] text-white p-5 rounded-2xl border border-blue-900 shadow-xl">
-          <span className="text-[10px] font-bold text-blue-200 uppercase tracking-wider">Current Bank Balance</span>
-          <h2 className="text-2xl font-black mt-1 text-white">{formatUGX(currentBankBalance)}</h2>
-          <span className="text-[11px] text-emerald-300 mt-1 block">Live Operating Liquidity Vault</span>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-blue-900 bg-[#083475] p-5 text-white shadow-xl">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Current Bank Balance</span>
+          <h2 className="mt-1 text-2xl font-black text-white">{formatUGX(currentBankBalance)}</h2>
+          <span className="mt-1 block text-[11px] text-emerald-300">Live operating liquidity vault</span>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-card">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Deposits</span>
-            <ArrowUpRight className="w-5 h-5 text-emerald-500" />
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <ArrowUpRight className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Total Deposits</p>
+            <p className="text-base font-black text-emerald-700">{formatUGX(totalDeposits)}</p>
           </div>
-          <h2 className="text-xl font-bold text-emerald-700 mt-1">{formatUGX(totalDeposits)}</h2>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-card">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Withdrawals</span>
-            <ArrowDownRight className="w-5 h-5 text-red-500" />
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600">
+            <ArrowDownRight className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Total Withdrawals</p>
+            <p className="text-base font-black text-red-700">{formatUGX(totalWithdrawals)}</p>
           </div>
-          <h2 className="text-xl font-bold text-red-700 mt-1">{formatUGX(totalWithdrawals)}</h2>
         </div>
       </div>
 
       {/* Transaction History Ledger Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-card overflow-hidden">
-        <div className="p-4 bg-slate-50 border-b border-slate-200">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+        <div className="border-b border-slate-200 bg-slate-50 p-4">
           <h3 className="text-xs font-bold uppercase text-slate-700">Bank Transaction Ledger</h3>
         </div>
 
         <DesktopOnly>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
-            <thead>
-              <tr className="bg-slate-100/60 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
-                <th className="p-4">Tx #</th>
-                <th className="p-4">Type</th>
-                <th className="p-4">Category</th>
-                <th className="p-4">Description</th>
-                <th className="p-4">Amount</th>
-                <th className="p-4">Closing Balance</th>
-                <th className="p-4">Ref #</th>
-                <th className="p-4">Date</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {bankTransactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-4 font-bold text-[#0B4394]">{tx.transaction_number}</td>
-                  <td className="p-4">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      tx.transaction_type === 'Deposit' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {tx.transaction_type}
-                    </span>
-                  </td>
-                  <td className="p-4 font-semibold text-slate-900">{tx.category}</td>
-                  <td className="p-4 text-slate-600 max-w-xs truncate">{tx.description}</td>
-                  <td className={`p-4 font-bold ${tx.transaction_type === 'Deposit' ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {tx.transaction_type === 'Deposit' ? '+' : '-'}{formatUGX(tx.amount)}
-                  </td>
-                  <td className="p-4 font-bold text-slate-900">{formatUGX(tx.balance_after)}</td>
-                  <td className="p-4 font-mono text-[11px] text-slate-500">{tx.reference_number}</td>
-                  <td className="p-4 text-slate-600">{tx.transaction_date}</td>
-                  <td className="p-4 text-right">
-                    <button
-                      onClick={() => generateBankTransactionPDF(tx)}
-                      className="p-1.5 bg-slate-100 hover:bg-[#0B4394] hover:text-white rounded-lg transition-colors text-slate-600"
-                      title="Print Voucher PDF"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed border-collapse text-left">
+              <colgroup>
+                <col className="w-[14%]" />
+                <col className="w-[8%]" />
+                <col className="w-[13%]" />
+                <col className="w-[15%]" />
+                <col className="w-[11%]" />
+                <col className="w-[12%]" />
+                <col className="w-[10%]" />
+                <col className="w-[9%]" />
+                <col className="w-[8%]" />
+              </colgroup>
+              {/* Headers never wrap — a squeezed column would otherwise stack
+                  a word like "Voucher" into vertical letters. */}
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-tight text-slate-600 [&>th]:whitespace-nowrap">
+                  <th className="px-3 py-3">Tx #</th>
+                  <th className="px-3 py-3">Type</th>
+                  <th className="px-3 py-3">Category</th>
+                  <th className="px-3 py-3">Description</th>
+                  <th className="px-3 py-3 text-right">Amount</th>
+                  <th className="px-3 py-3 text-right">Closing Bal.</th>
+                  <th className="px-3 py-3">Ref #</th>
+                  <th className="px-3 py-3">Date</th>
+                  <th className="px-3 py-3 text-right">Voucher</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-[11px]">
+                {bankTransactions.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="p-10 text-center text-slate-400">
+                      No bank transactions found.
+                    </td>
+                  </tr>
+                )}
+                {bankTransactions.map((tx) => (
+                  <tr key={tx.id} className="transition-colors hover:bg-slate-50 [&>td]:whitespace-nowrap">
+                    <td className="px-3 py-3 font-bold text-[#0B4394]">{tx.transaction_number}</td>
+                    <td className="px-3 py-3">
+                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                        tx.transaction_type === 'Deposit' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {tx.transaction_type}
+                      </span>
+                    </td>
+                    <td className="truncate px-3 py-3 font-semibold text-slate-900" title={tx.category}>{tx.category}</td>
+                    <td className="truncate px-3 py-3 text-slate-600" title={tx.description}>{tx.description}</td>
+                    <td className={`px-3 py-3 text-right font-bold ${tx.transaction_type === 'Deposit' ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {tx.transaction_type === 'Deposit' ? '+' : '-'}{formatUGX(tx.amount)}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-slate-900">{formatUGX(tx.balance_after)}</td>
+                    <td className="truncate px-3 py-3 font-mono text-[10.5px] text-slate-500" title={tx.reference_number}>{tx.reference_number}</td>
+                    <td className="px-3 py-3 text-slate-600">{tx.transaction_date}</td>
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        onClick={() => printVoucher(tx)}
+                        className="rounded-lg bg-blue-50 p-1.5 text-[#0B4394] transition-colors hover:bg-blue-100"
+                        title="Print Voucher PDF"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </DesktopOnly>
 
         <MobileOnly className="p-3">
@@ -172,7 +210,7 @@ export const BankManagement: React.FC = () => {
                   ]}
                   actions={
                     <button
-                      onClick={() => generateBankTransactionPDF(tx)}
+                      onClick={() => printVoucher(tx)}
                       className="w-full min-h-11 flex items-center justify-center gap-1.5 p-1.5 bg-slate-100 hover:bg-[#0B4394] hover:text-white rounded-lg transition-colors text-slate-600 text-xs font-bold"
                     >
                       <Printer className="w-4 h-4" />
@@ -204,7 +242,7 @@ export const BankManagement: React.FC = () => {
                   <select
                     value={formData.transaction_type}
                     onChange={(e) => setFormData({ ...formData, transaction_type: e.target.value as TransactionType })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                    className="form-field"
                   >
                     <option value="Deposit">Deposit</option>
                     <option value="Withdrawal">Withdrawal</option>
@@ -218,7 +256,7 @@ export const BankManagement: React.FC = () => {
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     placeholder="e.g. Capital Injection"
-                    className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                    className="form-field"
                   />
                 </div>
               </div>
@@ -229,7 +267,7 @@ export const BankManagement: React.FC = () => {
                   required
                   value={formData.branch_id}
                   onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                  className="form-field"
                 >
                   <option value="" disabled>Select branch</option>
                   {branches.map((branch) => (
@@ -246,7 +284,7 @@ export const BankManagement: React.FC = () => {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Details of bank deposit/withdrawal..."
-                  className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                  className="form-field"
                 />
               </div>
 
@@ -259,7 +297,7 @@ export const BankManagement: React.FC = () => {
                     required
                     value={formData.amount}
                     onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                    className="form-field"
                   />
                 </div>
                 <div>
@@ -270,7 +308,7 @@ export const BankManagement: React.FC = () => {
                     value={formData.reference_number}
                     onChange={(e) => setFormData({ ...formData, reference_number: e.target.value })}
                     placeholder="STB-DEP-001"
-                    className="w-full px-3 py-2 border rounded-xl text-xs font-medium"
+                    className="form-field"
                   />
                 </div>
               </div>

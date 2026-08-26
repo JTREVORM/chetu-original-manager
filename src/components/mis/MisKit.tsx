@@ -300,7 +300,6 @@ export function MisTable<T>({
     updateScrollState();
     window.addEventListener('resize', updateScrollState);
     return () => window.removeEventListener('resize', updateScrollState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns.length, visibleRows.length]);
 
   const scrollByPage = (dir: 1 | -1) => {
