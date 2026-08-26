@@ -1,0 +1,9 @@
+<svg width="64" height="64" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" rx="20" fill="#0F2962"/>
+  <!-- Blue C Arc -->
+  <path d="M 72 32 C 45 18, 22 38, 25 64 C 28 85, 60 85, 70 70" stroke="#1E60D5" stroke-width="12" stroke-linecap="round" fill="none" />
+  <path d="M 75 22 C 38 8, 12 35, 16 68 C 20 95, 66 95, 78 78" stroke="#3B82F6" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.8" />
+  <!-- Red Text -->
+  <text x="44" y="48" font-family="'Inter', sans-serif" font-weight="900" font-size="14" fill="#D32F2F" text-anchor="start">CHETU</text>
+  <text x="44" y="58" font-family="'Inter', sans-serif" font-weight="700" font-size="6" fill="#D32F2F" text-anchor="start">MICROFINANCE</text>
+</svg>

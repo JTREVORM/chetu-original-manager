@@ -1,0 +1,1 @@
+ALTER TABLE public.client_groups ADD COLUMN IF NOT EXISTS loan_officer_name text;

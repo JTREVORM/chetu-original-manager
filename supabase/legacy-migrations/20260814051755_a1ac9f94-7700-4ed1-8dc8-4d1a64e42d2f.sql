@@ -1,0 +1,1 @@
+DELETE FROM public.notifications WHERE id = 'NT-TEST-1';

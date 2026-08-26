@@ -1,0 +1,615 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values using oklch.
+ * All colors MUST use oklch format.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to :root (light value) and .dark (dark value)
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Chetu brand palette (ported from the imported project) */
+  --color-chetu-blue: #1E60D5;
+  --color-chetu-darkblue: #154BB2;
+  --color-chetu-navy: #0F2962;
+  --color-chetu-lightblue: #EFF6FF;
+  --color-chetu-red: #D32F2F;
+  --color-chetu-darkred: #B71C1C;
+  --color-chetu-lightred: #FEF2F2;
+  --color-chetu-gold: #F59E0B;
+  --color-chetu-gray-50: #F8FAFC;
+  --color-chetu-gray-100: #F1F5F9;
+  --color-chetu-gray-200: #E2E8F0;
+  --color-chetu-gray-300: #CBD5E1;
+  --color-chetu-gray-400: #94A3B8;
+  --color-chetu-gray-500: #64748B;
+  --color-chetu-gray-600: #475569;
+  --color-chetu-gray-700: #334155;
+  --color-chetu-gray-800: #1E293B;
+  --color-chetu-gray-900: #0F172A;
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 10px 25px -5px rgba(30, 96, 213, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  --shadow-modal: 0 25px 50px -12px rgba(15, 41, 98, 0.25);
+}
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.129 0.042 264.695);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.984 0.003 247.858);
+  --sidebar-foreground: oklch(0.129 0.042 264.695);
+  --sidebar-primary: oklch(0.208 0.042 265.755);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.968 0.007 247.896);
+  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
+  --sidebar-border: oklch(0.929 0.013 255.508);
+  --sidebar-ring: oklch(0.704 0.04 256.788);
+}
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
+
+
+/* ===== Imported global styles (Chetu Microfinance) ===== */
+/* =====================================================
+   CHETU MICROFINANCE MANAGEMENT SYSTEM - Global CSS
+   ===================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #F8FAFC;
+  color: #0F172A;
+  line-height: 1.5;
+}
+
+/* Prevent unexpected horizontal scroll from any wide child (images, pre, tables) */
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+/* Long words / NIN / reference numbers wrap at word boundaries — never
+   mid-word, and never letter-per-line (which is what `word-break: break-word`
+   produced once a flex item was squeezed on a phone). */
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+span,
+a,
+li,
+td,
+th,
+div,
+label {
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+}
+
+/* Inputs keep their intrinsic width and never break text mid-glyph. */
+input,
+select,
+textarea {
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+/* Hide horizontal scrollbar on horizontally scrollable tab bars */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(30, 96, 213, 0.3);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(30, 96, 213, 0.6);
+}
+
+/* Global thin scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.22s ease-out forwards;
+}
+
+/* Table & Form focus ring styling */
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(30, 96, 213, 0.15);
+  border-color: #1E60D5 !important;
+}
+
+/* Fix iOS input zoom + ensure inputs fit their container */
+input,
+select,
+textarea {
+  font-size: 16px;
+  max-width: 100%;
+}
+
+@media (min-width: 640px) {
+
+  input,
+  select,
+  textarea {
+    font-size: inherit;
+  }
+}
+
+/* Prevent horizontal overflow */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Responsive table container — keeps header & data aligned inside a
+   horizontally scrollable region instead of pushing the page wider */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile-safe modal */
+.modal-mobile {
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100vh - 2rem);
+}
+
+/* Responsive chart containers */
+.chart-container {
+  position: relative;
+  width: 100%;
+}
+
+/* Ensure text wraps properly on mobile */
+.break-word {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body * {
+    overflow: visible !important;
+  }
+}
+
+/* Mobile-first responsive improvements */
+@media (max-width: 640px) {
+
+  /* Reduce padding on small screens */
+  .px-responsive {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Prevent any fixed-width panel from exceeding the viewport */
+  .w-screen-safe {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}
+
+/* =====================================================
+   Responsive helpers used throughout the app
+   ===================================================== */
+
+/* Constrain a flex child so it can truncate/wrap instead of overflowing */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* Allow a stat footer (label + amount) to wrap gracefully on narrow phones */
+.stat-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+}
+
+/* Modal body scroll safety */
+.modal-body-scroll {
+  max-height: calc(100vh - 12rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Card grid ensure equal heights and no bleed */
+.grid-cards {
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+}
+
+/* Keep table cells readable but prevent page-wide blowout */
+.table-cell-limit {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Very small screens (<= 380px): further tightening */
+@media (max-width: 380px) {
+  .px-responsive {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
+/* =====================================================
+   Mobile-first layer (phones & tablets only — desktop
+   rules below 768px never apply, so the desktop UI is
+   preserved exactly as designed).
+   ===================================================== */
+
+/* Filter / status chips: one horizontal line, always. Scrolls if it
+   cannot fit, but a chip is never squeezed into vertical letters. */
+.chip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 0.125rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.chip-row > * {
+  flex: 0 0 auto;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  flex: 0 0 auto;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+/* Primary page actions: full width and thumb-sized on phones. */
+.page-header-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.page-header-actions > * {
+  width: 100%;
+  min-height: 2.75rem;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .page-header-actions {
+    flex-direction: row;
+    width: auto;
+    align-items: center;
+  }
+
+  .page-header-actions > * {
+    width: auto;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Comfortable tap targets everywhere on touch layouts. */
+  button,
+  [role="button"],
+  select,
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea {
+    min-height: 2.75rem;
+  }
+
+  button.chip,
+  .chip {
+    min-height: 2.25rem;
+  }
+
+  /* Inputs, selects and textareas are always full width on phones. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Forms collapse to a single column — no two-column forms on phones. */
+  form .grid,
+  .mobile-stack .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Modals fill the screen comfortably instead of being pinched. */
+  .modal-mobile {
+    max-width: calc(100vw - 1.5rem);
+  }
+}
+
+/* Utility to opt a specific row out of shrinking into vertical text. */
+.nowrap {
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------
+   Shared form design (matches the Member Admission layout):
+   compact bordered fields, small grey labels, amber section rules
+   and a full-width amber save button.
+   --------------------------------------------------------------- */
+/* Mobile follows the original UMIS sizing — roomy, touch-sized controls with
+   a plain dark label above each one. Desktop stays compact so the MIS tables
+   and their filter rows keep their density. */
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 16px;
+  font-weight: 400;
+  color: #1f2937;
+}
+
+.form-field {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  padding: 0.875rem 1rem;
+  font-size: 16px;
+  color: #111827;
+}
+
+@media (min-width: 768px) {
+  .form-label {
+    margin-bottom: 0.25rem;
+    font-size: 12px;
+    font-weight: 500;
+    color: #334155;
+  }
+  .form-field {
+    border-radius: 0.25rem;
+    border-color: #cbd5e1;
+    padding: 0.375rem 0.625rem;
+    font-size: 13px;
+    color: #0f172a;
+  }
+}
+.form-field:focus {
+  outline: none;
+  border-color: #0b4394;
+  box-shadow: 0 0 0 1px rgba(11, 67, 148, 0.4);
+}
+.form-field:disabled,
+.form-field[readonly] {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.form-section-title {
+  margin-bottom: 0.75rem;
+  border-left: 4px solid #fbbf24;
+  padding-left: 0.5rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.btn-save {
+  width: 100%;
+  border-radius: 9999px;
+  background: #fbbf24;
+  padding: 0.625rem 1rem;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.btn-save:hover {
+  background: #f59e0b;
+}
+.btn-save:disabled {
+  opacity: 0.6;
+}
