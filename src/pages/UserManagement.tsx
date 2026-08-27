@@ -5,6 +5,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { Profile, UserRole } from '../types/database.types';
 import { supabase } from '../lib/supabase';
 import { adminUsers } from '../lib/admin-users.functions';
+import { sendNotification } from '../lib/notify';
 
 import { UserCog, UserPlus, Plus, Key, X, Lock, Camera, Pencil } from 'lucide-react';
 import { Avatar } from '../components/common/Avatar';
@@ -142,6 +143,15 @@ export const UserManagement: React.FC = () => {
 
       addToast('success', 'User Created', `Created ${formData.role} user ${formData.full_name}`);
       logAudit('User Creation', 'User Management', `New ${formData.role} account created for ${formData.full_name} (${formData.phone_number}).`, result?.profile?.id);
+      await sendNotification({
+        title: 'Staff account created',
+        message: `${formData.full_name} was added as a ${formData.role}.`,
+        type: 'System',
+        audience: 'admins',
+        link_url: '/users',
+        excludeId: user?.id,
+        includeActor: true,
+      });
       setIsCreateModalOpen(false);
       setFormData({ full_name: '', phone_number: '', password: '', role: 'Loan Officer', email: '', branch_ids: [] });
       setAvatarPreview('');
@@ -189,6 +199,16 @@ export const UserManagement: React.FC = () => {
 
       addToast('success', 'User Updated', `Updated profile for ${editFormData.full_name}`);
       logAudit('Updated User Profile', 'User Management', `Updated profile for ${editFormData.full_name} (${editFormData.phone_number}). Role: ${editFormData.role}, Status: ${editFormData.status}.`, editingUser.id);
+      await sendNotification({
+        title: 'Staff account updated',
+        message: `${editFormData.full_name} is now a ${editFormData.role} (${editFormData.status}).`,
+        type: 'System',
+        audience: 'admins',
+        recipientIds: [editingUser.id],
+        link_url: '/users',
+        excludeId: user?.id,
+        includeActor: true,
+      });
       setIsEditModalOpen(false);
       setEditingUser(null);
       setEditAvatarPreview('');
@@ -213,6 +233,16 @@ export const UserManagement: React.FC = () => {
       await callAdminUsers({ action: 'resetPassword', id: selectedUser.id, password: newPassword });
       addToast('success', 'Password Reset', `Successfully updated password for ${selectedUser.full_name}`);
       logAudit('Password Reset', 'User Management', `Password was reset for user account: ${selectedUser.full_name} (${selectedUser.phone_number}).`, selectedUser.id);
+      await sendNotification({
+        title: 'Password reset',
+        message: `An Administrator reset the password for ${selectedUser.full_name}.`,
+        type: 'Alert',
+        audience: 'admins',
+        recipientIds: [selectedUser.id],
+        link_url: '/users',
+        excludeId: user?.id,
+        includeActor: true,
+      });
       setIsResetModalOpen(false);
       setNewPassword('');
       setSelectedUser(null);
@@ -229,6 +259,21 @@ export const UserManagement: React.FC = () => {
       await callAdminUsers({ action: 'setStatus', id: target.id, status: nextStatus });
       addToast('info', 'User Status Updated', `${target.full_name} is now ${nextStatus}`);
       logAudit('User Status Updated', 'User Management', `${target.full_name}'s account status changed to ${nextStatus}.`, target.id);
+      const reactivated = nextStatus === 'Active';
+      await sendNotification({
+        title: reactivated ? 'Staff account reactivated' : 'Staff account deactivated',
+        message: reactivated
+          ? `${target.full_name} (${target.role}) can sign in again.`
+          : `${target.full_name} (${target.role}) can no longer sign in.`,
+        // A deactivation is a control event, so it is flagged rather than filed.
+        type: reactivated ? 'System' : 'Alert',
+        audience: 'admins',
+        // The person themselves is told too — it decides whether they can work.
+        recipientIds: [target.id],
+        link_url: '/users',
+        excludeId: user?.id,
+        includeActor: true,
+      });
       fetchUsers();
     } catch (err) {
       addToast('error', 'Update Failed', err instanceof Error ? err.message : 'Could not change status');

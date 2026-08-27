@@ -477,6 +477,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const created = data as Branch;
     setBranches(prev => [...prev, created].sort((a, b) => a.branch_name.localeCompare(b.branch_name)));
     await logAudit('Created Branch', 'Branch Management', `Created branch ${created.branch_name} (${created.branch_code})`, created.id);
+    await sendNotification({
+      title: 'Branch created',
+      message: `${created.branch_name} (${created.branch_code}) is now available across the system.`,
+      type: 'System',
+      audience: 'managers',
+      link_url: '/branches',
+      excludeId: user?.id,
+      includeActor: true,
+    });
     return created;
   };
 
@@ -486,7 +495,17 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const { error } = await supabase.from('branches').update(nullifyBlanks({ ...branchData, updated_at: new Date().toISOString() })).eq('id', id);
     if (error) throw new Error(error.message);
     setBranches(prev => prev.map(b => b.id === id ? { ...b, ...branchData } as Branch : b));
+    const branchName = branchData.branch_name || branches.find(b => b.id === id)?.branch_name || 'A branch';
     await logAudit('Updated Branch', 'Branch Management', `Updated branch ID ${id}`, id);
+    await sendNotification({
+      title: 'Branch updated',
+      message: `${branchName} details were changed.`,
+      type: 'System',
+      audience: 'managers',
+      link_url: '/branches',
+      excludeId: user?.id,
+      includeActor: true,
+    });
   };
 
   const deleteBranch = async (id: string) => {
@@ -1745,6 +1764,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const newExp: Expense = { ...data, expense_number: data.expense_number || expense_number } as Expense;
     setExpenses(prev => [newExp, ...prev]);
     await logAudit('Recorded Expense', 'Expense Management', `Logged expense ${expense_number} (${newExp.category} - UGX ${newExp.amount})`, expense_number);
+    await sendNotification({
+      title: 'Expense recorded',
+      message: `${expense_number} — ${newExp.category}, UGX ${Number(newExp.amount).toLocaleString()}.`,
+      type: 'System',
+      audience: 'managers',
+      link_url: '/expenses',
+      excludeId: user?.id,
+      includeActor: true,
+    });
     return newExp;
   };
 
@@ -1772,6 +1800,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const newTx: BankTransaction = { ...data, transaction_number: data.transaction_number || transaction_number } as BankTransaction;
     setBankTransactions(prev => [newTx, ...prev]);
     await logAudit(`Recorded Bank ${txData.transaction_type}`, 'Bank Management', `${txData.transaction_type} of UGX ${txData.amount} (${txData.category})`, transaction_number);
+    await sendNotification({
+      title: `Bank ${txData.transaction_type.toLowerCase()} posted`,
+      message: `${transaction_number} — ${txData.category}, UGX ${Number(txData.amount).toLocaleString()}. Closing balance UGX ${Number(balance_after).toLocaleString()}.`,
+      type: 'System',
+      audience: 'managers',
+      link_url: '/bank-management',
+      excludeId: user?.id,
+      includeActor: true,
+    });
     return newTx;
   };
 

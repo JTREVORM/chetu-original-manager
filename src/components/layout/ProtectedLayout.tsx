@@ -5,6 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { ToastContainer } from "../common/ToastContainer";
 import { InstallAppPrompt } from "../common/InstallAppPrompt";
+import { NotificationPermissionPrompt } from "../common/NotificationPermissionPrompt";
 
 export const ProtectedLayout: React.FC<{ children: React.ReactNode; adminOnly?: boolean; managementOnly?: boolean }> = ({
   children,
@@ -42,6 +43,7 @@ export const ProtectedLayout: React.FC<{ children: React.ReactNode; adminOnly?: 
       </main>
       <ToastContainer />
       <InstallAppPrompt />
+      <NotificationPermissionPrompt />
     </div>
   );
 };

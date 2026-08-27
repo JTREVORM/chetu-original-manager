@@ -15,6 +15,16 @@ interface NotifyInput {
   recipientIds?: string[];
   /** Never notify the person who triggered the action. */
   excludeId?: string;
+  /**
+   * Deliver to the actor as well, overriding `excludeId`.
+   *
+   * Administrative actions — staff accounts, branches, ledger postings — are
+   * things the notification page is expected to be a complete record of, so
+   * the person who performed one still wants it filed. Lifecycle events
+   * (approvals, disbursements) keep excluding the actor: they are alerts to
+   * other people, and self-notifying every one of those would be noise.
+   */
+  includeActor?: boolean;
 }
 
 const rolesFor = (audience: NotifyAudience): string[] => {
@@ -41,7 +51,8 @@ export const sendNotification = async (input: NotifyInput): Promise<void> => {
       (data || []).forEach((p: { id: string }) => ids.add(p.id));
     }
 
-    if (input.excludeId) ids.delete(input.excludeId);
+    if (input.excludeId && !input.includeActor) ids.delete(input.excludeId);
+    if (input.includeActor && input.excludeId) ids.add(input.excludeId);
     if (ids.size === 0) return;
 
     const stamp = Date.now();

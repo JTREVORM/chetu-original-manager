@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { NotificationItem } from '../types/database.types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { showDeviceNotification } from '../lib/pushNotifications';
 
 interface ToastMessage {
   id: string;
@@ -53,10 +54,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const rows = data as NotificationItem[];
     // Toast anything that arrived while the app was open (skip the first load).
     if (seenIds.current.size > 0) {
-      rows
-        .filter(r => !seenIds.current.has(r.id) && !r.is_read)
-        .slice(0, 3)
-        .forEach(r => addToast('info', r.title, r.message));
+      const fresh = rows.filter(r => !seenIds.current.has(r.id) && !r.is_read);
+      fresh.slice(0, 3).forEach(r => addToast('info', r.title, r.message));
+      // The same alerts go to the device, so a phone in a pocket still buzzes.
+      // Capped for the same reason the toasts are: a backlog must not spam.
+      fresh.slice(0, 3).forEach(r => {
+        void showDeviceNotification({
+          title: r.title,
+          message: r.message,
+          link_url: r.link_url,
+          tag: r.id,
+        });
+      });
     }
     rows.forEach(r => seenIds.current.add(r.id));
     setNotifications(rows);
