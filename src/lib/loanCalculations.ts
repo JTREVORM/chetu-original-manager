@@ -1,6 +1,37 @@
 import { addDays, format } from 'date-fns';
 import { InterestType, WeeklyScheduleRow } from '../types/database.types';
 
+/**
+ * The smallest amount that can actually change hands. Uganda has no coin below
+ * UGX 100 in practical circulation, so an instalment of 4,317 cannot be
+ * collected at a group meeting — every figure a borrower pays is rounded to
+ * this step.
+ */
+export const UGX_STEP = 100;
+
+const roundToStep = (n: number, step: number = UGX_STEP) => Math.round(n / step) * step;
+const ceilToStep = (n: number, step: number = UGX_STEP) => Math.ceil(n / step) * step;
+const floorToStep = (n: number, step: number = UGX_STEP) => Math.floor(n / step) * step;
+
+/**
+ * Splits `total` into `count` collectable instalments.
+ *
+ * Every instalment is a multiple of UGX_STEP, they differ from each other by at
+ * most one step, and they sum to exactly `total` — so the schedule still closes
+ * on the amount owed. The odd steps go to the earliest weeks, leaving the final
+ * payment no larger than the rest.
+ */
+export function splitIntoSteps(total: number, count: number): number[] {
+  const weeks = Math.max(1, count);
+  const payable = Math.max(0, roundToStep(total));
+  const base = floorToStep(payable / weeks);
+  // `payable` and `base` are both multiples of the step, so the remainder is
+  // too, and it is always smaller than one step per week.
+  const extraSteps = Math.round((payable - base * weeks) / UGX_STEP);
+
+  return Array.from({ length: weeks }, (_, i) => base + (i < extraSteps ? UGX_STEP : 0));
+}
+
 export interface LoanCalculationSummary {
   principalAmount: number;
   interestRate: number;
@@ -38,26 +69,39 @@ export function calculateLoanSchedule(
   const schedule: WeeklyScheduleRow[] = [];
 
   if (interestType === 'Flat Rate') {
-    // Flat Rate Interest: Annualized based on weeks proportion or flat duration
-    // Formula: Total Interest = Principal * (Rate / 100) * (Weeks / 52)
-    // If interest rate is simplified for microfinance flat period: Total Interest = Principal * (Rate / 100) * (Weeks / 52)
-    const annualFactor = weeks / 52;
-    totalInterestAmount = Math.round(principal * (interestRate / 100) * annualFactor);
-    totalAmountPayable = principal + totalInterestAmount;
-    weeklyInstallment = Math.round(totalAmountPayable / weeks);
+    /*
+     * Flat Rate: the interest is a straight percentage of the principal for
+     * the whole loan cycle, not prorated by term.
+     *
+     *   Total Interest = Principal × Rate%
+     *   e.g. UGX 100,000 at 15% owes UGX 15,000, whether the cycle runs
+     *   8 weeks or 25.
+     *
+     * This is how the rate is quoted to a group at admission, and it is what
+     * the loan product's rate means. It previously scaled by weeks/52, which
+     * turned that same 15% loan into UGX 3,462 over 12 weeks — a figure no
+     * officer had quoted and no borrower expected.
+     */
+    // The total is rounded to a collectable figure first, and the interest
+    // absorbs that rounding — the principal is the cash that left the drawer,
+    // so it is never adjusted to make the arithmetic tidy.
+    const rawInterest = principal * (interestRate / 100);
+    totalAmountPayable = ceilToStep(principal + rawInterest);
+    totalInterestAmount = totalAmountPayable - principal;
 
-    const weeklyPrincipal = Math.round(principal / weeks);
-    const weeklyInterest = Math.round(totalInterestAmount / weeks);
+    const installments = splitIntoSteps(totalAmountPayable, weeks);
+    weeklyInstallment = installments[0] ?? 0;
+
+    // Interest is spread the same way, so each row's split is collectable too.
+    const interestPortions = splitIntoSteps(totalInterestAmount, weeks);
 
     let currentRemaining = totalAmountPayable;
 
     for (let i = 1; i <= weeks; i++) {
       const dueDate = addDays(startDate, i * 7);
-      const isLastWeek = i === weeks;
-      
-      const installment = isLastWeek ? currentRemaining : weeklyInstallment;
-      const principalPortion = isLastWeek ? Math.max(0, installment - weeklyInterest) : weeklyPrincipal;
-      const interestPortion = installment - principalPortion;
+      const installment = installments[i - 1]!;
+      const interestPortion = Math.min(interestPortions[i - 1]!, installment);
+      const principalPortion = installment - interestPortion;
       currentRemaining = Math.max(0, currentRemaining - installment);
 
       schedule.push({
@@ -77,9 +121,11 @@ export function calculateLoanSchedule(
     if (weeklyRate === 0) {
       totalInterestAmount = 0;
       totalAmountPayable = principal;
-      weeklyInstallment = Math.round(principal / weeks);
+      weeklyInstallment = ceilToStep(principal / weeks);
     } else {
-      weeklyInstallment = Math.round(
+      // The annuity is rounded up to a collectable figure; the final week then
+      // clears whatever is genuinely left rather than repeating this amount.
+      weeklyInstallment = ceilToStep(
         (principal * weeklyRate) / (1 - Math.pow(1 + weeklyRate, -weeks))
       );
     }
@@ -92,12 +138,16 @@ export function calculateLoanSchedule(
       const dueDate = addDays(startDate, i * 7);
       const interestPortion = Math.round(remainingPrincipal * weeklyRate);
       let principalPortion = weeklyInstallment - interestPortion;
+      let installment = weeklyInstallment;
 
       if (i === weeks || remainingPrincipal - principalPortion < 0) {
+        // Closing week: settle the balance, then round the payment to a
+        // collectable figure and let the principal portion carry the change.
         principalPortion = remainingPrincipal;
+        installment = roundToStep(principalPortion + interestPortion);
+        principalPortion = installment - interestPortion;
       }
 
-      const installment = principalPortion + interestPortion;
       remainingPrincipal = Math.max(0, remainingPrincipal - principalPortion);
       accumulatedInterest += interestPortion;
       accumulatedPayable += installment;
