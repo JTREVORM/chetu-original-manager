@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -102,7 +103,7 @@ export const Repayments: React.FC = () => {
         </div>
 
         <DesktopOnly>
-        <div className="overflow-x-auto">
+        <TableScroll>
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-100/60 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
@@ -165,7 +166,7 @@ export const Repayments: React.FC = () => {
               )}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
         </DesktopOnly>
 
         <MobileOnly className="p-3">
@@ -246,7 +247,7 @@ export const Repayments: React.FC = () => {
       {isModalOpen && selectedLoan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-[calc(100vw-1.5rem)] max-w-md md:w-full overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-5 bg-[#0B4394] text-white flex items-center justify-between">
+            <div className="p-5 brand-gradient text-white flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold">Record Weekly Repayment</h3>
                 <p className="text-xs text-blue-200">Loan: {selectedLoan.loan_number}</p>

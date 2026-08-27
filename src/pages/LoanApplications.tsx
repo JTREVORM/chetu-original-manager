@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { Plus } from 'lucide-react';
 import { useDatabase } from '../context/DatabaseContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -360,7 +361,8 @@ const LoanApplicationAdd: React.FC<{
               ))}
             </div>
 
-            <div className="hidden overflow-x-auto rounded border border-slate-200 md:block">
+            <div className="hidden md:block">
+<TableScroll className="rounded border border-slate-200">
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                   <tr>
@@ -385,7 +387,8 @@ const LoanApplicationAdd: React.FC<{
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
+</div>
           </div>
         )}
 
@@ -425,7 +428,8 @@ const LoanApplicationAdd: React.FC<{
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto rounded border border-slate-200 md:block">
+          <div className="hidden md:block">
+<TableScroll className="rounded border border-slate-200">
             <table className="w-full min-w-[640px] text-left text-[11px]">
               <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 <tr>
@@ -466,7 +470,8 @@ const LoanApplicationAdd: React.FC<{
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
+</div>
         </div>
 
         <div>

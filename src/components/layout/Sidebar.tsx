@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { NavLink, useLocation } from '../../lib/router-compat';
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
-import { UserProfileModal } from '../common/UserProfileModal';
 import { Avatar } from '../common/Avatar';
 import {
   LayoutDashboard,
@@ -66,7 +65,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { logAudit } = useDatabase();
   const location = useLocation();
 
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Accordion state - default active expanded sections
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -164,7 +162,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       icon: PiggyBank,
       subItems: [
         { name: 'Savings Dashboard', path: '/savings', icon: PiggyBank },
-        { name: 'Savings Accounts', path: '/savings-accounts', icon: PiggyBank }
+        { name: 'Savings Accounts', path: '/savings-accounts', icon: PiggyBank },
+        { name: 'Savings Report', path: '/reports/savings', icon: FileText }
       ]
     },
     {
@@ -216,7 +215,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      <aside className={`w-64 bg-[#0B4394] text-white min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40 shadow-2xl border-r border-blue-900/60 font-sans transform transition-transform duration-300 ease-in-out ${
+      <aside className={`w-64 sidebar-gradient text-white min-h-screen flex flex-col fixed left-0 top-0 bottom-0 z-40 shadow-2xl border-r border-blue-900/60 font-sans transform transition-transform duration-300 ease-in-out ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } md:translate-x-0`}>
         {/* Brand Header */}
@@ -240,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Navigation Items (UMIS V2 Accordion Style) */}
-        <div className="flex-1 overflow-y-auto py-2 px-2.5 space-y-1.5 custom-scrollbar text-xs">
+        <div className="flex-1 min-h-0 scroll-area scroll-y py-2 px-2.5 space-y-1.5 text-xs">
           {/* Top Main Dashboard Link */}
           <NavLink
             to="/"
@@ -327,8 +326,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {/* User Footer Profile & Logout */}
         <div className="p-2.5 border-t border-blue-800/80 bg-[#06295E]">
           <div className="flex items-center justify-between p-2 rounded-lg bg-blue-950/60 border border-blue-800/80">
-            <button
-              onClick={() => setIsProfileOpen(true)}
+            <NavLink
+              to="/profile"
+              onClick={onClose}
               className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
               title="My Profile"
             >
@@ -341,7 +341,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <p className="text-[11px] font-bold text-white truncate">{user?.full_name || 'System User'}</p>
                 <p className="text-[9px] text-blue-200 truncate">{user?.role} ({user?.phone_number || 'Internal'})</p>
               </div>
-            </button>
+            </NavLink>
 
             <button
               onClick={() => {
@@ -357,8 +357,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         </div>
       </aside>
 
-      {/* Profile Modal */}
-      <UserProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </>
   );
 };

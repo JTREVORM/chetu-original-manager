@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { useNavigate } from '../lib/router-compat';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
@@ -378,7 +379,7 @@ export const Dashboard: React.FC = () => {
           ) : breakdown.length === 0 ? (
             <p className="px-4 py-10 text-center text-[13px] text-slate-400">No open loans yet.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <TableScroll>
               <table className="w-full text-left text-[13px]">
                 <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   <tr>
@@ -401,7 +402,7 @@ export const Dashboard: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </TableScroll>
           )}
         </Panel>
       </div>
@@ -503,7 +504,7 @@ const MyGroups: React.FC<{
   }
 
   return (
-    <div className="overflow-x-auto">
+    <TableScroll>
       <table className="w-full text-left text-[13px]">
         <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
           <tr>
@@ -529,6 +530,6 @@ const MyGroups: React.FC<{
           ))}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   );
 };

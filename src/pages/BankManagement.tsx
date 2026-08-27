@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -57,7 +58,7 @@ export const BankManagement: React.FC = () => {
   return (
     <div className="space-y-5 pb-12">
       {/* Header */}
-      <div className="rounded-lg bg-[#0B4394] p-5 text-white shadow-xs sm:p-6">
+      <div className="page-banner p-5 sm:p-6">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
           <Building2 className="h-3.5 w-3.5 text-amber-400" />
           Financial Ledger
@@ -114,7 +115,7 @@ export const BankManagement: React.FC = () => {
         </div>
 
         <DesktopOnly>
-          <div className="overflow-x-auto">
+          <TableScroll>
             <table className="w-full table-fixed border-collapse text-left">
               <colgroup>
                 <col className="w-[14%]" />
@@ -181,7 +182,7 @@ export const BankManagement: React.FC = () => {
                 ))}
               </tbody>
             </table>
-          </div>
+          </TableScroll>
         </DesktopOnly>
 
         <MobileOnly className="p-3">
@@ -228,7 +229,7 @@ export const BankManagement: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-[calc(100vw-1.5rem)] max-w-md md:w-full overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-5 bg-[#0B4394] text-white flex items-center justify-between">
+            <div className="p-5 brand-gradient text-white flex items-center justify-between">
               <h3 className="text-base font-bold">Record Bank Transaction</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-300 hover:text-white">
                 <X className="w-5 h-5" />

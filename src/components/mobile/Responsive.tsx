@@ -32,9 +32,17 @@ export const FilterBar: React.FC<{ search?: React.ReactNode; children?: React.Re
   children,
 }) => (
   <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-xs sm:p-4">
-    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      {search && <div className="w-full md:max-w-96">{search}</div>}
-      {children && <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-2">{children}</div>}
+    {/*
+      Every level carries min-w-0. A flex item defaults to min-width:auto, so
+      without it the chip row below refuses to shrink, renders at its full
+      content width and is clipped by the page shell instead of scrolling
+      inside its own box.
+    */}
+    <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      {search && <div className="w-full min-w-0 md:max-w-96">{search}</div>}
+      {children && (
+        <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-2">{children}</div>
+      )}
     </div>
   </div>
 );
@@ -44,8 +52,8 @@ export const FilterGroup: React.FC<{ label: string; children: React.ReactNode }>
   label,
   children,
 }) => (
-  <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
-    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500 md:text-xs md:normal-case md:tracking-normal">
+  <div className="flex min-w-0 flex-col gap-1.5 md:flex-row md:items-center md:gap-2">
+    <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-500 md:text-xs md:normal-case md:tracking-normal">
       {label}
     </span>
     {children}
@@ -56,7 +64,7 @@ export const FilterGroup: React.FC<{ label: string; children: React.ReactNode }>
 export const ChipRow: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
   className = "",
-}) => <div className={`chip-row ${className}`}>{children}</div>;
+}) => <div className={`chip-row min-w-0 ${className}`}>{children}</div>;
 
 export const Chip: React.FC<{
   active?: boolean;

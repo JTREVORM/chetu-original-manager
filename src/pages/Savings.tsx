@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, BookOpen, Download } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Download } from 'lucide-react';
 import { useDatabase } from '../context/DatabaseContext';
 import { generateSavingsStatementPDF } from '../lib/pdfGenerator';
 import {
@@ -16,7 +16,8 @@ import {
   shortDate,
   useMisScope,
 } from '../components/mis/MisKit';
-import { PaymentMethod, SavingsAccount, SavingsTransactionType } from '../types/database.types';
+import { PaymentMethod, SavingsAccount, SavingsTransaction, SavingsTransactionType } from '../types/database.types';
+import { ScrollArea, TableScroll } from '../components/common/ScrollArea';
 
 interface SavingsRow {
   account: SavingsAccount;
@@ -225,8 +226,8 @@ export const SavingsAccountsPage: React.FC = () => {
             <Info label="Group" value={passbookFor.group_name} />
             <Info label="Balance" value={money(passbookFor.account.balance)} />
           </div>
-          <div className="overflow-x-auto rounded border border-slate-200">
-            <table className="w-full text-[12px]">
+          <ScrollArea axis="x" className="rounded border border-slate-200" ariaLabel="Passbook transactions">
+            <table className="w-full min-w-[560px] text-[12px]">
               <thead className="bg-slate-100 text-left text-slate-600">
                 <tr>
                   <th className="px-2 py-2">Date</th>
@@ -255,7 +256,7 @@ export const SavingsAccountsPage: React.FC = () => {
                 )}
               </tbody>
             </table>
-          </div>
+          </ScrollArea>
           <div className="mt-4 flex justify-end">
             <button
               type="button"
@@ -291,9 +292,13 @@ export const SavingsDashboardPage: React.FC = () => {
   );
 };
 
+/** Which KPI tile the drill-down is showing, or null when it is closed. */
+type Drill = 'balance' | 'savers' | 'deposits' | 'withdrawals';
+
 const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof useMisScope> }> = ({ rows, scope }) => {
   const { savingsTransactions } = useDatabase();
   const [branchId, setBranchId] = useState(scope.branchLocked ? scope.activeBranches[0]?.id || '' : '');
+  const [drill, setDrill] = useState<Drill | null>(null);
 
   const visible = useMemo(
     () =>
@@ -306,7 +311,6 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
         if (branchId && r.branch_id !== branchId) return false;
         return true;
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, branchId, scope.branchLocked, scope.isLoanOfficer, scope.user?.id, scope.activeBranches],
   );
 
@@ -317,22 +321,30 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
 
+  /** This week's transactions inside the visible scope, kept so the KPI tiles
+   *  can hand the underlying rows to the drill-down rather than only a total. */
+  const weekTx = useMemo(
+    () =>
+      savingsTransactions
+        .filter((t) => accountIds.has(t.account_id) && new Date(t.created_at) >= weekStart)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [savingsTransactions, accountIds],
+  );
+
   const flows = useMemo(() => {
     let deposits = 0;
     let withdrawals = 0;
-    let savers = new Set<string>();
-    for (const t of savingsTransactions) {
-      if (!accountIds.has(t.account_id)) continue;
-      if (new Date(t.created_at) < weekStart) continue;
+    const savers = new Set<string>();
+    for (const t of weekTx) {
       if (t.transaction_type === 'Withdrawal') withdrawals += Number(t.amount || 0);
       else {
         deposits += Number(t.amount || 0);
         savers.add(t.account_id);
       }
     }
-    return { deposits, withdrawals, savers: savers.size };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savingsTransactions, accountIds]);
+    return { deposits, withdrawals, savers: savers.size, saverIds: savers };
+  }, [weekTx]);
 
   const total = visible.reduce((s, r) => s + Number(r.account.balance || 0), 0);
   const activeCount = visible.filter((r) => r.account.status === 'Active').length;
@@ -388,10 +400,24 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Total Savings Balance" value={money(total)} tone="navy" />
-        <Kpi label="Saved This Week" value={`${flows.savers} / ${activeCount} members`} />
-        <Kpi label="Deposits (This Week)" value={money(flows.deposits)} tone="green" />
-        <Kpi label="Withdrawals (This Week)" value={money(flows.withdrawals)} tone="amber" />
+        <Kpi label="Total Savings Balance" value={money(total)} tone="navy" onClick={() => setDrill('balance')} />
+        <Kpi
+          label="Saved This Week"
+          value={`${flows.savers} / ${activeCount} members`}
+          onClick={() => setDrill('savers')}
+        />
+        <Kpi
+          label="Deposits (This Week)"
+          value={money(flows.deposits)}
+          tone="green"
+          onClick={() => setDrill('deposits')}
+        />
+        <Kpi
+          label="Withdrawals (This Week)"
+          value={money(flows.withdrawals)}
+          tone="amber"
+          onClick={() => setDrill('withdrawals')}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -406,28 +432,225 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
           rows={perGroup.map(([k, v]) => [k, `${v.name} (${v.code})`, String(v.members), money(v.total)])}
         />
       </div>
+
+      <KpiDrillDown
+        drill={drill}
+        onClose={() => setDrill(null)}
+        accounts={visible}
+        weekTx={weekTx}
+        weekStart={weekStart}
+      />
     </div>
   );
 };
 
-const Kpi: React.FC<{ label: string; value: string; tone?: 'navy' | 'green' | 'amber' }> = ({ label, value, tone }) => {
+/**
+ * The records behind a KPI tile: which members saved this week, the individual
+ * deposits and withdrawals, or every account making up the total balance.
+ */
+const KpiDrillDown: React.FC<{
+  drill: Drill | null;
+  onClose: () => void;
+  accounts: SavingsRow[];
+  weekTx: SavingsTransaction[];
+  weekStart: Date;
+}> = ({ drill, onClose, accounts, weekTx, weekStart }) => {
+  const accById = useMemo(() => new Map(accounts.map((a) => [a.account.id, a])), [accounts]);
+  const periodLabel = `week of ${shortDate(weekStart.toISOString())}`;
+
+  const view = useMemo(() => {
+    if (!drill) return null;
+
+    if (drill === 'balance') {
+      const rows = [...accounts]
+        .sort((a, b) => Number(b.account.balance || 0) - Number(a.account.balance || 0))
+        .map((a) => [
+          a.account.account_number,
+          a.holder,
+          a.member_code,
+          a.group_name,
+          a.branch_name,
+          a.officer_name,
+          a.account.status,
+          money(a.account.balance),
+        ]);
+      const total = accounts.reduce((s, a) => s + Number(a.account.balance || 0), 0);
+      return {
+        title: 'Total Savings Balance — all accounts',
+        head: ['Account No.', 'Account Holder', 'Member Code', 'Group', 'Branch', 'LO', 'Status', 'Balance'],
+        rows,
+        summary: `${accounts.length} account${accounts.length === 1 ? '' : 's'} • ${money(total)} held`,
+        empty: 'No savings accounts in this scope.',
+      };
+    }
+
+    if (drill === 'savers') {
+      // One line per member who made at least one deposit this week, with what
+      // they actually put in — the question a field officer is really asking.
+      const perAccount = new Map<string, { saved: number; count: number; last: string }>();
+      for (const t of weekTx) {
+        if (t.transaction_type === 'Withdrawal') continue;
+        const e = perAccount.get(t.account_id) || { saved: 0, count: 0, last: t.created_at };
+        e.saved += Number(t.amount || 0);
+        e.count += 1;
+        if (t.created_at > e.last) e.last = t.created_at;
+        perAccount.set(t.account_id, e);
+      }
+      const rows = [...perAccount.entries()]
+        .sort((a, b) => b[1].saved - a[1].saved)
+        .map(([id, e]) => {
+          const a = accById.get(id);
+          return [
+            a?.account.account_number || '—',
+            a?.holder || '—',
+            a?.member_code || '—',
+            a?.group_name || '—',
+            a?.branch_name || '—',
+            a?.officer_name || '—',
+            String(e.count),
+            shortDate(e.last),
+            money(e.saved),
+            money(a?.account.balance),
+          ];
+        });
+      const total = [...perAccount.values()].reduce((s, e) => s + e.saved, 0);
+      return {
+        title: `Members who saved this week (${periodLabel})`,
+        head: [
+          'Account No.', 'Account Holder', 'Member Code', 'Group', 'Branch', 'LO',
+          'Deposits', 'Last Deposit', 'Saved This Week', 'Current Balance',
+        ],
+        rows,
+        summary: `${rows.length} member${rows.length === 1 ? '' : 's'} saved • ${money(total)} deposited`,
+        empty: 'Nobody has saved yet this week.',
+      };
+    }
+
+    const wantWithdrawal = drill === 'withdrawals';
+    const tx = weekTx.filter((t) => (t.transaction_type === 'Withdrawal') === wantWithdrawal);
+    const rows = tx.map((t) => {
+      const a = accById.get(t.account_id);
+      return [
+        shortDate(t.created_at),
+        t.transaction_number,
+        t.receipt_number || '—',
+        a?.account.account_number || '—',
+        a?.holder || '—',
+        a?.member_code || '—',
+        a?.group_name || '—',
+        a?.branch_name || '—',
+        a?.officer_name || '—',
+        t.payment_method,
+        money(t.amount),
+        money(t.balance_after),
+      ];
+    });
+    const total = tx.reduce((s, t) => s + Number(t.amount || 0), 0);
+    return {
+      title: `${wantWithdrawal ? 'Withdrawals' : 'Deposits'} this week (${periodLabel})`,
+      head: [
+        'Date', 'Txn No.', 'Receipt No.', 'Account No.', 'Account Holder', 'Member Code',
+        'Group', 'Branch', 'LO', 'Method', 'Amount', 'Balance After',
+      ],
+      rows,
+      summary: `${tx.length} transaction${tx.length === 1 ? '' : 's'} • ${money(total)} total`,
+      empty: `No ${wantWithdrawal ? 'withdrawals' : 'deposits'} recorded this week.`,
+    };
+  }, [drill, accounts, weekTx, accById, periodLabel]);
+
+  if (!drill || !view) return null;
+
+  return (
+    <MisModal open onClose={onClose} title={view.title} width="max-w-6xl">
+      <p className="mb-3 text-[12px] font-bold text-slate-600">{view.summary}</p>
+      <ScrollArea axis="x" className="rounded border border-slate-200" ariaLabel={view.title}>
+        <table className="w-full text-left text-[11px]">
+          <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+            <tr className="[&>th]:whitespace-nowrap [&>th]:px-2 [&>th]:py-2">
+              {view.head.map((h, i) => (
+                <th key={h} className={i >= view.head.length - 2 ? 'text-right' : ''}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {view.rows.length === 0 ? (
+              <tr>
+                <td colSpan={view.head.length} className="px-2 py-8 text-center text-slate-400">
+                  {view.empty}
+                </td>
+              </tr>
+            ) : (
+              view.rows.map((r, i) => (
+                <tr key={i} className="hover:bg-slate-50 [&>td]:whitespace-nowrap [&>td]:px-2 [&>td]:py-2">
+                  {r.map((cell, j) => (
+                    <td
+                      key={j}
+                      className={
+                        j >= r.length - 2 ? 'text-right font-bold text-slate-900' : 'text-slate-700'
+                      }
+                    >
+                      {cell}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </ScrollArea>
+    </MisModal>
+  );
+};
+
+/**
+ * A dashboard figure. When `onClick` is supplied the whole tile becomes a
+ * button that opens the records behind the number — a total nobody can open is
+ * a dead end when a branch is trying to reconcile it.
+ */
+const Kpi: React.FC<{
+  label: string;
+  value: string;
+  tone?: 'navy' | 'green' | 'amber';
+  onClick?: () => void;
+}> = ({ label, value, tone, onClick }) => {
   const tones: Record<string, string> = {
     navy: 'text-[#0B4394]',
     green: 'text-emerald-600',
     amber: 'text-amber-600',
   };
-  return (
-    <div className="rounded border border-slate-200 bg-slate-50 p-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+  const body = (
+    <>
+      <p className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+        {onClick && <ChevronRight className="h-3 w-3 text-slate-400" />}
+      </p>
       <p className={`mt-1 text-sm font-black ${tone ? tones[tone] : 'text-slate-900'}`}>{value}</p>
-    </div>
+    </>
+  );
+
+  if (!onClick) {
+    return <div className="rounded border border-slate-200 bg-slate-50 p-3">{body}</div>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`View the records behind "${label}"`}
+      className="rounded border border-slate-200 bg-slate-50 p-3 text-left transition-colors hover:border-[#0B4394] hover:bg-blue-50/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0B4394]/40"
+    >
+      {body}
+    </button>
   );
 };
 
 const BreakdownTable: React.FC<{ title: string; head: string[]; rows: string[][] }> = ({ title, head, rows }) => (
   <div className="rounded border border-slate-200">
     <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-[12px] font-bold text-slate-700">{title}</div>
-    <div className="max-h-56 overflow-y-auto">
+    <TableScroll maxHeight="14rem" arrows={false} ariaLabel={title}>
+      {/* No min-width: two short columns already fit the narrowest phone, and
+          a floor here would force a scrollbar that is not needed. */}
       <table className="w-full text-[12px]">
         <thead className="text-left text-slate-500">
           <tr>
@@ -457,7 +680,7 @@ const BreakdownTable: React.FC<{ title: string; head: string[]; rows: string[][]
           )}
         </tbody>
       </table>
-    </div>
+    </TableScroll>
   </div>
 );
 

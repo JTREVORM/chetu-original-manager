@@ -18,6 +18,7 @@ import {
   useMisScope,
   type MisColumn,
 } from '../components/mis/MisKit';
+import { ScrollArea } from '../components/common/ScrollArea';
 
 export interface MemberRow {
   client: Client;
@@ -221,8 +222,8 @@ export const LoanDetailsInfoModal: React.FC<{ row: MemberRow | null; loans: Loan
       </div>
 
       <div className="form-section-title mt-5">Loan Information</div>
-      <div className="overflow-hidden rounded border border-slate-200">
-        <table className="w-full table-fixed text-left text-[11px]">
+      <ScrollArea axis="x" className="rounded border border-slate-200" ariaLabel="Loan information">
+        <table className="w-full min-w-[640px] table-fixed text-left text-[11px]">
           <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-500">
             <tr className="[&>th]:whitespace-nowrap [&>th]:px-2 [&>th]:py-2">
               <th>Loan No</th>
@@ -259,7 +260,7 @@ export const LoanDetailsInfoModal: React.FC<{ row: MemberRow | null; loans: Loan
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollArea>
     </MisModal>
   );
 };
@@ -405,8 +406,8 @@ export const FinancialFileUploadModal: React.FC<{ row: MemberRow | null; onClose
       </div>
 
       <div className="form-section-title mt-6">Uploaded Documents</div>
-      <div className="overflow-hidden rounded border border-slate-200">
-        <table className="w-full table-fixed text-left text-[11px]">
+      <ScrollArea axis="x" className="rounded border border-slate-200" ariaLabel="Uploaded documents">
+        <table className="w-full min-w-[560px] table-fixed text-left text-[11px]">
           <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-500">
             <tr className="[&>th]:whitespace-nowrap [&>th]:px-2 [&>th]:py-2">
               <th>Doc Name</th>
@@ -444,7 +445,7 @@ export const FinancialFileUploadModal: React.FC<{ row: MemberRow | null; onClose
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollArea>
     </MisModal>
   );
 };

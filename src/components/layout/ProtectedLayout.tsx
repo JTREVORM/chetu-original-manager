@@ -28,7 +28,7 @@ export const ProtectedLayout: React.FC<{ children: React.ReactNode; adminOnly?: 
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex selection:bg-chetu-blue selection:text-white overflow-x-hidden">
+    <div className="app-shell min-h-screen flex selection:bg-chetu-blue selection:text-white overflow-x-hidden">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       {isSidebarOpen && (
         <div

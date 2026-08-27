@@ -143,8 +143,8 @@ function RootComponent() {
       {/* The imported app reads localStorage during render, so it runs client-side only. */}
       <ClientOnly
         fallback={
-          <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-500">
-            Loading…
+          <div className="flex min-h-screen items-center justify-center bg-slate-100">
+            <span className="loader" role="status" aria-label="Loading" />
           </div>
         }
       >

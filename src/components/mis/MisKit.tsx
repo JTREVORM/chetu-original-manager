@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Inbox, SlidersHorizontal, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Search, Inbox, SlidersHorizontal } from 'lucide-react';
+import { ScrollArea, TableScroll } from '../common/ScrollArea';
+import { LoaderBlock } from '../common/Loader';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
@@ -27,7 +29,7 @@ export interface OfficerRow {
 
 /** Role-aware branch / loan-officer / group scope used by every MIS list screen. */
 export function useMisScope() {
-  const { branches, clientGroups } = useDatabase();
+  const { branches, clientGroups, dataVersion } = useDatabase();
   const { user, role } = useAuth();
 
   const isLoanOfficer = role === 'Loan Officer';
@@ -66,7 +68,7 @@ export function useMisScope() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dataVersion]);
 
   useEffect(() => {
     if (branchLocked) setBranchId((prev) => prev || myBranches[0] || activeBranches[0]?.id || '');
@@ -241,6 +243,7 @@ export function MisTable<T>({
   mobileTitle,
   mobileSubtitle,
   footer,
+  maxHeight,
 }: {
   columns: MisColumn<T>[];
   rows: T[];
@@ -252,6 +255,12 @@ export function MisTable<T>({
   mobileTitle?: (row: T) => React.ReactNode;
   mobileSubtitle?: (row: T) => React.ReactNode;
   footer?: React.ReactNode;
+  /**
+   * Caps the table's height and pins the header row, for screens that can
+   * return long result sets. Left unset the table grows and the page scrolls,
+   * which reads better for the short lists most screens produce.
+   */
+  maxHeight?: string;
 }) {
   const showIdle = !loading && !hasSearched;
   const showEmpty = !loading && hasSearched && rows.length === 0;
@@ -285,34 +294,13 @@ export function MisTable<T>({
   // horizontal-scroll wrapper below is for.
   const colMinWidth = (w?: string) => (w ? `${Math.round((parseFloat(w) || 0) * 12)}px` : undefined);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const updateScrollState = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-  };
-
-  useEffect(() => {
-    updateScrollState();
-    window.addEventListener('resize', updateScrollState);
-    return () => window.removeEventListener('resize', updateScrollState);
-  }, [columns.length, visibleRows.length]);
-
-  const scrollByPage = (dir: 1 | -1) => {
-    scrollRef.current?.scrollBy({ left: dir * (scrollRef.current.clientWidth * 0.75), behavior: 'smooth' });
-  };
-
   return (
     <>
-      <div className="relative hidden md:block">
-        <div
-          ref={scrollRef}
-          onScroll={updateScrollState}
-          className="mis-table-scrollbar overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-xs"
+      <div className="hidden md:block">
+        <TableScroll
+          maxHeight={maxHeight}
+          ariaLabel="Report results"
+          className="rounded-lg border border-slate-200 bg-white shadow-xs"
         >
           <table className="table-auto text-left text-[11px]">
             <colgroup>
@@ -336,8 +324,8 @@ export function MisTable<T>({
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={columns.length} className="px-4 py-10 text-center text-slate-400">
-                    Loading…
+                  <td colSpan={columns.length} className="px-4">
+                    <LoaderBlock label="Loading results" />
                   </td>
                 </tr>
               )}
@@ -377,28 +365,7 @@ export function MisTable<T>({
               </tfoot>
             )}
           </table>
-        </div>
-
-        {canScrollLeft && (
-          <button
-            type="button"
-            onClick={() => scrollByPage(-1)}
-            aria-label="Scroll table left"
-            className="absolute left-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </button>
-        )}
-        {canScrollRight && (
-          <button
-            type="button"
-            onClick={() => scrollByPage(1)}
-            aria-label="Scroll table right"
-            className="absolute right-2 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-md hover:bg-slate-50"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        )}
+        </TableScroll>
       </div>
 
       {/*
@@ -408,7 +375,9 @@ export function MisTable<T>({
       */}
       <div className="space-y-2.5 md:hidden">
         {loading && (
-          <div className="rounded-lg bg-white p-8 text-center text-sm text-slate-400">Loading…</div>
+          <div className="rounded-lg bg-white p-8">
+            <LoaderBlock label="Loading results" />
+          </div>
         )}
         {(showIdle || showEmpty) && (
           <div className="rounded-lg bg-white p-8 text-center">
@@ -518,9 +487,11 @@ export const MisModal: React.FC<{
 }> = ({ open, onClose, title, children, width = 'max-w-3xl' }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-3 sm:p-6">
-      <div className={`w-full ${width} rounded-lg bg-white shadow-2xl`}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-3 sm:p-6">
+      {/* The panel is capped to the viewport and only its body scrolls, so the
+          title and close control stay reachable however long the content is. */}
+      <div className={`flex max-h-full w-full flex-col ${width} rounded-lg bg-white shadow-2xl`}>
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
           <h2 className="min-w-0 truncate text-sm font-bold text-slate-900">{title}</h2>
           <button
             type="button"
@@ -531,7 +502,9 @@ export const MisModal: React.FC<{
             ✕
           </button>
         </div>
-        <div className="max-h-[80vh] overflow-y-auto p-4">{children}</div>
+        <ScrollArea axis="y" className="min-h-0 flex-1 p-4" ariaLabel={title}>
+          {children}
+        </ScrollArea>
       </div>
     </div>
   );

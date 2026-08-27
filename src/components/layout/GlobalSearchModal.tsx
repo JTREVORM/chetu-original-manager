@@ -60,7 +60,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
         </div>
 
         {/* Results List */}
-        <div className="max-h-96 overflow-y-auto p-2">
+        <div className="max-h-96 scroll-area scroll-y p-2">
           {query.trim().length === 0 ? (
             <div className="p-8 text-center text-slate-400">
               <Search className="w-8 h-8 mx-auto mb-2 opacity-40 text-chetu-blue" />

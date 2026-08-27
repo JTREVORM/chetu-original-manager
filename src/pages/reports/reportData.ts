@@ -10,6 +10,7 @@ export interface ScheduleRow extends WeeklyScheduleRow {
 
 /** All weekly instalment rows, grouped by loan. Reports need them for overdue maths. */
 export function useSchedules() {
+  const { dataVersion } = useDatabase();
   const [rows, setRows] = useState<ScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +29,7 @@ export function useSchedules() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dataVersion]);
 
   const byLoan = useMemo(() => {
     const map = new Map<string, ScheduleRow[]>();
@@ -137,6 +138,7 @@ export interface ReversalRow {
  * table rather than derived — the source rows are deleted by the rollback.
  */
 export function useLoanReversals() {
+  const { dataVersion } = useDatabase();
   const [rows, setRows] = useState<ReversalRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -155,7 +157,7 @@ export function useLoanReversals() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dataVersion]);
 
   return { reversals: rows, loading };
 }
@@ -165,6 +167,7 @@ export function useLoanReversals() {
  * approvals and reversals are performed by managers and administrators too.
  */
 export function useStaffNames() {
+  const { dataVersion } = useDatabase();
   const [names, setNames] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -178,7 +181,7 @@ export function useStaffNames() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dataVersion]);
 
   return (id?: string | null) => (id ? names.get(id) || '—' : '—');
 }
@@ -199,6 +202,7 @@ export interface MemberFeeRow {
 
 /** Admission and passbook charges taken when members were admitted. */
 export function useMemberFees() {
+  const { dataVersion } = useDatabase();
   const [rows, setRows] = useState<MemberFeeRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -217,7 +221,7 @@ export function useMemberFees() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dataVersion]);
 
   return { memberFees: rows, loading };
 }

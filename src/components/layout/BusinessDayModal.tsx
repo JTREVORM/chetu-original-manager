@@ -1,6 +1,7 @@
 import React from 'react';
 import { CalendarDays, X } from 'lucide-react';
 import { useBusinessDay } from '../../lib/businessDay';
+import { ScrollArea } from '../common/ScrollArea';
 
 interface BusinessDayModalProps {
   isOpen: boolean;
@@ -14,8 +15,8 @@ export const BusinessDayModal: React.FC<BusinessDayModalProps> = ({ isOpen, onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-sm w-full overflow-hidden">
-        <div className="p-5 bg-chetu-navy text-white flex items-center justify-between">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-sm w-full overflow-hidden flex max-h-full flex-col">
+        <div className="shrink-0 p-5 bg-chetu-navy text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/10 rounded-lg">
               <CalendarDays className="w-5 h-5" />
@@ -27,7 +28,7 @@ export const BusinessDayModal: React.FC<BusinessDayModalProps> = ({ isOpen, onCl
           </button>
         </div>
 
-        <div className="p-6 space-y-3">
+        <ScrollArea axis="y" className="min-h-0 flex-1 p-6 space-y-3" ariaLabel="Business day">
           <div
             className={`flex items-center justify-between p-4 rounded-xl border ${
               isBusinessOpen ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'
@@ -52,7 +53,7 @@ export const BusinessDayModal: React.FC<BusinessDayModalProps> = ({ isOpen, onCl
           <p className="text-[11px] text-slate-500 text-center pt-1">
             Business hours run Monday to Friday. Saturday and Sunday are closed.
           </p>
-        </div>
+        </ScrollArea>
       </div>
     </div>
   );

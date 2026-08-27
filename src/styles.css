@@ -240,30 +240,126 @@ textarea {
   display: none;
 }
 
-/* MIS report tables: a wide, hard-to-miss horizontal scrollbar so a table
-   with more columns than fit on screen reads as "scroll for more" rather
-   than looking cut off. */
-.mis-table-scrollbar {
-  scrollbar-width: auto;
-  scrollbar-color: #94a3b8 #f1f5f9;
+/* =====================================================
+   Overflow / scrolling system
+   -----------------------------------------------------
+   One implementation for every scrollable region in the
+   app. `.scroll-area` supplies the behaviour and the
+   scrollbar skin; the axis classes decide which
+   direction actually scrolls. Drive these through the
+   <ScrollArea> component rather than hand-rolling
+   overflow utilities on individual pages.
+   ===================================================== */
+.scroll-area {
+  /* Momentum scrolling + native horizontal swipe on touch devices. */
+  -webkit-overflow-scrolling: touch;
+  /* Stops a nested scroller from chaining its scroll to the page once it
+     reaches its own end — the usual cause of "the whole page jumped". */
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-.mis-table-scrollbar::-webkit-scrollbar {
-  height: 14px;
+.scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.mis-table-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9;
+.scroll-y {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.mis-table-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #94a3b8;
+.scroll-both {
+  overflow: auto;
+}
+
+/* Scrollbars appear only when there is overflow (overflow: auto), and are
+   sized to be easy to grab without dominating the panel. */
+.scroll-area::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-area::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
   border-radius: 9999px;
-  border: 3px solid #f1f5f9;
+  /* Transparent border + background-clip keeps the thumb visually slim
+     while leaving a full-width hit area for the pointer. */
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
-.mis-table-scrollbar::-webkit-scrollbar-thumb:hover {
+.scroll-area:hover::-webkit-scrollbar-thumb {
+  background-color: #94a3b8;
+}
+
+.scroll-area::-webkit-scrollbar-thumb:hover {
   background-color: #64748b;
+}
+
+.scroll-area::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Safety net: anything still using a bare Tailwind overflow utility (or added
+   later without reaching for <ScrollArea>) picks up the same scrollbar skin
+   and touch behaviour, so no region can look out of place. `.no-scrollbar`
+   opts out deliberately and must keep winning, hence the :not(). */
+.overflow-auto:not(.no-scrollbar),
+.overflow-x-auto:not(.no-scrollbar),
+.overflow-y-auto:not(.no-scrollbar) {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.overflow-auto:not(.no-scrollbar)::-webkit-scrollbar,
+.overflow-x-auto:not(.no-scrollbar)::-webkit-scrollbar,
+.overflow-y-auto:not(.no-scrollbar)::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.overflow-auto:not(.no-scrollbar)::-webkit-scrollbar-track,
+.overflow-x-auto:not(.no-scrollbar)::-webkit-scrollbar-track,
+.overflow-y-auto:not(.no-scrollbar)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-auto:not(.no-scrollbar)::-webkit-scrollbar-thumb,
+.overflow-x-auto:not(.no-scrollbar)::-webkit-scrollbar-thumb,
+.overflow-y-auto:not(.no-scrollbar)::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Table header that stays put while its own container scrolls vertically. */
+.table-sticky-head thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: #f8fafc;
+}
+
+/* Touch devices get a slightly chunkier thumb — a 10px target is hard to
+   hit with a finger, and these panels are swiped more often than dragged. */
+@media (hover: none) {
+  .scroll-area::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  .scroll-area::-webkit-scrollbar-thumb {
+    background-color: #94a3b8;
+  }
 }
 
 /* Custom Scrollbar */
@@ -302,6 +398,200 @@ textarea {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
+}
+
+/* =====================================================
+   Brand surfaces
+   -----------------------------------------------------
+   The sign-in screen's navy → blue → amber wash, reused
+   inside the app so the two read as one product. Applied
+   to chrome and page banners only: data tables stay on
+   plain white, where dense figures are easiest to read.
+   ===================================================== */
+.brand-gradient {
+  background-image: linear-gradient(135deg, #0b4394 0%, #2c5da6 55%, #f6c256 140%);
+}
+
+/* Page banner: the heading block every screen opens with. */
+.page-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  color: #fff;
+  /* The amber stop sits inside the visible range, otherwise the right-hand end
+     desaturates to grey instead of reading as the sign-in screen's warm edge. */
+  background-image: linear-gradient(110deg, #0b4394 0%, #14509e 40%, #3d76bd 72%, #d9a441 118%);
+  box-shadow: 0 10px 24px -12px rgba(11, 67, 148, 0.55);
+}
+
+/* The soft light bloom the sign-in screen has in its top-right corner. */
+.page-banner::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  right: -10%;
+  width: 22rem;
+  height: 22rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+/* The navigation rail: the same wash running top to bottom, deepening at the
+   foot so the user/logout block still separates from the menu above it. */
+.sidebar-gradient {
+  background-image: linear-gradient(180deg, #0b4394 0%, #0d478f 45%, #072f6b 100%);
+}
+
+/* The app shell picks up a faint tint of the same wash. */
+.app-shell {
+  background-color: #f1f5f9;
+  background-image:
+    radial-gradient(46rem 30rem at 88% -8%, rgba(11, 67, 148, 0.1), transparent 60%),
+    radial-gradient(40rem 26rem at -6% 108%, rgba(224, 165, 60, 0.14), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Sign-in core values: the one-word label swaps for the full statement on
+   hover or keyboard focus. Both faces are always in the DOM — only their
+   opacity and offset change — so the text is available to screen readers and
+   the card never resizes as it flips. */
+.value-face,
+.value-detail {
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.value-detail {
+  opacity: 0;
+  transform: translateY(0.5rem);
+}
+
+.value-card:hover .value-face,
+.value-card:focus-visible .value-face {
+  opacity: 0;
+  transform: translateY(-0.5rem);
+}
+
+.value-card:hover .value-detail,
+.value-card:focus-visible .value-detail {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .value-face,
+  .value-detail {
+    transition: none;
+  }
+
+  .value-card:hover .value-face,
+  .value-card:focus-visible .value-face,
+  .value-detail {
+    transform: none;
+  }
+}
+
+/* Sign-in page: the "WE WANT / YOUR / FEEDBACK" speech-bubble chips. The
+   pointer is a CSS triangle so no extra markup is needed per chip. */
+.feedback-pill {
+  position: relative;
+  border-radius: 0.5rem;
+  background: #0b4394;
+  padding: 0.5rem 1rem;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(11, 67, 148, 0.3);
+}
+
+.feedback-pill::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: #0b4394;
+}
+
+/* =====================================================
+   Loading indicator
+   -----------------------------------------------------
+   A "Loading..." wordmark with a sweep that fills the
+   letters left to right. The text lives in ::before so
+   the element itself carries the moving gradient, which
+   is clipped to the glyphs.
+   ===================================================== */
+.loader {
+  width: fit-content;
+  font-weight: bold;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 30px;
+  background: linear-gradient(90deg, #0b4394 50%, #0000 0) right / 200% 100%;
+  animation: l21 2s infinite linear;
+}
+
+.loader::before {
+  content: "Loading...";
+  color: #0000;
+  padding: 0 5px;
+  background: inherit;
+  background-image: linear-gradient(90deg, #fff 50%, #0b4394 0);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* Smaller inline variant for table and card bodies. */
+.loader-sm {
+  font-size: 16px;
+}
+
+@keyframes l21 {
+  100% {
+    background-position: left;
+  }
+}
+
+/* On a dark ground the sweep inverts so the glyphs stay legible. */
+.loader-on-dark {
+  background: linear-gradient(90deg, #fff 50%, #0000 0) right / 200% 100%;
+}
+
+.loader-on-dark::before {
+  background-image: linear-gradient(90deg, #0b4394 50%, #fff 0);
+}
+
+/* Without motion the sweep would never resolve, so show solid text instead. */
+@media (prefers-reduced-motion: reduce) {
+  .loader {
+    animation: none;
+    background: none;
+  }
+
+  .loader::before {
+    color: #0b4394;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+  }
+
+  .loader-on-dark::before {
+    color: #fff;
+  }
+}
+
+/* Full-screen veil used while a manual refresh is in flight. */
+.loader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(248, 250, 252, 0.82);
+  backdrop-filter: blur(2px);
 }
 
 /* Animations */

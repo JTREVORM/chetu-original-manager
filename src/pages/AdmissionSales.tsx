@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
 import { Receipt, Search } from 'lucide-react';
+import { TableScroll } from '../components/common/ScrollArea';
 
 const money = (n: number) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -33,7 +34,7 @@ const monthStartISO = () => {
 };
 
 export const AdmissionSales: React.FC = () => {
-  const { clients, branches, clientGroups } = useDatabase();
+  const { clients, branches, clientGroups, dataVersion } = useDatabase();
   const { user, role } = useAuth();
 
   const isLoanOfficer = role === 'Loan Officer';
@@ -98,7 +99,7 @@ export const AdmissionSales: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dataVersion]);
 
   const officerOptions = useMemo(
     () => officers.filter((o) => !branchId || (o.branch_ids || []).includes(branchId)),
@@ -293,8 +294,9 @@ export const AdmissionSales: React.FC = () => {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden rounded-lg border border-slate-200 bg-white shadow-xs md:block">
-        <table className="w-full table-fixed text-left text-[11px]">
+      <div className="hidden md:block">
+        <TableScroll ariaLabel="Admission sales" className="rounded-lg border border-slate-200 bg-white shadow-xs">
+        <table className="w-full min-w-[900px] table-fixed text-left text-[11px]">
           <colgroup>
             <col style={{ width: '9%' }} />
             <col style={{ width: '10%' }} />
@@ -373,6 +375,7 @@ export const AdmissionSales: React.FC = () => {
             </tfoot>
           )}
         </table>
+        </TableScroll>
       </div>
 
       {/* Mobile cards */}

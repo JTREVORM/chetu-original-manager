@@ -84,7 +84,7 @@ export const Branches: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="rounded-lg bg-[#0B4394] p-5 text-white shadow-xs sm:p-6">
+      <div className="page-banner p-5 sm:p-6">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
           <Building2 className="h-3.5 w-3.5 text-amber-400" />
           Branch Network

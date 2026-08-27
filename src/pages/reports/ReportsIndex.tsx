@@ -8,6 +8,7 @@ import {
   Clock,
   FileSpreadsheet,
   FileText,
+  PiggyBank,
   Receipt,
   TrendingDown,
   Undo2,
@@ -81,6 +82,12 @@ const REPORTS = [
     icon: Coins,
     title: 'Fee Collection Report',
     desc: 'Admission, passbook, processing, CRB, security and group maintenance charges collected.',
+  },
+  {
+    to: '/reports/savings',
+    icon: PiggyBank,
+    title: 'Savings Report',
+    desc: 'Deposits and withdrawals per member, group, branch and loan officer, with net movement.',
   },
 ];
 

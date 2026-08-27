@@ -112,6 +112,16 @@ interface DatabaseContextType {
   logAudit: (action: string, module: string, details: string, record_id?: string) => Promise<void>;
   clearAllData: () => Promise<void>;
   refetch: (options?: { silent?: boolean }) => Promise<void>;
+  /**
+   * Incremented every time `refetch` completes.
+   *
+   * Screens that fetch their own data outside this context (the report hooks,
+   * the loan-officer picker, per-page lists) put this in their effect's
+   * dependency array so the header's Refresh reaches them too — otherwise
+   * Refresh only reloads the tables this context happens to own and the rest
+   * of the screen keeps showing stale rows.
+   */
+  dataVersion: number;
 }
 
 const DatabaseContext = createContext<DatabaseContextType | undefined>(undefined);
@@ -119,6 +129,7 @@ const DatabaseContext = createContext<DatabaseContextType | undefined>(undefined
 export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, role, isAdmin, isAuditor, isBranchManager, isLoanOfficer } = useAuth();
 
+  const [dataVersion, setDataVersion] = useState(0);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientGroups, setClientGroups] = useState<ClientGroup[]>([]);
@@ -251,6 +262,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (settingsRes.data) setSettings(settingsRes.data as SystemSettings);
     if (branchesRes.data) setBranches(branchesRes.data as Branch[]);
     if (transfersRes.data) setTransfers(transfersRes.data as unknown as Transfer[]);
+    // Signals every self-fetching screen to re-pull; see `dataVersion` above.
+    setDataVersion((v) => v + 1);
     setIsLoading(false);
   };
 
@@ -1952,7 +1965,8 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         performGlobalSearch,
         logAudit,
         clearAllData,
-        refetch
+        refetch,
+        dataVersion
       }}
     >
       {children}

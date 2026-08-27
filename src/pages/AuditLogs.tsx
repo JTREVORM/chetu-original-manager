@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { useDatabase } from '../context/DatabaseContext';
 import { ShieldAlert, Search, Clock, User, HardDrive } from 'lucide-react';
 import { PageHeader, FilterBar, FilterGroup, ChipRow, Chip, DesktopOnly, MobileOnly, RecordCard, CardList, EmptyState } from '../components/mobile/Responsive';
@@ -60,7 +61,7 @@ export const AuditLogs: React.FC = () => {
         </div>
 
         <DesktopOnly>
-        <div className="overflow-x-auto">
+        <TableScroll>
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-100/60 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-500">
@@ -102,7 +103,7 @@ export const AuditLogs: React.FC = () => {
               )}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
         </DesktopOnly>
 
         <MobileOnly className="p-3">

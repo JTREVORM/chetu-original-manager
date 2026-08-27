@@ -11,7 +11,7 @@ import { Avatar } from '../components/common/Avatar';
 
 export const UserManagement: React.FC = () => {
   const { user, isAuditor, isAdmin } = useAuth();
-  const { logAudit, branches } = useDatabase();
+  const { logAudit, branches, dataVersion } = useDatabase();
   const { addToast } = useNotifications();
 
   const [usersList, setUsersList] = useState<Profile[]>([]);
@@ -60,7 +60,7 @@ export const UserManagement: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [dataVersion]);
 
   // All privileged actions (create, edit role/status, reset password) go through
   // a server function that holds the service-role key server-side and re-checks
@@ -255,7 +255,7 @@ export const UserManagement: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="rounded-lg bg-[#0B4394] p-5 text-white shadow-xs sm:p-6">
+      <div className="page-banner p-5 sm:p-6">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
           <UserCog className="h-3.5 w-3.5 text-amber-400" />
           Staff Accounts
@@ -377,7 +377,7 @@ export const UserManagement: React.FC = () => {
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="w-[calc(100vw-1.5rem)] md:w-full max-w-md bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-5 bg-[#0B4394] text-white flex items-center justify-between">
+            <div className="p-5 brand-gradient text-white flex items-center justify-between">
               <h3 className="text-base font-bold">Register New Staff User</h3>
               <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-300 hover:text-white">
                 <X className="w-5 h-5" />
@@ -527,7 +527,7 @@ export const UserManagement: React.FC = () => {
       {isEditModalOpen && editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="w-[calc(100vw-1.5rem)] md:w-full max-w-md bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-5 bg-[#0B4394] text-white flex items-center justify-between">
+            <div className="p-5 brand-gradient text-white flex items-center justify-between">
               <h3 className="text-base font-bold">Edit User Profile</h3>
               <button onClick={() => { setIsEditModalOpen(false); setEditingUser(null); }} className="text-slate-300 hover:text-white">
                 <X className="w-5 h-5" />

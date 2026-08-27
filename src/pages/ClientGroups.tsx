@@ -6,6 +6,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { supabase } from '../integrations/supabase/client';
 import { ClientGroup } from '../types/database.types';
 import { formatUGX } from '../lib/loanCalculations';
+import { TableScroll } from '../components/common/ScrollArea';
 import {
   Users,
   X,
@@ -28,7 +29,8 @@ export const ClientGroups: React.FC = () => {
     clients,
     branches,
     groupAttendance,
-    recordGroupAttendance
+    recordGroupAttendance,
+    dataVersion
   } = useDatabase();
   const { addToast } = useNotifications();
 
@@ -60,7 +62,7 @@ export const ClientGroups: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [canSelectOfficer]);
+  }, [canSelectOfficer, dataVersion]);
 
   // Draft filters (applied on Search) + applied filters used by the table
   const initialBranch = canSelectBranch ? 'All' : myBranchIds[0] || 'All';
@@ -207,7 +209,7 @@ export const ClientGroups: React.FC = () => {
   return (
     <div className="space-y-5 pb-12">
       {/* Header */}
-      <div className="rounded-2xl bg-[#0B4394] p-6 text-white shadow-xl">
+      <div className="page-banner p-6">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-200">
           <Building className="h-3.5 w-3.5 text-amber-400" />
           Group Register
@@ -321,7 +323,8 @@ export const ClientGroups: React.FC = () => {
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         <div className="hidden md:block">
-          <table className="w-full table-fixed border-collapse text-left">
+          <TableScroll ariaLabel="Client groups">
+          <table className="w-full min-w-[1100px] table-fixed border-collapse text-left">
             <colgroup>
               <col className="w-[9%]" />
               <col className="w-[8%]" />
@@ -408,6 +411,7 @@ export const ClientGroups: React.FC = () => {
               ))}
             </tbody>
           </table>
+          </TableScroll>
         </div>
 
         {/* Mobile cards */}
@@ -461,7 +465,7 @@ export const ClientGroups: React.FC = () => {
       {isEditModalOpen && selectedGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
           <div className="max-h-[90vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl md:w-full">
-            <div className="flex items-center justify-between bg-[#0B4394] p-5 text-white">
+            <div className="flex items-center justify-between brand-gradient p-5 text-white">
               <h3 className="text-base font-bold">Edit Client Group</h3>
               <button onClick={() => setIsEditModalOpen(false)} className="text-slate-300 hover:text-white">
                 <X className="h-5 w-5" />

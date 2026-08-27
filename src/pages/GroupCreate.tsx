@@ -118,7 +118,7 @@ export const GroupCreate: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 pb-16">
-      <div className="rounded-2xl bg-[#0B4394] p-6 text-white shadow-xl">
+      <div className="page-banner p-6">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-200">
           <UserPlus className="h-3.5 w-3.5 text-amber-400" />
           New Lending Group

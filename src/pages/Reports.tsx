@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { useDatabase } from '../context/DatabaseContext';
 import { generatePortfolioReportPDF } from '../lib/pdfGenerator';
 import { exportToCSV } from '../lib/excelExporter';
@@ -230,7 +231,7 @@ export const Reports: React.FC = () => {
         </div>
 
         <DesktopOnly>
-        <div className="overflow-x-auto">
+        <TableScroll>
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-slate-100/70 border-b border-slate-200 text-[11px] font-bold uppercase text-slate-600">
@@ -259,7 +260,7 @@ export const Reports: React.FC = () => {
               )}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
         </DesktopOnly>
 
         <MobileOnly className="p-3">

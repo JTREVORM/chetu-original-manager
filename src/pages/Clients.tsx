@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { Link } from '../lib/router-compat';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
@@ -146,7 +147,7 @@ export const Clients: React.FC = () => {
   return (
     <div className="space-y-5 pb-12 sm:space-y-6">
       {/* Header */}
-      <div className="rounded-2xl bg-[#0B4394] p-6 text-white shadow-xl">
+      <div className="page-banner p-6">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-200">
           <Users className="h-3.5 w-3.5 text-amber-400" />
           Member Register
@@ -229,7 +230,8 @@ export const Clients: React.FC = () => {
 
       {/* Members table */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="hidden overflow-x-auto md:block">
+        <div className="hidden md:block">
+<TableScroll>
           <table className="w-full min-w-[900px] border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-600">
@@ -304,7 +306,8 @@ export const Clients: React.FC = () => {
               ))}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
+</div>
 
         {/* Mobile cards */}
         <div className="divide-y divide-slate-100 md:hidden">
@@ -336,7 +339,7 @@ export const Clients: React.FC = () => {
       {selectedClient && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/50 backdrop-blur-xs flex justify-end">
           <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col">
-            <div className="p-5 bg-[#0B4394] text-white flex items-center justify-between">
+            <div className="p-5 brand-gradient text-white flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Avatar
                   src={selectedClient.passport_photo}
@@ -529,7 +532,7 @@ export const Clients: React.FC = () => {
       {isEditModalOpen && selectedClient && (
         <div data-testid="client-edit-modal" className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-[calc(100vw-1.5rem)] max-w-2xl md:w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-5 bg-[#0B4394] text-white flex items-center justify-between">
+            <div className="p-5 brand-gradient text-white flex items-center justify-between">
               <h3 className="text-base font-bold">Edit Client Profile</h3>
               <button onClick={() => setIsEditModalOpen(false)} className="text-slate-300 hover:text-white">
                 <X className="w-5 h-5" />

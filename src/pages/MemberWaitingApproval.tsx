@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { TableScroll } from '../components/common/ScrollArea';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -104,7 +105,7 @@ export const MemberWaitingApproval: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-12">
-      <div className="rounded-2xl bg-[#0B4394] p-6 text-white shadow-xl">
+      <div className="page-banner p-6">
         <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-200">
           <Clock className="h-3.5 w-3.5 text-amber-400" />
           Member Approvals
@@ -133,7 +134,8 @@ export const MemberWaitingApproval: React.FC = () => {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block">
+<TableScroll>
           <table className="w-full min-w-[900px] table-fixed border-collapse text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-tight text-slate-600">
@@ -203,7 +205,8 @@ export const MemberWaitingApproval: React.FC = () => {
               })}
             </tbody>
           </table>
-        </div>
+        </TableScroll>
+</div>
 
         {/* Mobile cards */}
         <div className="divide-y divide-slate-100 md:hidden">
@@ -252,7 +255,7 @@ export const MemberWaitingApproval: React.FC = () => {
       {editingClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
           <div className="max-h-[90vh] w-[calc(100vw-1.5rem)] max-w-lg overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl md:w-full">
-            <div className="flex items-center justify-between bg-[#0B4394] p-5 text-white">
+            <div className="flex items-center justify-between brand-gradient p-5 text-white">
               <h3 className="text-base font-bold">Edit Member Submission</h3>
               <button onClick={() => setEditingClient(null)} className="text-slate-300 hover:text-white">
                 <X className="h-5 w-5" />

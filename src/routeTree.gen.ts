@@ -41,6 +41,7 @@ import { Route as MemberListRouteImport } from './routes/member-list'
 import { Route as MemberRejectedRouteImport } from './routes/member-rejected'
 import { Route as MemberWaitingApprovalRouteImport } from './routes/member-waiting-approval'
 import { Route as OverdueCollectionRouteImport } from './routes/overdue-collection'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RepaymentsRouteImport } from './routes/repayments'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as SavingsRouteImport } from './routes/savings'
@@ -62,6 +63,7 @@ import { Route as ReportsOutstandingRouteImport } from './routes/reports.outstan
 import { Route as ReportsOverdueCollectionListRouteImport } from './routes/reports.overdue-collection-list'
 import { Route as ReportsParRouteImport } from './routes/reports.par'
 import { Route as ReportsReversalsRouteImport } from './routes/reports.reversals'
+import { Route as ReportsSavingsRouteImport } from './routes/reports.savings'
 import { Route as TransfersGroupInterchangeRouteImport } from './routes/transfers.group-interchange'
 import { Route as TransfersGroupOfficerRouteImport } from './routes/transfers.group-officer'
 import { Route as TransfersMemberRouteImport } from './routes/transfers.member'
@@ -228,6 +230,11 @@ const OverdueCollectionRoute = OverdueCollectionRouteImport.update({
   path: '/overdue-collection',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RepaymentsRoute = RepaymentsRouteImport.update({
   id: '/repayments',
   path: '/repayments',
@@ -336,6 +343,11 @@ const ReportsReversalsRoute = ReportsReversalsRouteImport.update({
   path: '/reversals',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsSavingsRoute = ReportsSavingsRouteImport.update({
+  id: '/savings',
+  path: '/savings',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const TransfersGroupInterchangeRoute =
   TransfersGroupInterchangeRouteImport.update({
     id: '/transfers/group-interchange',
@@ -396,6 +408,7 @@ export interface FileRoutesByFullPath {
   '/member-rejected': typeof MemberRejectedRoute
   '/member-waiting-approval': typeof MemberWaitingApprovalRoute
   '/overdue-collection': typeof OverdueCollectionRoute
+  '/profile': typeof ProfileRoute
   '/repayments': typeof RepaymentsRoute
   '/reports': typeof ReportsRouteWithChildren
   '/savings': typeof SavingsRoute
@@ -416,6 +429,7 @@ export interface FileRoutesByFullPath {
   '/reports/overdue-collection-list': typeof ReportsOverdueCollectionListRoute
   '/reports/par': typeof ReportsParRoute
   '/reports/reversals': typeof ReportsReversalsRoute
+  '/reports/savings': typeof ReportsSavingsRoute
   '/transfers/group-interchange': typeof TransfersGroupInterchangeRoute
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
@@ -456,6 +470,7 @@ export interface FileRoutesByTo {
   '/member-rejected': typeof MemberRejectedRoute
   '/member-waiting-approval': typeof MemberWaitingApprovalRoute
   '/overdue-collection': typeof OverdueCollectionRoute
+  '/profile': typeof ProfileRoute
   '/repayments': typeof RepaymentsRoute
   '/savings': typeof SavingsRoute
   '/savings-accounts': typeof SavingsAccountsRoute
@@ -475,6 +490,7 @@ export interface FileRoutesByTo {
   '/reports/overdue-collection-list': typeof ReportsOverdueCollectionListRoute
   '/reports/par': typeof ReportsParRoute
   '/reports/reversals': typeof ReportsReversalsRoute
+  '/reports/savings': typeof ReportsSavingsRoute
   '/transfers/group-interchange': typeof TransfersGroupInterchangeRoute
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
@@ -516,6 +532,7 @@ export interface FileRoutesById {
   '/member-rejected': typeof MemberRejectedRoute
   '/member-waiting-approval': typeof MemberWaitingApprovalRoute
   '/overdue-collection': typeof OverdueCollectionRoute
+  '/profile': typeof ProfileRoute
   '/repayments': typeof RepaymentsRoute
   '/reports': typeof ReportsRouteWithChildren
   '/savings': typeof SavingsRoute
@@ -536,6 +553,7 @@ export interface FileRoutesById {
   '/reports/overdue-collection-list': typeof ReportsOverdueCollectionListRoute
   '/reports/par': typeof ReportsParRoute
   '/reports/reversals': typeof ReportsReversalsRoute
+  '/reports/savings': typeof ReportsSavingsRoute
   '/transfers/group-interchange': typeof TransfersGroupInterchangeRoute
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
@@ -578,6 +596,7 @@ export interface FileRouteTypes {
     | '/member-rejected'
     | '/member-waiting-approval'
     | '/overdue-collection'
+    | '/profile'
     | '/repayments'
     | '/reports'
     | '/savings'
@@ -598,6 +617,7 @@ export interface FileRouteTypes {
     | '/reports/overdue-collection-list'
     | '/reports/par'
     | '/reports/reversals'
+    | '/reports/savings'
     | '/transfers/group-interchange'
     | '/transfers/group-officer'
     | '/transfers/member'
@@ -638,6 +658,7 @@ export interface FileRouteTypes {
     | '/member-rejected'
     | '/member-waiting-approval'
     | '/overdue-collection'
+    | '/profile'
     | '/repayments'
     | '/savings'
     | '/savings-accounts'
@@ -657,6 +678,7 @@ export interface FileRouteTypes {
     | '/reports/overdue-collection-list'
     | '/reports/par'
     | '/reports/reversals'
+    | '/reports/savings'
     | '/transfers/group-interchange'
     | '/transfers/group-officer'
     | '/transfers/member'
@@ -697,6 +719,7 @@ export interface FileRouteTypes {
     | '/member-rejected'
     | '/member-waiting-approval'
     | '/overdue-collection'
+    | '/profile'
     | '/repayments'
     | '/reports'
     | '/savings'
@@ -717,6 +740,7 @@ export interface FileRouteTypes {
     | '/reports/overdue-collection-list'
     | '/reports/par'
     | '/reports/reversals'
+    | '/reports/savings'
     | '/transfers/group-interchange'
     | '/transfers/group-officer'
     | '/transfers/member'
@@ -758,6 +782,7 @@ export interface RootRouteChildren {
   MemberRejectedRoute: typeof MemberRejectedRoute
   MemberWaitingApprovalRoute: typeof MemberWaitingApprovalRoute
   OverdueCollectionRoute: typeof OverdueCollectionRoute
+  ProfileRoute: typeof ProfileRoute
   RepaymentsRoute: typeof RepaymentsRoute
   ReportsRoute: typeof ReportsRouteWithChildren
   SavingsRoute: typeof SavingsRoute
@@ -1000,6 +1025,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OverdueCollectionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/repayments': {
       id: '/repayments'
       path: '/repayments'
@@ -1147,6 +1179,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsReversalsRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/savings': {
+      id: '/reports/savings'
+      path: '/savings'
+      fullPath: '/reports/savings'
+      preLoaderRoute: typeof ReportsSavingsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/transfers/group-interchange': {
       id: '/transfers/group-interchange'
       path: '/transfers/group-interchange'
@@ -1197,6 +1236,7 @@ interface ReportsRouteChildren {
   ReportsOverdueCollectionListRoute: typeof ReportsOverdueCollectionListRoute
   ReportsParRoute: typeof ReportsParRoute
   ReportsReversalsRoute: typeof ReportsReversalsRoute
+  ReportsSavingsRoute: typeof ReportsSavingsRoute
   ReportsIndexRoute: typeof ReportsIndexRoute
 }
 
@@ -1212,6 +1252,7 @@ const ReportsRouteChildren: ReportsRouteChildren = {
   ReportsOverdueCollectionListRoute: ReportsOverdueCollectionListRoute,
   ReportsParRoute: ReportsParRoute,
   ReportsReversalsRoute: ReportsReversalsRoute,
+  ReportsSavingsRoute: ReportsSavingsRoute,
   ReportsIndexRoute: ReportsIndexRoute,
 }
 
@@ -1251,6 +1292,7 @@ const rootRouteChildren: RootRouteChildren = {
   MemberRejectedRoute: MemberRejectedRoute,
   MemberWaitingApprovalRoute: MemberWaitingApprovalRoute,
   OverdueCollectionRoute: OverdueCollectionRoute,
+  ProfileRoute: ProfileRoute,
   RepaymentsRoute: RepaymentsRoute,
   ReportsRoute: ReportsRouteWithChildren,
   SavingsRoute: SavingsRoute,

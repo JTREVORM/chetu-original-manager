@@ -146,7 +146,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 scroll-area scroll-y">
           {grouped.length === 0 ? (
             <div className="px-6 py-16 text-center">
               <Bell className="mx-auto mb-3 h-9 w-9 text-slate-200" />
@@ -174,27 +174,48 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
                         <button
                           type="button"
                           onClick={() => open(item)}
-                          className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 ${
-                            item.is_read ? '' : 'bg-[#0B4394]/[0.035]'
+                          className={`flex w-full items-start gap-3 py-3 pr-4 text-left transition-colors ${
+                            item.is_read
+                              ? 'bg-white pl-4 hover:bg-slate-50'
+                              : // Unread reads as a distinct state, not a tint a
+                                // tired eye has to hunt for: tinted row, solid
+                                // accent rail and darker copy.
+                                'border-l-4 border-[#0B4394] bg-blue-50/70 pl-3 hover:bg-blue-100/70'
                           }`}
                         >
-                          {/* Unread marker, kept as a thin rule rather than a dot
-                              so the icon column stays aligned. */}
-                          <span
-                            aria-hidden
-                            className={`mt-1 h-9 w-0.5 shrink-0 rounded-full ${item.is_read ? 'bg-transparent' : 'bg-[#0B4394]'}`}
-                          />
                           <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded ${style.ring} ${style.text}`}>
                             <Icon className="h-4 w-4" />
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex items-baseline justify-between gap-2">
-                              <span className={`min-w-0 truncate text-[13px] ${item.is_read ? 'font-semibold text-slate-700' : 'font-bold text-slate-900'}`}>
-                                {item.title}
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                {!item.is_read && (
+                                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#0B4394]" />
+                                )}
+                                <span
+                                  className={`min-w-0 truncate text-[13px] ${
+                                    item.is_read ? 'font-semibold text-slate-600' : 'font-black text-slate-900'
+                                  }`}
+                                >
+                                  {item.title}
+                                </span>
                               </span>
-                              <span className="shrink-0 text-[11px] text-slate-400">{relativeTime(item.created_at)}</span>
+                              <span
+                                className={`shrink-0 text-[11px] ${
+                                  item.is_read ? 'text-slate-400' : 'font-bold text-[#0B4394]'
+                                }`}
+                              >
+                                {relativeTime(item.created_at)}
+                              </span>
                             </span>
-                            <span className="mt-0.5 block text-[12px] leading-relaxed text-slate-600">{item.message}</span>
+                            <span
+                              className={`mt-0.5 block text-[12px] leading-relaxed ${
+                                item.is_read ? 'text-slate-500' : 'text-slate-700'
+                              }`}
+                            >
+                              {item.message}
+                            </span>
+                            {!item.is_read && <span className="sr-only">Unread</span>}
                           </span>
                           {item.link_url && <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-slate-300" />}
                         </button>

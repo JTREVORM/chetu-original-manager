@@ -14,6 +14,7 @@ import {
   useMisScope,
   type MisColumn,
 } from '../../components/mis/MisKit';
+import { ScrollArea } from '../../components/common/ScrollArea';
 import { ReportExportButtons } from '../../components/mis/ReportExport';
 import { exportToCSV } from '../../lib/excelExporter';
 import { useDatabase } from '../../context/DatabaseContext';
@@ -314,7 +315,7 @@ const Info2: React.FC<{ label: string; value: string }> = ({ label, value }) => 
 );
 
 export const MiniTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ headers, rows }) => (
-  <div className="overflow-x-auto rounded border border-slate-200">
+  <ScrollArea axis="x" className="rounded border border-slate-200">
     <table className="w-full min-w-[560px] text-left text-[11px]">
       <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
         <tr>
@@ -345,5 +346,5 @@ export const MiniTable: React.FC<{ headers: string[]; rows: string[][] }> = ({ h
         )}
       </tbody>
     </table>
-  </div>
+  </ScrollArea>
 );
