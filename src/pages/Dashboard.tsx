@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { TableScroll } from '../components/common/ScrollArea';
+import { BusinessDayBanner } from '../components/common/BusinessDayBanner';
 import { useNavigate } from '../lib/router-compat';
 import { useAuth } from '../context/AuthContext';
 import { useDatabase } from '../context/DatabaseContext';
@@ -222,6 +223,10 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
+      {/* Whether work is permitted right now, above everything else — a number
+          on this page is not actionable if the system is locked. */}
+      <BusinessDayBanner />
+
       {/* Welcome band. Greets by time of day and first name, then states in one
           line what this person is accountable for — the greeting earns its place
           by carrying the scope, rather than being decoration above the numbers. */}

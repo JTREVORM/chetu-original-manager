@@ -34,7 +34,8 @@ import {
   ClipboardList,
   ArrowLeftRight,
   Send,
-  Coins
+  Coins,
+  CalendarCheck
 } from 'lucide-react';
 
 interface SubMenuItem {
@@ -77,6 +78,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   };
 
   const navGroups: NavGroup[] = [
+    {
+      id: 'businessday',
+      name: 'Business Day',
+      icon: CalendarCheck,
+      subItems: [
+        { name: 'Business Day Control', path: '/business-day', icon: CalendarCheck }
+      ]
+    },
     {
       id: 'groups',
       name: 'Groups',

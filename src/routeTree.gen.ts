@@ -18,6 +18,7 @@ import { Route as BadDebtsCollectionRouteImport } from './routes/bad-debts-colle
 import { Route as BadLoansRouteImport } from './routes/bad-loans'
 import { Route as BankManagementRouteImport } from './routes/bank-management'
 import { Route as BranchesRouteImport } from './routes/branches'
+import { Route as BusinessDayRouteImport } from './routes/business-day'
 import { Route as CalculatorRouteImport } from './routes/calculator'
 import { Route as ClientGroupsRouteImport } from './routes/client-groups'
 import { Route as ClientsRouteImport } from './routes/clients'
@@ -113,6 +114,11 @@ const BankManagementRoute = BankManagementRouteImport.update({
 const BranchesRoute = BranchesRouteImport.update({
   id: '/branches',
   path: '/branches',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BusinessDayRoute = BusinessDayRouteImport.update({
+  id: '/business-day',
+  path: '/business-day',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CalculatorRoute = CalculatorRouteImport.update({
@@ -385,6 +391,7 @@ export interface FileRoutesByFullPath {
   '/bad-loans': typeof BadLoansRoute
   '/bank-management': typeof BankManagementRoute
   '/branches': typeof BranchesRoute
+  '/business-day': typeof BusinessDayRoute
   '/calculator': typeof CalculatorRoute
   '/client-groups': typeof ClientGroupsRoute
   '/clients': typeof ClientsRoute
@@ -447,6 +454,7 @@ export interface FileRoutesByTo {
   '/bad-loans': typeof BadLoansRoute
   '/bank-management': typeof BankManagementRoute
   '/branches': typeof BranchesRoute
+  '/business-day': typeof BusinessDayRoute
   '/calculator': typeof CalculatorRoute
   '/client-groups': typeof ClientGroupsRoute
   '/clients': typeof ClientsRoute
@@ -509,6 +517,7 @@ export interface FileRoutesById {
   '/bad-loans': typeof BadLoansRoute
   '/bank-management': typeof BankManagementRoute
   '/branches': typeof BranchesRoute
+  '/business-day': typeof BusinessDayRoute
   '/calculator': typeof CalculatorRoute
   '/client-groups': typeof ClientGroupsRoute
   '/clients': typeof ClientsRoute
@@ -573,6 +582,7 @@ export interface FileRouteTypes {
     | '/bad-loans'
     | '/bank-management'
     | '/branches'
+    | '/business-day'
     | '/calculator'
     | '/client-groups'
     | '/clients'
@@ -635,6 +645,7 @@ export interface FileRouteTypes {
     | '/bad-loans'
     | '/bank-management'
     | '/branches'
+    | '/business-day'
     | '/calculator'
     | '/client-groups'
     | '/clients'
@@ -696,6 +707,7 @@ export interface FileRouteTypes {
     | '/bad-loans'
     | '/bank-management'
     | '/branches'
+    | '/business-day'
     | '/calculator'
     | '/client-groups'
     | '/clients'
@@ -759,6 +771,7 @@ export interface RootRouteChildren {
   BadLoansRoute: typeof BadLoansRoute
   BankManagementRoute: typeof BankManagementRoute
   BranchesRoute: typeof BranchesRoute
+  BusinessDayRoute: typeof BusinessDayRoute
   CalculatorRoute: typeof CalculatorRoute
   ClientGroupsRoute: typeof ClientGroupsRoute
   ClientsRoute: typeof ClientsRoute
@@ -862,6 +875,13 @@ declare module '@tanstack/react-router' {
       path: '/branches'
       fullPath: '/branches'
       preLoaderRoute: typeof BranchesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/business-day': {
+      id: '/business-day'
+      path: '/business-day'
+      fullPath: '/business-day'
+      preLoaderRoute: typeof BusinessDayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/calculator': {
@@ -1269,6 +1289,7 @@ const rootRouteChildren: RootRouteChildren = {
   BadLoansRoute: BadLoansRoute,
   BankManagementRoute: BankManagementRoute,
   BranchesRoute: BranchesRoute,
+  BusinessDayRoute: BusinessDayRoute,
   CalculatorRoute: CalculatorRoute,
   ClientGroupsRoute: ClientGroupsRoute,
   ClientsRoute: ClientsRoute,
