@@ -6,9 +6,15 @@ export const Route = createFileRoute("/loan-products")({
   head: () => ({
     meta: [
       { title: "Loan Products | Chetu Microfinance" },
-      { name: "description", content: "Loan Products workspace in the Chetu microfinance management system." },
+      {
+        name: "description",
+        content: "Loan Products workspace in the Chetu microfinance management system.",
+      },
       { property: "og:title", content: "Loan Products | Chetu Microfinance" },
-      { property: "og:description", content: "Loan Products workspace in the Chetu microfinance management system." },
+      {
+        property: "og:description",
+        content: "Loan Products workspace in the Chetu microfinance management system.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

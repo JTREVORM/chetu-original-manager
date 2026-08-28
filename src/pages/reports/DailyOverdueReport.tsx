@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   Field,
   MisFilters,
@@ -11,10 +11,10 @@ import {
   todayISO,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
-import { useDatabase } from '../../context/DatabaseContext';
-import { matchScope, overdueAsOf, useLoanRows, type LoanRow } from './reportData';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
+import { useDatabase } from "../../context/DatabaseContext";
+import { matchScope, overdueAsOf, useLoanRows, type LoanRow } from "./reportData";
 
 interface Row extends LoanRow {
   overdue: number;
@@ -29,13 +29,25 @@ export const DailyOverdueReport: React.FC = () => {
   const { rows, loading } = useLoanRows(scope);
 
   const [asOn, setAsOn] = useState(todayISO());
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const [applied, setApplied] = useState({ branchId: '', officerId: '', groupId: '', asOn: '', search: '' });
+  const [applied, setApplied] = useState({
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    asOn: "",
+    search: "",
+  });
 
   const runSearch = () => {
     setHasSearched(true);
-    setApplied({ branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId, asOn, search });
+    setApplied({
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      asOn,
+      search,
+    });
   };
 
   const filtered = useMemo<Row[]>(() => {
@@ -44,7 +56,8 @@ export const DailyOverdueReport: React.FC = () => {
     for (const p of repayments) {
       if (p.payment_date > applied.asOn) continue;
       const prev = lastByLoan.get(p.loan_id);
-      if (!prev || p.payment_date >= prev.date) lastByLoan.set(p.loan_id, { amount: Number(p.amount_paid), date: p.payment_date });
+      if (!prev || p.payment_date >= prev.date)
+        lastByLoan.set(p.loan_id, { amount: Number(p.amount_paid), date: p.payment_date });
     }
     return rows
       .filter((r) => matchScope(r, applied, scope))
@@ -66,11 +79,11 @@ export const DailyOverdueReport: React.FC = () => {
   const totalOutstanding = filtered.reduce((s, r) => s + Number(r.loan.outstanding_balance), 0);
 
   const columns: MisColumn<Row>[] = [
-    { key: 'branch', label: 'Branch', width: '11%', render: (r) => r.branch_name },
+    { key: "branch", label: "Branch", width: "11%", render: (r) => r.branch_name },
     {
-      key: 'member',
-      label: 'Member Name',
-      width: '16%',
+      key: "member",
+      label: "Member Name",
+      width: "16%",
       render: (r) => (
         <span className="font-semibold text-slate-900">
           {r.client.full_name}
@@ -79,27 +92,48 @@ export const DailyOverdueReport: React.FC = () => {
       ),
       text: (r) => r.client.full_name,
     },
-    { key: 'loan', label: 'Loan No', width: '13%', render: (r) => r.loan.loan_number },
-    { key: 'disb', label: 'Disbursement Date', width: '11%', render: (r) => shortDate(r.loan.disbursed_at) },
-    { key: 'prin', label: 'Principal Amount', width: '12%', align: 'right', render: (r) => money(r.loan.principal_amount) },
+    { key: "loan", label: "Loan No", width: "13%", render: (r) => r.loan.loan_number },
     {
-      key: 'overdue',
-      label: 'Overdue Amount',
-      width: '12%',
-      align: 'right',
+      key: "disb",
+      label: "Disbursement Date",
+      width: "11%",
+      render: (r) => shortDate(r.loan.disbursed_at),
+    },
+    {
+      key: "prin",
+      label: "Principal Amount",
+      width: "12%",
+      align: "right",
+      render: (r) => money(r.loan.principal_amount),
+    },
+    {
+      key: "overdue",
+      label: "Overdue Amount",
+      width: "12%",
+      align: "right",
       render: (r) => <span className="font-bold text-rose-600">{money(r.overdue)}</span>,
       text: (r) => money(r.overdue),
     },
-    { key: 'out', label: 'Outstanding Amount', width: '12%', align: 'right', render: (r) => money(r.loan.outstanding_balance) },
     {
-      key: 'last',
-      label: 'Last Collection Amount',
-      width: '13%',
-      align: 'right',
+      key: "out",
+      label: "Outstanding Amount",
+      width: "12%",
+      align: "right",
+      render: (r) => money(r.loan.outstanding_balance),
+    },
+    {
+      key: "last",
+      label: "Last Collection Amount",
+      width: "13%",
+      align: "right",
       render: (r) => (
         <span>
           {money(r.lastCollection)}
-          {r.lastCollectionDate && <span className="block text-[10px] text-slate-400">{shortDate(r.lastCollectionDate)}</span>}
+          {r.lastCollectionDate && (
+            <span className="block text-[10px] text-slate-400">
+              {shortDate(r.lastCollectionDate)}
+            </span>
+          )}
         </span>
       ),
       text: (r) => money(r.lastCollection),
@@ -108,7 +142,16 @@ export const DailyOverdueReport: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Daily Overdue Report" period={`As on ${shortDate(applied.asOn || asOn)}`} columns={columns} rows={filtered} />}>
+      <MisPageTitle
+        right={
+          <ReportExportButtons
+            title="Daily Overdue Report"
+            period={`As on ${shortDate(applied.asOn || asOn)}`}
+            columns={columns}
+            rows={filtered}
+          />
+        }
+      >
         Daily Overdue Report
       </MisPageTitle>
 
@@ -122,7 +165,12 @@ export const DailyOverdueReport: React.FC = () => {
       >
         <ScopeFields scope={scope} />
         <Field label="As On Date">
-          <input type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={asOn}
+            onChange={(e) => setAsOn(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <SearchButton onClick={runSearch} />
       </MisFilters>

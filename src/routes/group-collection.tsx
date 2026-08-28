@@ -6,9 +6,15 @@ export const Route = createFileRoute("/group-collection")({
   head: () => ({
     meta: [
       { title: "Group Wise Collection | Chetu Microfinance" },
-      { name: "description", content: "Record weekly group repayments for every member of a lending group." },
+      {
+        name: "description",
+        content: "Record weekly group repayments for every member of a lending group.",
+      },
       { property: "og:title", content: "Group Wise Collection | Chetu Microfinance" },
-      { property: "og:description", content: "Record weekly group repayments for every member of a lending group." },
+      {
+        property: "og:description",
+        content: "Record weekly group repayments for every member of a lending group.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

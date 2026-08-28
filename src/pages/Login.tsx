@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { useNavigate } from '../lib/router-compat';
-import { useAuth } from '../context/AuthContext';
-import { useDatabase } from '../context/DatabaseContext';
+import React, { useState } from "react";
+import { useNavigate } from "../lib/router-compat";
+import { useAuth } from "../context/AuthContext";
+import { useDatabase } from "../context/DatabaseContext";
 import {
   Lock,
   ChevronRight,
@@ -16,12 +16,12 @@ import {
   Star,
   PlusCircle,
   Users,
-} from 'lucide-react';
+} from "lucide-react";
 
-import { Profile } from '../types/database.types';
-import { UgandaFlag } from '../components/common/UgandaFlag';
+import { Profile } from "../types/database.types";
+import { UgandaFlag } from "../components/common/UgandaFlag";
 
-const FEEDBACK_WORDS = ['WE WANT', 'YOUR', 'FEEDBACK'];
+const FEEDBACK_WORDS = ["WE WANT", "YOUR", "FEEDBACK"];
 
 /**
  * What the institution says it stands for, shown beside the sign-in card.
@@ -30,34 +30,34 @@ const FEEDBACK_WORDS = ['WE WANT', 'YOUR', 'FEEDBACK'];
  */
 const CORE_VALUES = [
   {
-    label: 'Consistency',
+    label: "Consistency",
     icon: RefreshCcw,
-    title: 'Be Consistent',
-    detail: 'Do the simple tasks right every day, every time.',
+    title: "Be Consistent",
+    detail: "Do the simple tasks right every day, every time.",
   },
   {
-    label: 'Integrity',
+    label: "Integrity",
     icon: HeartHandshake,
-    title: 'Have Integrity',
-    detail: 'Do the right thing all the time even when no one is looking.',
+    title: "Have Integrity",
+    detail: "Do the right thing all the time even when no one is looking.",
   },
   {
-    label: 'Ambition',
+    label: "Ambition",
     icon: Star,
-    title: 'Be Ambitious',
-    detail: 'Strive to innovate, grow, and improve in all you do.',
+    title: "Be Ambitious",
+    detail: "Strive to innovate, grow, and improve in all you do.",
   },
   {
-    label: 'Positivity',
+    label: "Positivity",
     icon: PlusCircle,
-    title: 'Be Positive',
-    detail: 'Stay upbeat and keep a fun attitude.',
+    title: "Be Positive",
+    detail: "Stay upbeat and keep a fun attitude.",
   },
   {
-    label: 'Unity',
+    label: "Unity",
     icon: Users,
-    title: 'Be United',
-    detail: 'United as one team in all that we do.',
+    title: "Be United",
+    detail: "United as one team in all that we do.",
   },
 ];
 
@@ -66,51 +66,55 @@ export const Login: React.FC = () => {
   const { logAudit } = useDatabase();
   const navigate = useNavigate();
 
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const [setupName, setSetupName] = useState('');
-  const [setupPhone, setSetupPhone] = useState('');
-  const [setupPassword, setSetupPassword] = useState('');
+  const [setupName, setSetupName] = useState("");
+  const [setupPhone, setSetupPhone] = useState("");
+  const [setupPassword, setSetupPassword] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    setErrorMsg("");
 
     // Staff sign in with their email address, or with the phone number they are
     // used to — the identifier is passed through as typed and resolved by the
     // auth layer.
     const identifier = phone.trim();
-    const isEmail = identifier.includes('@');
+    const isEmail = identifier.includes("@");
     const phoneRegex = /^07\d{8}$/;
 
     if (!isEmail && !phoneRegex.test(identifier)) {
-      setErrorMsg('Enter your email address, or a phone number of 10 digits starting with 07.');
+      setErrorMsg("Enter your email address, or a phone number of 10 digits starting with 07.");
       return;
     }
 
-    const credential = isEmail ? identifier.toLowerCase() : '+256' + identifier.slice(1);
+    const credential = isEmail ? identifier.toLowerCase() : "+256" + identifier.slice(1);
     const success = await login(credential, password);
     if (success) {
-      logAudit('System Login', 'Authentication', `User signed in with ${isEmail ? identifier.toLowerCase() : 'phone number ' + identifier}.`);
-      navigate('/');
+      logAudit(
+        "System Login",
+        "Authentication",
+        `User signed in with ${isEmail ? identifier.toLowerCase() : "phone number " + identifier}.`,
+      );
+      navigate("/");
     } else {
-      setErrorMsg('Those sign-in details were not recognised. Check and try again.');
+      setErrorMsg("Those sign-in details were not recognised. Check and try again.");
     }
   };
 
   const handleSetup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!setupName.trim() || !setupPhone.trim() || !setupPassword.trim()) {
-      setErrorMsg('All fields are required for first-time setup.');
+      setErrorMsg("All fields are required for first-time setup.");
       return;
     }
 
     const phoneRegex = /^07\d{8}$/;
     if (!phoneRegex.test(setupPhone)) {
-      setErrorMsg('Phone number must be exactly 10 digits and start with 07 (e.g. 0772123456).');
+      setErrorMsg("Phone number must be exactly 10 digits and start with 07 (e.g. 0772123456).");
       return;
     }
 
@@ -118,19 +122,23 @@ export const Login: React.FC = () => {
       id: `usr-${Date.now()}`,
       phone_number: setupPhone,
       full_name: setupName,
-      role: 'Administrator',
+      role: "Administrator",
       password: setupPassword,
-      status: 'Active',
-      created_at: new Date().toISOString()
+      status: "Active",
+      created_at: new Date().toISOString(),
     };
     completeSetup(admin);
-    logAudit('System First-Time Setup', 'Authentication', `Initial Administrator account created for ${setupName}.`);
-    navigate('/');
+    logAudit(
+      "System First-Time Setup",
+      "Authentication",
+      `Initial Administrator account created for ${setupName}.`,
+    );
+    navigate("/");
   };
 
   if (needsSetup) {
-  return (
-    <div className="min-h-screen bg-chetu-navy flex flex-col justify-center py-6 sm:py-8 sm:px-6 lg:px-8 selection:bg-chetu-blue relative overflow-hidden">
+    return (
+      <div className="min-h-screen bg-chetu-navy flex flex-col justify-center py-6 sm:py-8 sm:px-6 lg:px-8 selection:bg-chetu-blue relative overflow-hidden">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-chetu-blue/20 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-chetu-red/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -152,7 +160,9 @@ export const Login: React.FC = () => {
             <div className="mb-6 text-center">
               <KeyRound className="w-12 h-12 text-chetu-blue mx-auto mb-3" />
               <h3 className="text-lg font-bold text-slate-900">Create Administrator Account</h3>
-              <p className="text-xs text-slate-500 mt-1">Set up the first admin user to access the system.</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Set up the first admin user to access the system.
+              </p>
             </div>
 
             {errorMsg && (
@@ -199,7 +209,7 @@ export const Login: React.FC = () => {
                     <Lock className="h-4 w-4" />
                   </div>
                   <input
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? "text" : "password"}
                     required
                     value={setupPassword}
                     onChange={(e) => setSetupPassword(e.target.value)}
@@ -212,7 +222,11 @@ export const Login: React.FC = () => {
                     className="absolute inset-y-0 right-0 pr-3 flex items-center"
                     tabIndex={-1}
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4 text-slate-600" /> : <Eye className="h-4 w-4 text-slate-600" />}
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-slate-600" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-slate-600" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -234,7 +248,6 @@ export const Login: React.FC = () => {
       </div>
     );
   }
-
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-100 selection:bg-chetu-blue selection:text-white">
@@ -282,14 +295,14 @@ export const Login: React.FC = () => {
 
             <p className="mt-6 max-w-xl text-[13px] leading-relaxed text-white/95 sm:text-sm">
               Tell us what is working and what is not. Send your feedback or report a concern
-              confidentially to{' '}
+              confidentially to{" "}
               <a
                 href="mailto:director@trevordigitalsolutions.com"
                 className="font-bold text-white underline decoration-amber-300 underline-offset-4 hover:text-amber-200"
               >
                 director@trevordigitalsolutions.com
-              </a>{' '}
-              or call{' '}
+              </a>{" "}
+              or call{" "}
               <a
                 href="tel:+256740081305"
                 className="font-bold text-white underline decoration-amber-300 underline-offset-4 hover:text-amber-200"
@@ -302,7 +315,9 @@ export const Login: React.FC = () => {
             {/* Sign-in card */}
             <div className="mt-7 rounded-2xl border border-white/25 bg-white/15 p-5 shadow-2xl backdrop-blur-md sm:p-6">
               <h2 className="text-base font-bold text-white">Welcome back</h2>
-              <p className="mt-0.5 text-[12px] text-blue-50">Sign in to continue to your workspace.</p>
+              <p className="mt-0.5 text-[12px] text-blue-50">
+                Sign in to continue to your workspace.
+              </p>
 
               {errorMsg && (
                 <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-3 text-xs font-semibold text-red-800">
@@ -343,7 +358,7 @@ export const Login: React.FC = () => {
                     </div>
                     <input
                       id="password"
-                      type={showPassword ? 'text' : 'password'}
+                      type={showPassword ? "text" : "password"}
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -353,7 +368,7 @@ export const Login: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                       className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-500 hover:text-slate-700"
                       tabIndex={-1}
                     >
@@ -367,20 +382,24 @@ export const Login: React.FC = () => {
                   disabled={isLoading}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 py-3 text-sm font-black text-white shadow-lg transition-colors hover:bg-amber-400 focus:outline-none focus:ring-2 focus:ring-white/70 disabled:opacity-70"
                 >
-                  {isLoading ? 'Signing in…' : 'Log in'}
+                  {isLoading ? "Signing in…" : "Log in"}
                   <LogIn className="h-4 w-4" />
                 </button>
 
                 <div className="flex items-center justify-between pt-0.5 text-[12px]">
                   <label className="flex cursor-pointer items-center gap-2 text-white/90">
-                    <input type="checkbox" defaultChecked className="rounded text-amber-500 focus:ring-amber-400" />
+                    <input
+                      type="checkbox"
+                      defaultChecked
+                      className="rounded text-amber-500 focus:ring-amber-400"
+                    />
                     <span>Remember session</span>
                   </label>
                   <a
                     href="#forgot"
                     onClick={(e) => {
                       e.preventDefault();
-                      alert('Please contact your system administrator to reset your password.');
+                      alert("Please contact your system administrator to reset your password.");
                     }}
                     className="font-semibold text-amber-200 hover:underline"
                   >
@@ -395,8 +414,9 @@ export const Login: React.FC = () => {
           <div className="text-center">
             <h2 className="text-2xl font-black text-[#0B4394] sm:text-3xl">Core Values</h2>
             <p className="mx-auto mt-3 max-w-xl text-[13px] leading-relaxed text-white/95">
-              At Chetu Microfinance, our core values guide how we lend, how we collect and how we treat
-              every member and each other — so we do the right thing, the right way, every day.
+              At Chetu Microfinance, our core values guide how we lend, how we collect and how we
+              treat every member and each other — so we do the right thing, the right way, every
+              day.
             </p>
 
             {/* Hover or focus a card to read what the value means in practice. */}

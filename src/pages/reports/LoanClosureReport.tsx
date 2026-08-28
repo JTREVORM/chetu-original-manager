@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   Field,
   MisFilters,
@@ -12,17 +12,17 @@ import {
   monthStartISO,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
-import { useDatabase } from '../../context/DatabaseContext';
-import { matchScope, useLoanRows, useStaffNames, type LoanRow } from './reportData';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
+import { useDatabase } from "../../context/DatabaseContext";
+import { matchScope, useLoanRows, useStaffNames, type LoanRow } from "./reportData";
 
-type Closure = 'Fully Paid' | 'Settled' | 'Written Off';
+type Closure = "Fully Paid" | "Settled" | "Written Off";
 
 const CLOSURE_TONE: Record<Closure, string> = {
-  'Fully Paid': 'text-emerald-700',
-  Settled: 'text-[#0B4394]',
-  'Written Off': 'text-chetu-red',
+  "Fully Paid": "text-emerald-700",
+  Settled: "text-[#0B4394]",
+  "Written Off": "text-chetu-red",
 };
 
 interface Row extends LoanRow {
@@ -48,18 +48,29 @@ export const LoanClosureReport: React.FC = () => {
 
   const [from, setFrom] = useState(monthStartISO());
   const [till, setTill] = useState(todayISO());
-  const [closure, setClosure] = useState('');
-  const [search, setSearch] = useState('');
+  const [closure, setClosure] = useState("");
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [applied, setApplied] = useState({
-    branchId: '', officerId: '', groupId: '', search: '', from: '', till: '', closure: '',
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    search: "",
+    from: "",
+    till: "",
+    closure: "",
   });
 
   const runSearch = () => {
     setHasSearched(true);
     setApplied({
-      branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId,
-      search, from, till, closure,
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+      from,
+      till,
+      closure,
     });
   };
 
@@ -79,24 +90,24 @@ export const LoanClosureReport: React.FC = () => {
         let amount: number;
         let reason: string;
 
-        if (loan.status === 'Written Off') {
-          closureType = 'Written Off';
-          closedOn = (loan.writeoff_at || loan.updated_at || loan.created_at).split('T')[0]!;
+        if (loan.status === "Written Off") {
+          closureType = "Written Off";
+          closedOn = (loan.writeoff_at || loan.updated_at || loan.created_at).split("T")[0]!;
           closedBy = staffName(loan.writeoff_by);
           amount = Number(loan.writeoff_amount || 0);
-          reason = loan.writeoff_reason || '—';
-        } else if (loan.status === 'Settled') {
-          closureType = 'Settled';
-          closedOn = (loan.settled_at || loan.updated_at || loan.created_at).split('T')[0]!;
+          reason = loan.writeoff_reason || "—";
+        } else if (loan.status === "Settled") {
+          closureType = "Settled";
+          closedOn = (loan.settled_at || loan.updated_at || loan.created_at).split("T")[0]!;
           closedBy = staffName(loan.settled_by);
           amount = Number(loan.settlement_amount || 0);
-          reason = 'Early settlement';
-        } else if (loan.status === 'Fully Paid') {
-          closureType = 'Fully Paid';
-          closedOn = (loan.updated_at || loan.created_at).split('T')[0]!;
-          closedBy = '—';
+          reason = "Early settlement";
+        } else if (loan.status === "Fully Paid") {
+          closureType = "Fully Paid";
+          closedOn = (loan.updated_at || loan.created_at).split("T")[0]!;
+          closedBy = "—";
           amount = Number(loan.total_amount_payable);
-          reason = 'Repaid to term';
+          reason = "Repaid to term";
         } else {
           return null;
         }
@@ -126,55 +137,110 @@ export const LoanClosureReport: React.FC = () => {
     const t = { paid: 0, settled: 0, written: 0, collected: 0 };
     for (const r of filtered) {
       t.collected += r.collected;
-      if (r.closure === 'Fully Paid') t.paid += r.closure_amount;
-      else if (r.closure === 'Settled') t.settled += r.closure_amount;
+      if (r.closure === "Fully Paid") t.paid += r.closure_amount;
+      else if (r.closure === "Settled") t.settled += r.closure_amount;
       else t.written += r.closure_amount;
     }
     return t;
   }, [filtered]);
 
   const columns: MisColumn<Row>[] = [
-    { key: 'branch', label: 'Branch', width: '8%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'lo', label: 'LO', width: '8%', render: (r) => r.officer_name, text: (r) => r.officer_name },
-    { key: 'group', label: 'Group', width: '9%', render: (r) => r.group_name, text: (r) => r.group_name },
     {
-      key: 'member',
-      label: 'Member',
-      width: '13%',
+      key: "branch",
+      label: "Branch",
+      width: "8%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "lo",
+      label: "LO",
+      width: "8%",
+      render: (r) => r.officer_name,
+      text: (r) => r.officer_name,
+    },
+    {
+      key: "group",
+      label: "Group",
+      width: "9%",
+      render: (r) => r.group_name,
+      text: (r) => r.group_name,
+    },
+    {
+      key: "member",
+      label: "Member",
+      width: "13%",
       render: (r) => (
         <span className="font-semibold text-slate-900">
           {r.client.full_name}
-          <span className="block text-[10px] font-normal text-slate-400">{r.client.client_number}</span>
+          <span className="block text-[10px] font-normal text-slate-400">
+            {r.client.client_number}
+          </span>
         </span>
       ),
       text: (r) => r.client.full_name,
     },
-    { key: 'loan', label: 'Loan No', width: '10%', render: (r) => r.loan.loan_number, text: (r) => r.loan.loan_number },
-    { key: 'prin', label: 'Principal', width: '8%', align: 'right', render: (r) => money(r.loan.principal_amount) },
-    { key: 'coll', label: 'Total Collected', width: '9%', align: 'right', render: (r) => money(r.collected) },
     {
-      key: 'closure',
-      label: 'Closed As',
-      width: '8%',
+      key: "loan",
+      label: "Loan No",
+      width: "10%",
+      render: (r) => r.loan.loan_number,
+      text: (r) => r.loan.loan_number,
+    },
+    {
+      key: "prin",
+      label: "Principal",
+      width: "8%",
+      align: "right",
+      render: (r) => money(r.loan.principal_amount),
+    },
+    {
+      key: "coll",
+      label: "Total Collected",
+      width: "9%",
+      align: "right",
+      render: (r) => money(r.collected),
+    },
+    {
+      key: "closure",
+      label: "Closed As",
+      width: "8%",
       render: (r) => <span className={`font-bold ${CLOSURE_TONE[r.closure]}`}>{r.closure}</span>,
       text: (r) => r.closure,
     },
     {
-      key: 'amt',
-      label: 'Closure Amount',
-      width: '9%',
-      align: 'right',
-      render: (r) => <span className={`font-bold ${CLOSURE_TONE[r.closure]}`}>{money(r.closure_amount)}</span>,
+      key: "amt",
+      label: "Closure Amount",
+      width: "9%",
+      align: "right",
+      render: (r) => (
+        <span className={`font-bold ${CLOSURE_TONE[r.closure]}`}>{money(r.closure_amount)}</span>
+      ),
       text: (r) => money(r.closure_amount),
     },
-    { key: 'on', label: 'Closed On', width: '8%', render: (r) => shortDate(r.closed_on) },
-    { key: 'by', label: 'Closed By', width: '9%', render: (r) => r.closed_by, text: (r) => r.closed_by },
-    { key: 'why', label: 'Reason', width: '11%', render: (r) => r.reason, text: (r) => r.reason },
+    { key: "on", label: "Closed On", width: "8%", render: (r) => shortDate(r.closed_on) },
+    {
+      key: "by",
+      label: "Closed By",
+      width: "9%",
+      render: (r) => r.closed_by,
+      text: (r) => r.closed_by,
+    },
+    { key: "why", label: "Reason", width: "11%", render: (r) => r.reason, text: (r) => r.reason },
   ];
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Loan Closure Report" period={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`} columns={columns} rows={filtered} />}>
+      <MisPageTitle
+        right={
+          <ReportExportButtons
+            title="Loan Closure Report"
+            period={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`}
+            columns={columns}
+            rows={filtered}
+          />
+        }
+      >
         Loan Closure Report
       </MisPageTitle>
 
@@ -188,13 +254,27 @@ export const LoanClosureReport: React.FC = () => {
       >
         <ScopeFields scope={scope} />
         <Field label="From Date">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Till Date">
-          <input type="date" value={till} onChange={(e) => setTill(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={till}
+            onChange={(e) => setTill(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Closed As">
-          <select value={closure} onChange={(e) => setClosure(e.target.value)} className="form-field">
+          <select
+            value={closure}
+            onChange={(e) => setClosure(e.target.value)}
+            className="form-field"
+          >
             <option value="">All</option>
             <option value="Fully Paid">Fully Paid</option>
             <option value="Settled">Settled</option>

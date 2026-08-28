@@ -1,49 +1,67 @@
-import React, { useMemo, useState } from 'react';
-import { TableScroll } from '../components/common/ScrollArea';
-import { useAuth } from '../context/AuthContext';
-import { useDatabase } from '../context/DatabaseContext';
-import { useNotifications } from '../context/NotificationContext';
-import { generateExpenseVoucherPDF } from '../lib/pdfGenerator';
-import { formatUGX } from '../lib/loanCalculations';
-import { ExpenseCategory, PaymentMethod } from '../types/database.types';
-import { CreditCard, Plus, Printer, Search, X, CalendarDays, Receipt } from 'lucide-react';
-import { FilterBar, FilterGroup, ChipRow, Chip, DesktopOnly, MobileOnly, RecordCard, CardList, EmptyState } from '../components/mobile/Responsive';
+import React, { useMemo, useState } from "react";
+import { TableScroll } from "../components/common/ScrollArea";
+import { useAuth } from "../context/AuthContext";
+import { useDatabase } from "../context/DatabaseContext";
+import { useNotifications } from "../context/NotificationContext";
+import { generateExpenseVoucherPDF } from "../lib/pdfGenerator";
+import { formatUGX } from "../lib/loanCalculations";
+import { ExpenseCategory, PaymentMethod } from "../types/database.types";
+import { CreditCard, Plus, Printer, Search, X, CalendarDays, Receipt } from "lucide-react";
+import {
+  FilterBar,
+  FilterGroup,
+  ChipRow,
+  Chip,
+  DesktopOnly,
+  MobileOnly,
+  RecordCard,
+  CardList,
+  EmptyState,
+} from "../components/mobile/Responsive";
 
 export const Expenses: React.FC = () => {
   const { isAuditor, isAdmin } = useAuth();
   const { expenses, addExpense, totalExpenses, branches } = useDatabase();
   const { addToast } = useNotifications();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('All');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("All");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
-    category: 'Rent' as ExpenseCategory,
-    description: '',
+    category: "Rent" as ExpenseCategory,
+    description: "",
     amount: 500000,
-    expense_date: new Date().toISOString().split('T')[0],
-    payment_method: 'Bank Transfer' as PaymentMethod,
-    receipt_url: '',
-    branch_id: ''
+    expense_date: new Date().toISOString().split("T")[0],
+    payment_method: "Bank Transfer" as PaymentMethod,
+    receipt_url: "",
+    branch_id: "",
   });
 
   const categories: ExpenseCategory[] = [
-    'Salaries', 'Rent', 'Fuel', 'Utilities', 'Internet', 'Maintenance', 'Transport', 'Office Supplies', 'Other'
+    "Salaries",
+    "Rent",
+    "Fuel",
+    "Utilities",
+    "Internet",
+    "Maintenance",
+    "Transport",
+    "Office Supplies",
+    "Other",
   ];
 
-  const filteredExpenses = expenses.filter(e => {
+  const filteredExpenses = expenses.filter((e) => {
     const matchesSearch =
       e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.expense_number.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCat = categoryFilter === 'All' || e.category === categoryFilter;
+    const matchesCat = categoryFilter === "All" || e.category === categoryFilter;
     return matchesSearch && matchesCat;
   });
 
   const thisMonthTotal = useMemo(() => {
     const now = new Date();
     return expenses
-      .filter(e => {
+      .filter((e) => {
         const d = new Date(e.expense_date);
         return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
       })
@@ -56,7 +74,7 @@ export const Expenses: React.FC = () => {
     try {
       await generateExpenseVoucherPDF(expense);
     } catch {
-      addToast('error', 'Voucher Failed', 'Could not build the expense voucher PDF.');
+      addToast("error", "Voucher Failed", "Could not build the expense voucher PDF.");
     }
   };
 
@@ -64,19 +82,19 @@ export const Expenses: React.FC = () => {
     e.preventDefault();
     try {
       const created = await addExpense(formData);
-      addToast('success', 'Expense Logged', `Expense ${created.expense_number} recorded.`);
+      addToast("success", "Expense Logged", `Expense ${created.expense_number} recorded.`);
       setIsModalOpen(false);
       setFormData({
-        category: 'Rent',
-        description: '',
+        category: "Rent",
+        description: "",
         amount: 500000,
-        expense_date: new Date().toISOString().split('T')[0],
-        payment_method: 'Bank Transfer',
-        receipt_url: '',
-        branch_id: ''
+        expense_date: new Date().toISOString().split("T")[0],
+        payment_method: "Bank Transfer",
+        receipt_url: "",
+        branch_id: "",
       });
     } catch {
-      addToast('error', 'Action Failed', 'Could not record expense.');
+      addToast("error", "Action Failed", "Could not record expense.");
     }
   };
 
@@ -90,7 +108,8 @@ export const Expenses: React.FC = () => {
         </div>
         <h1 className="text-2xl font-bold tracking-tight">Expense Management</h1>
         <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
-          Record, categorize and audit every operating expense, with a printable voucher for each one.
+          Record, categorize and audit every operating expense, with a printable voucher for each
+          one.
         </p>
       </div>
 
@@ -107,7 +126,9 @@ export const Expenses: React.FC = () => {
       {/* Summary */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-blue-900 bg-[#083475] p-5 text-white shadow-xl">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">Total System Expenses</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-200">
+            Total System Expenses
+          </span>
           <h2 className="mt-1 text-2xl font-black text-red-300">{formatUGX(totalExpenses)}</h2>
           <span className="mt-1 block text-[11px] text-blue-200">All branches, all time</span>
         </div>
@@ -116,7 +137,9 @@ export const Expenses: React.FC = () => {
             <CalendarDays className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">This Month</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              This Month
+            </p>
             <p className="text-base font-black text-slate-900">{formatUGX(thisMonthTotal)}</p>
           </div>
         </div>
@@ -125,7 +148,9 @@ export const Expenses: React.FC = () => {
             <Receipt className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Vouchers Logged</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              Vouchers Logged
+            </p>
             <p className="text-base font-black text-slate-900">{expenses.length}</p>
           </div>
         </div>
@@ -148,8 +173,12 @@ export const Expenses: React.FC = () => {
       >
         <FilterGroup label="Category">
           <ChipRow>
-            {['All', ...categories].map((cat) => (
-              <Chip key={cat} active={categoryFilter === cat} onClick={() => setCategoryFilter(cat)}>
+            {["All", ...categories].map((cat) => (
+              <Chip
+                key={cat}
+                active={categoryFilter === cat}
+                onClick={() => setCategoryFilter(cat)}
+              >
                 {cat}
               </Chip>
             ))}
@@ -191,15 +220,25 @@ export const Expenses: React.FC = () => {
                   </tr>
                 )}
                 {filteredExpenses.map((exp) => (
-                  <tr key={exp.id} className="transition-colors hover:bg-slate-50 [&>td]:whitespace-nowrap">
+                  <tr
+                    key={exp.id}
+                    className="transition-colors hover:bg-slate-50 [&>td]:whitespace-nowrap"
+                  >
                     <td className="px-3 py-3 font-bold text-[#0B4394]">{exp.expense_number}</td>
                     <td className="px-3 py-3">
                       <span className="rounded-md bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-700">
                         {exp.category}
                       </span>
                     </td>
-                    <td className="truncate px-3 py-3 font-medium text-slate-900" title={exp.description}>{exp.description}</td>
-                    <td className="px-3 py-3 text-right font-bold text-red-600">{formatUGX(exp.amount)}</td>
+                    <td
+                      className="truncate px-3 py-3 font-medium text-slate-900"
+                      title={exp.description}
+                    >
+                      {exp.description}
+                    </td>
+                    <td className="px-3 py-3 text-right font-bold text-red-600">
+                      {formatUGX(exp.amount)}
+                    </td>
                     <td className="px-3 py-3 text-slate-600">{exp.expense_date}</td>
                     <td className="px-3 py-3 text-slate-600">{exp.payment_method}</td>
                     <td className="px-3 py-3 text-right">
@@ -234,9 +273,12 @@ export const Expenses: React.FC = () => {
                     </span>
                   }
                   fields={[
-                    { label: 'Amount', value: <span className="text-red-600">{formatUGX(exp.amount)}</span> },
-                    { label: 'Date', value: exp.expense_date },
-                    { label: 'Payment Method', value: exp.payment_method },
+                    {
+                      label: "Amount",
+                      value: <span className="text-red-600">{formatUGX(exp.amount)}</span>,
+                    },
+                    { label: "Date", value: exp.expense_date },
+                    { label: "Payment Method", value: exp.payment_method },
                   ]}
                   actions={
                     <button
@@ -260,7 +302,10 @@ export const Expenses: React.FC = () => {
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-[calc(100vw-1.5rem)] max-w-md md:w-full overflow-hidden max-h-[90vh] overflow-y-auto">
             <div className="p-5 brand-gradient text-white flex items-center justify-between">
               <h3 className="text-base font-bold">Log New Expense Voucher</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-300 hover:text-white">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-300 hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -270,11 +315,15 @@ export const Expenses: React.FC = () => {
                 <label className="form-label">Expense Category *</label>
                 <select
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value as ExpenseCategory })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value as ExpenseCategory })
+                  }
                   className="form-field"
                 >
-                  {categories.map(c => (
-                    <option key={c} value={c}>{c}</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -299,7 +348,9 @@ export const Expenses: React.FC = () => {
                     step="10000"
                     required
                     value={formData.amount}
-                    onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, amount: parseInt(e.target.value) || 0 })
+                    }
                     className="form-field"
                   />
                 </div>
@@ -323,9 +374,13 @@ export const Expenses: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
                   className="form-field"
                 >
-                  <option value="" disabled>Select branch</option>
+                  <option value="" disabled>
+                    Select branch
+                  </option>
                   {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>{branch.branch_name}</option>
+                    <option key={branch.id} value={branch.id}>
+                      {branch.branch_name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -334,7 +389,9 @@ export const Expenses: React.FC = () => {
                 <label className="form-label">Payment Method *</label>
                 <select
                   value={formData.payment_method}
-                  onChange={(e) => setFormData({ ...formData, payment_method: e.target.value as PaymentMethod })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, payment_method: e.target.value as PaymentMethod })
+                  }
                   className="form-field"
                 >
                   <option value="Bank Transfer">Bank Transfer</option>

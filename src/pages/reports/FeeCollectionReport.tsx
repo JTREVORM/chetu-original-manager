@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   Field,
   MisFilters,
@@ -12,13 +12,13 @@ import {
   monthStartISO,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
-import { FEES, storedLoanFees } from '../../lib/fees';
-import { useDatabase } from '../../context/DatabaseContext';
-import { matchScope, useLoanRows, useMemberFees, type LoanRow } from './reportData';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
+import { FEES, storedLoanFees } from "../../lib/fees";
+import { useDatabase } from "../../context/DatabaseContext";
+import { matchScope, useLoanRows, useMemberFees, type LoanRow } from "./reportData";
 
-type FeeKind = 'Admission' | 'Loan';
+type FeeKind = "Admission" | "Loan";
 
 interface Row {
   id: string;
@@ -43,7 +43,13 @@ interface Row {
 }
 
 const EMPTY = {
-  admission: 0, passbook: 0, processing: 0, crb: 0, security: 0, groupMaintenance: 0, total: 0,
+  admission: 0,
+  passbook: 0,
+  processing: 0,
+  crb: 0,
+  security: 0,
+  groupMaintenance: 0,
+  total: 0,
 };
 
 /**
@@ -67,18 +73,29 @@ export const FeeCollectionReport: React.FC = () => {
 
   const [from, setFrom] = useState(monthStartISO());
   const [till, setTill] = useState(todayISO());
-  const [kind, setKind] = useState('');
-  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState("");
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [applied, setApplied] = useState({
-    branchId: '', officerId: '', groupId: '', search: '', from: '', till: '', kind: '',
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    search: "",
+    from: "",
+    till: "",
+    kind: "",
   });
 
   const runSearch = () => {
     setHasSearched(true);
     setApplied({
-      branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId,
-      search, from, till, kind,
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+      from,
+      till,
+      kind,
     });
   };
 
@@ -95,17 +112,17 @@ export const FeeCollectionReport: React.FC = () => {
       const passbook = Number(fee.passbook_fee || 0);
       out.push({
         id: `fee-${fee.id}`,
-        kind: 'Admission',
-        date: fee.created_at.split('T')[0]!,
-        branch_id: fee.branch_id || client.branch_id || '',
+        kind: "Admission",
+        date: fee.created_at.split("T")[0]!,
+        branch_id: fee.branch_id || client.branch_id || "",
         branch_name: scope.branchName(fee.branch_id || client.branch_id),
-        officer_id: client.loan_officer_id || group?.loan_officer_id || '',
+        officer_id: client.loan_officer_id || group?.loan_officer_id || "",
         officer_name: group?.loan_officer_name || scope.officerName(client.loan_officer_id),
-        group_id: group?.id || '',
-        group_name: group?.group_name || '—',
+        group_id: group?.id || "",
+        group_name: group?.group_name || "—",
         member_name: client.full_name,
         member_code: client.client_number,
-        reference: fee.receipt_number || '—',
+        reference: fee.receipt_number || "—",
         ...EMPTY,
         admission,
         passbook,
@@ -120,8 +137,8 @@ export const FeeCollectionReport: React.FC = () => {
       const taken = storedLoanFees(r.loan);
       out.push({
         id: `loan-${r.loan.id}`,
-        kind: 'Loan',
-        date: r.loan.disbursed_at.split('T')[0]!,
+        kind: "Loan",
+        date: r.loan.disbursed_at.split("T")[0]!,
         branch_id: r.branch_id,
         branch_name: r.branch_name,
         officer_id: r.officer_id,
@@ -154,7 +171,13 @@ export const FeeCollectionReport: React.FC = () => {
       if (applied.kind && r.kind !== applied.kind) return false;
       if (applied.from && r.date < applied.from) return false;
       if (applied.till && r.date > applied.till) return false;
-      if (q && !`${r.member_name} ${r.member_code} ${r.group_name} ${r.reference}`.toLowerCase().includes(q)) return false;
+      if (
+        q &&
+        !`${r.member_name} ${r.member_code} ${r.group_name} ${r.reference}`
+          .toLowerCase()
+          .includes(q)
+      )
+        return false;
       return true;
     });
   }, [rows, applied, scope.isLoanOfficer, scope.user?.id]);
@@ -175,22 +198,38 @@ export const FeeCollectionReport: React.FC = () => {
   }, [filtered]);
 
   const columns: MisColumn<Row>[] = [
-    { key: 'date', label: 'Date', width: '7%', render: (r) => shortDate(r.date) },
+    { key: "date", label: "Date", width: "7%", render: (r) => shortDate(r.date) },
     {
-      key: 'kind',
-      label: 'Charge',
-      width: '7%',
+      key: "kind",
+      label: "Charge",
+      width: "7%",
       render: (r) => (
-        <span className={`font-bold ${r.kind === 'Admission' ? 'text-[#0B4394]' : 'text-emerald-700'}`}>{r.kind}</span>
+        <span
+          className={`font-bold ${r.kind === "Admission" ? "text-[#0B4394]" : "text-emerald-700"}`}
+        >
+          {r.kind}
+        </span>
       ),
       text: (r) => r.kind,
     },
-    { key: 'branch', label: 'Branch', width: '8%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'group', label: 'Group', width: '9%', render: (r) => r.group_name, text: (r) => r.group_name },
     {
-      key: 'member',
-      label: 'Member',
-      width: '12%',
+      key: "branch",
+      label: "Branch",
+      width: "8%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "group",
+      label: "Group",
+      width: "9%",
+      render: (r) => r.group_name,
+      text: (r) => r.group_name,
+    },
+    {
+      key: "member",
+      label: "Member",
+      width: "12%",
       render: (r) => (
         <span className="font-semibold text-slate-900">
           {r.member_name}
@@ -199,25 +238,67 @@ export const FeeCollectionReport: React.FC = () => {
       ),
       text: (r) => r.member_name,
     },
-    { key: 'ref', label: 'Reference', width: '10%', render: (r) => r.reference, text: (r) => r.reference },
-    { key: 'adm', label: 'Admission', width: '7%', align: 'right', render: (r) => (r.admission ? money(r.admission) : '—'), text: (r) => String(r.admission) },
-    { key: 'pass', label: 'Passbook', width: '7%', align: 'right', render: (r) => (r.passbook ? money(r.passbook) : '—'), text: (r) => String(r.passbook) },
-    { key: 'proc', label: `Processing ${FEES.processingFeePct}%`, width: '8%', align: 'right', render: (r) => (r.processing ? money(r.processing) : '—'), text: (r) => String(r.processing) },
-    { key: 'crb', label: `CRB ${FEES.crbFeePct}%`, width: '7%', align: 'right', render: (r) => (r.crb ? money(r.crb) : '—'), text: (r) => String(r.crb) },
-    { key: 'gm', label: 'Group Maint.', width: '7%', align: 'right', render: (r) => (r.groupMaintenance ? money(r.groupMaintenance) : '—'), text: (r) => String(r.groupMaintenance) },
     {
-      key: 'sec',
+      key: "ref",
+      label: "Reference",
+      width: "10%",
+      render: (r) => r.reference,
+      text: (r) => r.reference,
+    },
+    {
+      key: "adm",
+      label: "Admission",
+      width: "7%",
+      align: "right",
+      render: (r) => (r.admission ? money(r.admission) : "—"),
+      text: (r) => String(r.admission),
+    },
+    {
+      key: "pass",
+      label: "Passbook",
+      width: "7%",
+      align: "right",
+      render: (r) => (r.passbook ? money(r.passbook) : "—"),
+      text: (r) => String(r.passbook),
+    },
+    {
+      key: "proc",
+      label: `Processing ${FEES.processingFeePct}%`,
+      width: "8%",
+      align: "right",
+      render: (r) => (r.processing ? money(r.processing) : "—"),
+      text: (r) => String(r.processing),
+    },
+    {
+      key: "crb",
+      label: `CRB ${FEES.crbFeePct}%`,
+      width: "7%",
+      align: "right",
+      render: (r) => (r.crb ? money(r.crb) : "—"),
+      text: (r) => String(r.crb),
+    },
+    {
+      key: "gm",
+      label: "Group Maint.",
+      width: "7%",
+      align: "right",
+      render: (r) => (r.groupMaintenance ? money(r.groupMaintenance) : "—"),
+      text: (r) => String(r.groupMaintenance),
+    },
+    {
+      key: "sec",
       label: `Security ${FEES.securityDepositPct}%`,
-      width: '8%',
-      align: 'right',
-      render: (r) => (r.security ? <span className="text-slate-500">{money(r.security)}</span> : '—'),
+      width: "8%",
+      align: "right",
+      render: (r) =>
+        r.security ? <span className="text-slate-500">{money(r.security)}</span> : "—",
       text: (r) => String(r.security),
     },
     {
-      key: 'tot',
-      label: 'Total',
-      width: '8%',
-      align: 'right',
+      key: "tot",
+      label: "Total",
+      width: "8%",
+      align: "right",
       render: (r) => <span className="font-bold text-[#0B4394]">{money(r.total)}</span>,
       text: (r) => String(r.total),
     },
@@ -233,12 +314,12 @@ export const FeeCollectionReport: React.FC = () => {
             columns={columns}
             rows={filtered}
             meta={[
-              ['Admission fee', `UGX ${FEES.admissionFee.toLocaleString()}`],
-              ['Passbook fee', `UGX ${FEES.passbookFee.toLocaleString()}`],
-              ['Processing fee', `${FEES.processingFeePct}% of principal`],
-              ['CRB fee', `${FEES.crbFeePct}% of principal`],
-              ['Security deposit', `${FEES.securityDepositPct}% of principal (refundable)`],
-              ['Group maintenance', `UGX ${FEES.groupMaintenanceFee.toLocaleString()} per loan`],
+              ["Admission fee", `UGX ${FEES.admissionFee.toLocaleString()}`],
+              ["Passbook fee", `UGX ${FEES.passbookFee.toLocaleString()}`],
+              ["Processing fee", `${FEES.processingFeePct}% of principal`],
+              ["CRB fee", `${FEES.crbFeePct}% of principal`],
+              ["Security deposit", `${FEES.securityDepositPct}% of principal (refundable)`],
+              ["Group maintenance", `UGX ${FEES.groupMaintenanceFee.toLocaleString()} per loan`],
             ]}
           />
         }
@@ -256,10 +337,20 @@ export const FeeCollectionReport: React.FC = () => {
       >
         <ScopeFields scope={scope} />
         <Field label="From Date">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Till Date">
-          <input type="date" value={till} onChange={(e) => setTill(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={till}
+            onChange={(e) => setTill(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Charge Type">
           <select value={kind} onChange={(e) => setKind(e.target.value)} className="form-field">

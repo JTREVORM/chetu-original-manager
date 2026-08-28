@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link } from '@tanstack/react-router';
+import React from "react";
+import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
   CheckCircle2,
@@ -13,81 +13,81 @@ import {
   TrendingDown,
   Undo2,
   Users,
-} from 'lucide-react';
-import { MisPageTitle } from '../../components/mis/MisKit';
+} from "lucide-react";
+import { MisPageTitle } from "../../components/mis/MisKit";
 
 const REPORTS = [
   {
-    to: '/reports/master-roll',
+    to: "/reports/master-roll",
     icon: FileText,
-    title: 'Master Roll',
-    desc: 'Every loan disbursed in a date window with schedule and collection drill-downs.',
+    title: "Master Roll",
+    desc: "Every loan disbursed in a date window with schedule and collection drill-downs.",
   },
   {
-    to: '/reports/lo-wise-group-realizable',
+    to: "/reports/lo-wise-group-realizable",
     icon: Users,
-    title: 'LO Wise Group Realizable',
+    title: "LO Wise Group Realizable",
     desc: "Group-level today's realizable, overdue and total realizable per loan officer.",
   },
   {
-    to: '/reports/daily-overdue',
+    to: "/reports/daily-overdue",
     icon: Clock,
-    title: 'Daily Overdue Report',
-    desc: 'Loans behind on instalments as on a date, with overdue realization stats.',
+    title: "Daily Overdue Report",
+    desc: "Loans behind on instalments as on a date, with overdue realization stats.",
   },
   {
-    to: '/reports/outstanding',
+    to: "/reports/outstanding",
     icon: BarChart3,
-    title: 'Outstanding Report',
-    desc: 'Active loan balances with collection and schedule exports.',
+    title: "Outstanding Report",
+    desc: "Active loan balances with collection and schedule exports.",
   },
   {
-    to: '/reports/day-collection-list',
+    to: "/reports/day-collection-list",
     icon: Receipt,
-    title: 'Day Collection List',
-    desc: 'All collections captured within a date range by loan type.',
+    title: "Day Collection List",
+    desc: "All collections captured within a date range by loan type.",
   },
   {
-    to: '/reports/overdue-collection-list',
+    to: "/reports/overdue-collection-list",
     icon: FileSpreadsheet,
-    title: 'Overdue Collection List',
-    desc: 'Overdue amounts collected in a period for arrears follow-up.',
+    title: "Overdue Collection List",
+    desc: "Overdue amounts collected in a period for arrears follow-up.",
   },
   {
-    to: '/reports/par',
+    to: "/reports/par",
     icon: TrendingDown,
-    title: 'Portfolio at Risk',
-    desc: 'Arrears ageing buckets and the PAR ratio across the open portfolio.',
+    title: "Portfolio at Risk",
+    desc: "Arrears ageing buckets and the PAR ratio across the open portfolio.",
   },
   {
-    to: '/reports/loan-closure',
+    to: "/reports/loan-closure",
     icon: CheckCircle2,
-    title: 'Loan Closure Report',
-    desc: 'Loans that left the portfolio: repaid to term, settled early or written off.',
+    title: "Loan Closure Report",
+    desc: "Loans that left the portfolio: repaid to term, settled early or written off.",
   },
   {
-    to: '/reports/approvals',
+    to: "/reports/approvals",
     icon: ClipboardList,
-    title: 'Approval Pipeline',
-    desc: 'Groups, members and loan applications waiting on a decision or rejected.',
+    title: "Approval Pipeline",
+    desc: "Groups, members and loan applications waiting on a decision or rejected.",
   },
   {
-    to: '/reports/reversals',
+    to: "/reports/reversals",
     icon: Undo2,
-    title: 'Reversal Register',
-    desc: 'Every disbursement and receipt an Administrator has rolled back.',
+    title: "Reversal Register",
+    desc: "Every disbursement and receipt an Administrator has rolled back.",
   },
   {
-    to: '/reports/fee-collection',
+    to: "/reports/fee-collection",
     icon: Coins,
-    title: 'Fee Collection Report',
-    desc: 'Admission, passbook, processing, CRB, security and group maintenance charges collected.',
+    title: "Fee Collection Report",
+    desc: "Admission, passbook, processing, CRB, security and group maintenance charges collected.",
   },
   {
-    to: '/reports/savings',
+    to: "/reports/savings",
     icon: PiggyBank,
-    title: 'Savings Report',
-    desc: 'Deposits and withdrawals per member, group, branch and loan officer, with net movement.',
+    title: "Savings Report",
+    desc: "Deposits and withdrawals per member, group, branch and loan officer, with net movement.",
   },
 ];
 
@@ -107,7 +107,9 @@ export const ReportsIndex: React.FC = () => (
               <r.icon className="h-4.5 w-4.5" />
             </span>
             <div className="min-w-0">
-              <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#0B4394]">{r.title}</h3>
+              <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#0B4394]">
+                {r.title}
+              </h3>
               <p className="mt-1 text-[11px] leading-snug text-slate-500">{r.desc}</p>
             </div>
           </div>

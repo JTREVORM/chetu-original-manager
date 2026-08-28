@@ -6,9 +6,15 @@ export const Route = createFileRoute("/reports/approvals")({
   head: () => ({
     meta: [
       { title: "Approval Pipeline | Chetu Microfinance" },
-      { name: "description", content: "Groups, members and loan applications waiting on a decision or rejected." },
+      {
+        name: "description",
+        content: "Groups, members and loan applications waiting on a decision or rejected.",
+      },
       { property: "og:title", content: "Approval Pipeline | Chetu Microfinance" },
-      { property: "og:description", content: "Groups, members and loan applications waiting on a decision or rejected." },
+      {
+        property: "og:description",
+        content: "Groups, members and loan applications waiting on a decision or rejected.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

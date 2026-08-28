@@ -6,7 +6,8 @@ import { createFileRoute } from "@tanstack/react-router";
  * It is a no-op (409) as soon as any Administrator profile exists, so it
  * cannot be used to escalate privileges once the system is live.
  */
-const toE164 = (phone: string) => (phone.startsWith("+") ? phone : `+256${phone.replace(/^0/, "")}`);
+const toE164 = (phone: string) =>
+  phone.startsWith("+") ? phone : `+256${phone.replace(/^0/, "")}`;
 const phoneToEmail = (e164: string) => `${e164.replace("+", "")}@staff.chetumicrofinance.local`;
 
 export const Route = createFileRoute("/api/public/bootstrap-admin")({
@@ -27,7 +28,10 @@ export const Route = createFileRoute("/api/public/bootstrap-admin")({
 
         if (!/^07\d{8}$/.test(phone) || password.length < 8) {
           return Response.json(
-            { error: "phone_number must be 10 digits starting 07 and password at least 8 characters" },
+            {
+              error:
+                "phone_number must be 10 digits starting 07 and password at least 8 characters",
+            },
             { status: 400 },
           );
         }
@@ -53,7 +57,10 @@ export const Route = createFileRoute("/api/public/bootstrap-admin")({
         });
 
         if (error || !data.user) {
-          return Response.json({ error: error?.message ?? "Failed to create user" }, { status: 500 });
+          return Response.json(
+            { error: error?.message ?? "Failed to create user" },
+            { status: 500 },
+          );
         }
 
         const { error: profileError } = await supabaseAdmin.from("profiles").upsert({

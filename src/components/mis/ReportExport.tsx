@@ -1,20 +1,20 @@
-import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { FileDown, FileSpreadsheet } from 'lucide-react';
-import type { MisColumn } from './MisKit';
-import { exportReportPDF } from '../../lib/reportPdf';
-import { exportToCSV } from '../../lib/excelExporter';
+import React, { useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { FileDown, FileSpreadsheet } from "lucide-react";
+import type { MisColumn } from "./MisKit";
+import { exportReportPDF } from "../../lib/reportPdf";
+import { exportToCSV } from "../../lib/excelExporter";
 
 /** Cell text for exports — uses `text()` when supplied, otherwise a primitive render value. */
 function cellText<T>(col: MisColumn<T>, row: T): string {
   if (col.text) return col.text(row);
   const v = col.render(row);
-  if (typeof v === 'string' || typeof v === 'number') return String(v);
-  return '';
+  if (typeof v === "string" || typeof v === "number") return String(v);
+  return "";
 }
 
 export function buildExportData<T>(columns: MisColumn<T>[], rows: T[]) {
-  const cols = columns.filter((c) => c.key !== 'action');
+  const cols = columns.filter((c) => c.key !== "action");
   return {
     headers: cols.map((c) => c.label),
     rows: rows.map((r) => cols.map((c) => cellText(c, r))),
@@ -51,7 +51,13 @@ export function ReportExportButtons<T>({
       const { headers, rows: body } = buildExportData(columns, rows);
       // The logo is fetched on first use, so this is asynchronous.
       await exportReportPDF({
-        title, headers, rows: body, period, subtitle, meta, totals,
+        title,
+        headers,
+        rows: body,
+        period,
+        subtitle,
+        meta,
+        totals,
         generatedBy: user?.full_name,
       });
     } finally {
@@ -65,7 +71,7 @@ export function ReportExportButtons<T>({
   };
 
   const base =
-    'inline-flex h-8 items-center gap-1.5 rounded px-3 text-[11px] font-bold text-white disabled:opacity-40';
+    "inline-flex h-8 items-center gap-1.5 rounded px-3 text-[11px] font-bold text-white disabled:opacity-40";
 
   return (
     <div className="flex items-center gap-2">
@@ -77,9 +83,15 @@ export function ReportExportButtons<T>({
         className={`${base} bg-chetu-red hover:opacity-90`}
       >
         <FileDown className="h-3.5 w-3.5" />
-        {busy ? 'Building…' : 'PDF'}
+        {busy ? "Building…" : "PDF"}
       </button>
-      <button type="button" onClick={csv} disabled={disabled} title="Download Excel (CSV)" className={`${base} bg-emerald-600 hover:bg-emerald-700`}>
+      <button
+        type="button"
+        onClick={csv}
+        disabled={disabled}
+        title="Download Excel (CSV)"
+        className={`${base} bg-emerald-600 hover:bg-emerald-700`}
+      >
         <FileSpreadsheet className="h-3.5 w-3.5" />
         Excel
       </button>

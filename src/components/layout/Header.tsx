@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useDatabase } from '../../context/DatabaseContext';
-import { useNotifications } from '../../context/NotificationContext';
-import { GlobalSearchModal } from './GlobalSearchModal';
-import { NotificationDrawer } from './NotificationDrawer';
-import { NavLink } from '../../lib/router-compat';
-import { BusinessDayModal } from './BusinessDayModal';
-import { useBusinessDay } from '../../lib/businessDay';
-import { Search, Menu, CalendarDays, UserCircle2, RefreshCw, LogOut } from 'lucide-react';
-import { NotificationBell } from './NotificationBell';
-import { LoaderOverlay } from '../common/Loader';
-import { UgandaFlag } from '../common/UgandaFlag';
+import React, { useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { useDatabase } from "../../context/DatabaseContext";
+import { useNotifications } from "../../context/NotificationContext";
+import { GlobalSearchModal } from "./GlobalSearchModal";
+import { NotificationDrawer } from "./NotificationDrawer";
+import { NavLink } from "../../lib/router-compat";
+import { BusinessDayModal } from "./BusinessDayModal";
+import { useBusinessDay } from "../../lib/businessDay";
+import { Search, Menu, CalendarDays, UserCircle2, RefreshCw, LogOut } from "lucide-react";
+import { NotificationBell } from "./NotificationBell";
+import { LoaderOverlay } from "../common/Loader";
+import { UgandaFlag } from "../common/UgandaFlag";
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -22,10 +22,11 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const { unreadCount, refreshNotifications, addToast } = useNotifications();
   const { isOpen: isBusinessOpen, statusLabel, timeLabel, dateLabel } = useBusinessDay();
 
-  const isLoanOfficer = role === 'Loan Officer';
+  const isLoanOfficer = role === "Loan Officer";
   // A Loan Officer is fixed to the branch(es) they are attached to — `branches`
   // from the database context is already scoped to those branches.
-  const lockedBranch = (isLoanOfficer || isBranchManager) && branches.length === 1 ? branches[0] : null;
+  const lockedBranch =
+    (isLoanOfficer || isBranchManager) && branches.length === 1 ? branches[0] : null;
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isBusinessDayOpen, setIsBusinessDayOpen] = useState(false);
@@ -47,25 +48,36 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
     setIsRefreshing(true);
     const startedAt = Date.now();
     try {
-      const results = await Promise.allSettled([refreshProfile(), refetch(), refreshNotifications()]);
-      const failed = results.filter((r) => r.status === 'rejected').length;
+      const results = await Promise.allSettled([
+        refreshProfile(),
+        refetch(),
+        refreshNotifications(),
+      ]);
+      const failed = results.filter((r) => r.status === "rejected").length;
       // A fast refresh finishes before the loader is legible; hold it briefly
       // so the overlay reads as a reload rather than a flicker.
       const elapsed = Date.now() - startedAt;
       if (elapsed < 650) await new Promise((r) => setTimeout(r, 650 - elapsed));
 
       if (failed === results.length) {
-        addToast('error', 'Refresh failed', 'Could not reach the server. Check your connection and try again.');
+        addToast(
+          "error",
+          "Refresh failed",
+          "Could not reach the server. Check your connection and try again.",
+        );
       } else if (failed > 0) {
-        addToast('warning', 'Partly refreshed', 'Some data could not be reloaded. Try again in a moment.');
+        addToast(
+          "warning",
+          "Partly refreshed",
+          "Some data could not be reloaded. Try again in a moment.",
+        );
       } else {
-        addToast('success', 'Data refreshed', 'This screen is now showing the latest records.');
+        addToast("success", "Data refreshed", "This screen is now showing the latest records.");
       }
     } finally {
       setIsRefreshing(false);
     }
   };
-
 
   return (
     <>
@@ -96,7 +108,11 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             <span className="leading-none" title="Uganda" role="img" aria-label="Uganda">
               <UgandaFlag className="w-6 h-4 rounded-sm shadow-sm" />
             </span>
-            <NotificationBell count={unreadCount} onClick={() => setIsNotificationOpen(true)} size="lg" />
+            <NotificationBell
+              count={unreadCount}
+              onClick={() => setIsNotificationOpen(true)}
+              size="lg"
+            />
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
@@ -104,9 +120,14 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               aria-label="Refresh data"
               title="Refresh data"
             >
-              <RefreshCw className={`w-6 h-6 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-6 h-6 ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
-            <button onClick={() => logout()} className="p-1 text-slate-800" aria-label="Sign out" title="Sign out">
+            <button
+              onClick={() => logout()}
+              className="p-1 text-slate-800"
+              aria-label="Sign out"
+              title="Sign out"
+            >
               <LogOut className="w-6 h-6" />
             </button>
           </div>
@@ -123,14 +144,21 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         <div className="hidden md:flex min-w-0 flex-1 items-center gap-4">
           {/* Business day + branch */}
           <div className="flex shrink-0 items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5">
-            <CalendarDays className={`h-5 w-5 shrink-0 ${isBusinessOpen ? 'text-slate-700' : 'text-chetu-red'}`} />
+            <CalendarDays
+              className={`h-5 w-5 shrink-0 ${isBusinessOpen ? "text-slate-700" : "text-chetu-red"}`}
+            />
             <div className="min-w-0 leading-tight">
               <p className="whitespace-nowrap text-[12px] font-bold text-slate-900">
-                Business Day : {dateLabel}{' '}
-                <span className={isBusinessOpen ? 'text-emerald-600' : 'text-chetu-red'}>({statusLabel})</span>
+                Business Day : {dateLabel}{" "}
+                <span className={isBusinessOpen ? "text-emerald-600" : "text-chetu-red"}>
+                  ({statusLabel})
+                </span>
               </p>
               {lockedBranch ? (
-                <p className="truncate text-[12px] font-bold text-slate-900" title="Fixed to your attached branch">
+                <p
+                  className="truncate text-[12px] font-bold text-slate-900"
+                  title="Fixed to your attached branch"
+                >
                   {lockedBranch.branch_name}
                 </p>
               ) : (
@@ -141,7 +169,11 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                   className="-ml-0.5 max-w-44 cursor-pointer truncate bg-transparent text-[12px] font-bold text-slate-900 focus:outline-none"
                 >
                   <option value="">
-                    {branches.length ? ((isLoanOfficer || isBranchManager) ? 'My Branches' : 'All Branches') : 'No branches yet'}
+                    {branches.length
+                      ? isLoanOfficer || isBranchManager
+                        ? "My Branches"
+                        : "All Branches"
+                      : "No branches yet"}
                   </option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -156,7 +188,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <div className="min-w-0 flex-1" />
 
           {/* Live status — the clock doubles as proof the session is alive. */}
-          <div className="hidden shrink-0 items-center gap-2 lg:flex" title={`Server time ${timeLabel}`}>
+          <div
+            className="hidden shrink-0 items-center gap-2 lg:flex"
+            title={`Server time ${timeLabel}`}
+          >
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 motion-safe:animate-ping" />
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -199,7 +234,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             title="Refresh data"
             aria-label="Refresh data"
           >
-            <RefreshCw className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} strokeWidth={2.5} />
+            <RefreshCw
+              className={`h-6 w-6 ${isRefreshing ? "animate-spin" : ""}`}
+              strokeWidth={2.5}
+            />
           </button>
 
           <button
@@ -217,7 +255,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
       <GlobalSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
 
       {/* Notification Drawer */}
-      <NotificationDrawer isOpen={isNotificationOpen} onClose={() => setIsNotificationOpen(false)} />
+      <NotificationDrawer
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+      />
 
       {/* User Profile Modal */}
 

@@ -6,9 +6,15 @@ export const Route = createFileRoute("/loan-rollback")({
   head: () => ({
     meta: [
       { title: "Loan Rollback | Chetu Microfinance" },
-      { name: "description", content: "Undo a disbursement or reverse a repayment receipt entered in error." },
+      {
+        name: "description",
+        content: "Undo a disbursement or reverse a repayment receipt entered in error.",
+      },
       { property: "og:title", content: "Loan Rollback | Chetu Microfinance" },
-      { property: "og:description", content: "Undo a disbursement or reverse a repayment receipt entered in error." },
+      {
+        property: "og:description",
+        content: "Undo a disbursement or reverse a repayment receipt entered in error.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

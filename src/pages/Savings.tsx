@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Download } from 'lucide-react';
-import { useDatabase } from '../context/DatabaseContext';
-import { generateSavingsStatementPDF } from '../lib/pdfGenerator';
+import React, { useMemo, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Download } from "lucide-react";
+import { useDatabase } from "../context/DatabaseContext";
+import { generateSavingsStatementPDF } from "../lib/pdfGenerator";
 import {
   ActionButton,
   Field,
@@ -15,9 +15,14 @@ import {
   money,
   shortDate,
   useMisScope,
-} from '../components/mis/MisKit';
-import { PaymentMethod, SavingsAccount, SavingsTransaction, SavingsTransactionType } from '../types/database.types';
-import { ScrollArea, TableScroll } from '../components/common/ScrollArea';
+} from "../components/mis/MisKit";
+import {
+  PaymentMethod,
+  SavingsAccount,
+  SavingsTransaction,
+  SavingsTransactionType,
+} from "../types/database.types";
+import { ScrollArea, TableScroll } from "../components/common/ScrollArea";
 
 interface SavingsRow {
   account: SavingsAccount;
@@ -40,20 +45,26 @@ export const useSavingsRows = (scope: ReturnType<typeof useMisScope>): SavingsRo
     const groupById = new Map(clientGroups.map((g) => [g.id, g]));
     return savingsAccounts.map((acc) => {
       const client = acc.client || (acc.client_id ? clientById.get(acc.client_id) : undefined);
-      const group = acc.group || (acc.group_id ? groupById.get(acc.group_id) : client?.group_id ? groupById.get(client.group_id) : undefined);
-      const officerId = client?.loan_officer_id || group?.loan_officer_id || '';
+      const group =
+        acc.group ||
+        (acc.group_id
+          ? groupById.get(acc.group_id)
+          : client?.group_id
+            ? groupById.get(client.group_id)
+            : undefined);
+      const officerId = client?.loan_officer_id || group?.loan_officer_id || "";
       return {
         account: acc,
-        branch_id: client?.branch_id || group?.branch_id || '',
-        branch_name: scope.branchName(client?.branch_id || group?.branch_id || ''),
+        branch_id: client?.branch_id || group?.branch_id || "",
+        branch_name: scope.branchName(client?.branch_id || group?.branch_id || ""),
         officer_name: group?.loan_officer_name || scope.officerName(officerId),
         officer_id: officerId,
-        group_id: group?.id || '',
-        group_code: group?.group_code || '—',
-        group_name: group?.group_name || '—',
-        holder: client?.full_name || group?.group_name || '—',
-        member_code: client?.client_number || '—',
-        phone: client?.phone_number || '—',
+        group_id: group?.id || "",
+        group_code: group?.group_code || "—",
+        group_name: group?.group_name || "—",
+        holder: client?.full_name || group?.group_name || "—",
+        member_code: client?.client_number || "—",
+        phone: client?.phone_number || "—",
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,11 +76,13 @@ export const SavingsAccountsPage: React.FC = () => {
   const { savingsTransactions, addSavingsTransaction } = useDatabase();
   const rows = useSavingsRows(scope);
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const [applied, setApplied] = useState({ branchId: '', officerId: '', groupId: '', search: '' });
+  const [applied, setApplied] = useState({ branchId: "", officerId: "", groupId: "", search: "" });
 
-  const [txFor, setTxFor] = useState<{ row: SavingsRow; type: SavingsTransactionType } | null>(null);
+  const [txFor, setTxFor] = useState<{ row: SavingsRow; type: SavingsTransactionType } | null>(
+    null,
+  );
   const [passbookFor, setPassbookFor] = useState<SavingsRow | null>(null);
 
   const canTransact = !scope.isAuditor;
@@ -82,7 +95,8 @@ export const SavingsAccountsPage: React.FC = () => {
       if (applied.officerId && r.officer_id !== applied.officerId) return false;
       if (applied.groupId && r.group_id !== applied.groupId) return false;
       if (q) {
-        const hay = `${r.account.account_number} ${r.holder} ${r.member_code} ${r.group_name} ${r.group_code} ${r.phone}`.toLowerCase();
+        const hay =
+          `${r.account.account_number} ${r.holder} ${r.member_code} ${r.group_name} ${r.group_code} ${r.phone}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -91,7 +105,12 @@ export const SavingsAccountsPage: React.FC = () => {
 
   const runSearch = () => {
     setHasSearched(true);
-    setApplied({ branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId, search });
+    setApplied({
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+    });
   };
 
   const accountTransactions = (accountId: string) =>
@@ -100,38 +119,80 @@ export const SavingsAccountsPage: React.FC = () => {
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
 
   const columns: MisColumn<SavingsRow>[] = [
-    { key: 'branch', label: 'Branch', width: '10%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'lo', label: 'LO', width: '10%', render: (r) => r.officer_name, text: (r) => r.officer_name },
-    { key: 'gcode', label: 'Group Code', width: '10%', render: (r) => r.group_code, text: (r) => r.group_code },
-    { key: 'gname', label: 'Group Name', width: '10%', render: (r) => r.group_name, text: (r) => r.group_name },
-    { key: 'acc', label: 'Account No.', width: '13%', render: (r) => r.account.account_number, text: (r) => r.account.account_number },
-    { key: 'mcode', label: 'Member Code', width: '10%', render: (r) => r.member_code, text: (r) => r.member_code },
     {
-      key: 'holder',
-      label: 'Account Holder',
-      width: '13%',
+      key: "branch",
+      label: "Branch",
+      width: "10%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "lo",
+      label: "LO",
+      width: "10%",
+      render: (r) => r.officer_name,
+      text: (r) => r.officer_name,
+    },
+    {
+      key: "gcode",
+      label: "Group Code",
+      width: "10%",
+      render: (r) => r.group_code,
+      text: (r) => r.group_code,
+    },
+    {
+      key: "gname",
+      label: "Group Name",
+      width: "10%",
+      render: (r) => r.group_name,
+      text: (r) => r.group_name,
+    },
+    {
+      key: "acc",
+      label: "Account No.",
+      width: "13%",
+      render: (r) => r.account.account_number,
+      text: (r) => r.account.account_number,
+    },
+    {
+      key: "mcode",
+      label: "Member Code",
+      width: "10%",
+      render: (r) => r.member_code,
+      text: (r) => r.member_code,
+    },
+    {
+      key: "holder",
+      label: "Account Holder",
+      width: "13%",
       render: (r) => <span className="font-semibold text-slate-900">{r.holder}</span>,
       text: (r) => r.holder,
     },
-    { key: 'type', label: 'Type', width: '7%', render: (r) => r.account.account_type, text: (r) => r.account.account_type },
     {
-      key: 'balance',
-      label: 'Balance',
-      width: '10%',
+      key: "type",
+      label: "Type",
+      width: "7%",
+      render: (r) => r.account.account_type,
+      text: (r) => r.account.account_type,
+    },
+    {
+      key: "balance",
+      label: "Balance",
+      width: "10%",
       render: (r) => <span className="font-bold text-[#0B4394]">{money(r.account.balance)}</span>,
       text: (r) => money(r.account.balance),
     },
     {
-      key: 'status',
-      label: 'Status',
-      width: '8%',
+      key: "status",
+      label: "Status",
+      width: "8%",
       render: (r) => r.account.status,
       text: (r) => r.account.status,
     },
     {
-      key: 'action',
-      label: 'Action',
-      width: '12%',
+      key: "action",
+      label: "Action",
+      width: "12%",
       render: (r) => (
         <div className="flex flex-wrap items-center gap-1">
           {canTransact && (
@@ -139,7 +200,7 @@ export const SavingsAccountsPage: React.FC = () => {
               <button
                 type="button"
                 title="Record weekly deposit"
-                onClick={() => setTxFor({ row: r, type: 'Deposit' })}
+                onClick={() => setTxFor({ row: r, type: "Deposit" })}
                 className="inline-flex h-7 items-center gap-1 rounded bg-emerald-600 px-2 text-[11px] font-bold text-white hover:bg-emerald-700"
               >
                 <ArrowDownLeft className="h-3 w-3" /> Deposit
@@ -147,7 +208,7 @@ export const SavingsAccountsPage: React.FC = () => {
               <button
                 type="button"
                 title="Record withdrawal"
-                onClick={() => setTxFor({ row: r, type: 'Withdrawal' })}
+                onClick={() => setTxFor({ row: r, type: "Withdrawal" })}
                 className="inline-flex h-7 items-center gap-1 rounded bg-amber-500 px-2 text-[11px] font-bold text-white hover:bg-amber-600"
               >
                 <ArrowUpRight className="h-3 w-3" /> Withdraw
@@ -169,9 +230,9 @@ export const SavingsAccountsPage: React.FC = () => {
       <MisPageTitle>Savings Accounts</MisPageTitle>
 
       <p className="text-[11px] text-slate-500">
-        Savings are collected weekly — record each member&apos;s weekly deposit or a withdrawal below.
+        Savings are collected weekly — record each member&apos;s weekly deposit or a withdrawal
+        below.
       </p>
-
 
       <MisFilters
         title="Savings Accounts"
@@ -219,14 +280,22 @@ export const SavingsAccountsPage: React.FC = () => {
       )}
 
       {passbookFor && (
-        <MisModal open onClose={() => setPassbookFor(null)} title={`Passbook — ${passbookFor.holder}`}>
+        <MisModal
+          open
+          onClose={() => setPassbookFor(null)}
+          title={`Passbook — ${passbookFor.holder}`}
+        >
           <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Info label="Account No." value={passbookFor.account.account_number} />
             <Info label="Member Code" value={passbookFor.member_code} />
             <Info label="Group" value={passbookFor.group_name} />
             <Info label="Balance" value={money(passbookFor.account.balance)} />
           </div>
-          <ScrollArea axis="x" className="rounded border border-slate-200" ariaLabel="Passbook transactions">
+          <ScrollArea
+            axis="x"
+            className="rounded border border-slate-200"
+            ariaLabel="Passbook transactions"
+          >
             <table className="w-full min-w-[560px] text-[12px]">
               <thead className="bg-slate-100 text-left text-slate-600">
                 <tr>
@@ -293,11 +362,16 @@ export const SavingsDashboardPage: React.FC = () => {
 };
 
 /** Which KPI tile the drill-down is showing, or null when it is closed. */
-type Drill = 'balance' | 'savers' | 'deposits' | 'withdrawals';
+type Drill = "balance" | "savers" | "deposits" | "withdrawals";
 
-const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof useMisScope> }> = ({ rows, scope }) => {
+const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof useMisScope> }> = ({
+  rows,
+  scope,
+}) => {
   const { savingsTransactions } = useDatabase();
-  const [branchId, setBranchId] = useState(scope.branchLocked ? scope.activeBranches[0]?.id || '' : '');
+  const [branchId, setBranchId] = useState(
+    scope.branchLocked ? scope.activeBranches[0]?.id || "" : "",
+  );
   const [drill, setDrill] = useState<Drill | null>(null);
 
   const visible = useMemo(
@@ -337,7 +411,7 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
     let withdrawals = 0;
     const savers = new Set<string>();
     for (const t of weekTx) {
-      if (t.transaction_type === 'Withdrawal') withdrawals += Number(t.amount || 0);
+      if (t.transaction_type === "Withdrawal") withdrawals += Number(t.amount || 0);
       else {
         deposits += Number(t.amount || 0);
         savers.add(t.account_id);
@@ -347,13 +421,13 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
   }, [weekTx]);
 
   const total = visible.reduce((s, r) => s + Number(r.account.balance || 0), 0);
-  const activeCount = visible.filter((r) => r.account.status === 'Active').length;
+  const activeCount = visible.filter((r) => r.account.status === "Active").length;
 
   const perBranch = useMemo(() => {
     const map = new Map<string, { name: string; total: number; accounts: number }>();
     for (const r of visible) {
-      const key = r.branch_id || 'none';
-      const entry = map.get(key) || { name: r.branch_name || '—', total: 0, accounts: 0 };
+      const key = r.branch_id || "none";
+      const entry = map.get(key) || { name: r.branch_name || "—", total: 0, accounts: 0 };
       entry.total += Number(r.account.balance || 0);
       entry.accounts += 1;
       map.set(key, entry);
@@ -362,11 +436,19 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
   }, [visible]);
 
   const perGroup = useMemo(() => {
-    const map = new Map<string, { name: string; code: string; branch: string; total: number; members: number }>();
+    const map = new Map<
+      string,
+      { name: string; code: string; branch: string; total: number; members: number }
+    >();
     for (const r of visible) {
-      const key = r.group_id || 'none';
-      const entry =
-        map.get(key) || { name: r.group_name || 'Unassigned', code: r.group_code || '—', branch: r.branch_name || '—', total: 0, members: 0 };
+      const key = r.group_id || "none";
+      const entry = map.get(key) || {
+        name: r.group_name || "Unassigned",
+        code: r.group_code || "—",
+        branch: r.branch_name || "—",
+        total: 0,
+        members: 0,
+      };
       entry.total += Number(r.account.balance || 0);
       entry.members += 1;
       map.set(key, entry);
@@ -380,13 +462,21 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
         <div>
           <h2 className="text-sm font-bold text-slate-900">Savings Monitoring</h2>
           <p className="text-[11px] text-slate-500">
-            {branchId ? scope.branchName(branchId) : scope.branchLocked ? 'Your branch(es)' : 'All branches'}
+            {branchId
+              ? scope.branchName(branchId)
+              : scope.branchLocked
+                ? "Your branch(es)"
+                : "All branches"}
           </p>
         </div>
         {!scope.branchLocked && (
           <div className="w-full sm:w-64">
             <Field label="Monitor Branch">
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value)} className="form-field">
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="form-field"
+              >
                 <option value="">All Branches</option>
                 {scope.activeBranches.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -400,36 +490,46 @@ const SavingsDashboard: React.FC<{ rows: SavingsRow[]; scope: ReturnType<typeof 
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Total Savings Balance" value={money(total)} tone="navy" onClick={() => setDrill('balance')} />
+        <Kpi
+          label="Total Savings Balance"
+          value={money(total)}
+          tone="navy"
+          onClick={() => setDrill("balance")}
+        />
         <Kpi
           label="Saved This Week"
           value={`${flows.savers} / ${activeCount} members`}
-          onClick={() => setDrill('savers')}
+          onClick={() => setDrill("savers")}
         />
         <Kpi
           label="Deposits (This Week)"
           value={money(flows.deposits)}
           tone="green"
-          onClick={() => setDrill('deposits')}
+          onClick={() => setDrill("deposits")}
         />
         <Kpi
           label="Withdrawals (This Week)"
           value={money(flows.withdrawals)}
           tone="amber"
-          onClick={() => setDrill('withdrawals')}
+          onClick={() => setDrill("withdrawals")}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <BreakdownTable
           title="Savings by Branch"
-          head={['Branch', 'Accounts', 'Balance']}
+          head={["Branch", "Accounts", "Balance"]}
           rows={perBranch.map(([k, v]) => [k, v.name, String(v.accounts), money(v.total)])}
         />
         <BreakdownTable
           title="Savings by Group"
-          head={['Group', 'Members', 'Balance']}
-          rows={perGroup.map(([k, v]) => [k, `${v.name} (${v.code})`, String(v.members), money(v.total)])}
+          head={["Group", "Members", "Balance"]}
+          rows={perGroup.map(([k, v]) => [
+            k,
+            `${v.name} (${v.code})`,
+            String(v.members),
+            money(v.total),
+          ])}
         />
       </div>
 
@@ -461,7 +561,7 @@ const KpiDrillDown: React.FC<{
   const view = useMemo(() => {
     if (!drill) return null;
 
-    if (drill === 'balance') {
+    if (drill === "balance") {
       const rows = [...accounts]
         .sort((a, b) => Number(b.account.balance || 0) - Number(a.account.balance || 0))
         .map((a) => [
@@ -476,20 +576,29 @@ const KpiDrillDown: React.FC<{
         ]);
       const total = accounts.reduce((s, a) => s + Number(a.account.balance || 0), 0);
       return {
-        title: 'Total Savings Balance — all accounts',
-        head: ['Account No.', 'Account Holder', 'Member Code', 'Group', 'Branch', 'LO', 'Status', 'Balance'],
+        title: "Total Savings Balance — all accounts",
+        head: [
+          "Account No.",
+          "Account Holder",
+          "Member Code",
+          "Group",
+          "Branch",
+          "LO",
+          "Status",
+          "Balance",
+        ],
         rows,
-        summary: `${accounts.length} account${accounts.length === 1 ? '' : 's'} • ${money(total)} held`,
-        empty: 'No savings accounts in this scope.',
+        summary: `${accounts.length} account${accounts.length === 1 ? "" : "s"} • ${money(total)} held`,
+        empty: "No savings accounts in this scope.",
       };
     }
 
-    if (drill === 'savers') {
+    if (drill === "savers") {
       // One line per member who made at least one deposit this week, with what
       // they actually put in — the question a field officer is really asking.
       const perAccount = new Map<string, { saved: number; count: number; last: string }>();
       for (const t of weekTx) {
-        if (t.transaction_type === 'Withdrawal') continue;
+        if (t.transaction_type === "Withdrawal") continue;
         const e = perAccount.get(t.account_id) || { saved: 0, count: 0, last: t.created_at };
         e.saved += Number(t.amount || 0);
         e.count += 1;
@@ -501,12 +610,12 @@ const KpiDrillDown: React.FC<{
         .map(([id, e]) => {
           const a = accById.get(id);
           return [
-            a?.account.account_number || '—',
-            a?.holder || '—',
-            a?.member_code || '—',
-            a?.group_name || '—',
-            a?.branch_name || '—',
-            a?.officer_name || '—',
+            a?.account.account_number || "—",
+            a?.holder || "—",
+            a?.member_code || "—",
+            a?.group_name || "—",
+            a?.branch_name || "—",
+            a?.officer_name || "—",
             String(e.count),
             shortDate(e.last),
             money(e.saved),
@@ -517,29 +626,37 @@ const KpiDrillDown: React.FC<{
       return {
         title: `Members who saved this week (${periodLabel})`,
         head: [
-          'Account No.', 'Account Holder', 'Member Code', 'Group', 'Branch', 'LO',
-          'Deposits', 'Last Deposit', 'Saved This Week', 'Current Balance',
+          "Account No.",
+          "Account Holder",
+          "Member Code",
+          "Group",
+          "Branch",
+          "LO",
+          "Deposits",
+          "Last Deposit",
+          "Saved This Week",
+          "Current Balance",
         ],
         rows,
-        summary: `${rows.length} member${rows.length === 1 ? '' : 's'} saved • ${money(total)} deposited`,
-        empty: 'Nobody has saved yet this week.',
+        summary: `${rows.length} member${rows.length === 1 ? "" : "s"} saved • ${money(total)} deposited`,
+        empty: "Nobody has saved yet this week.",
       };
     }
 
-    const wantWithdrawal = drill === 'withdrawals';
-    const tx = weekTx.filter((t) => (t.transaction_type === 'Withdrawal') === wantWithdrawal);
+    const wantWithdrawal = drill === "withdrawals";
+    const tx = weekTx.filter((t) => (t.transaction_type === "Withdrawal") === wantWithdrawal);
     const rows = tx.map((t) => {
       const a = accById.get(t.account_id);
       return [
         shortDate(t.created_at),
         t.transaction_number,
-        t.receipt_number || '—',
-        a?.account.account_number || '—',
-        a?.holder || '—',
-        a?.member_code || '—',
-        a?.group_name || '—',
-        a?.branch_name || '—',
-        a?.officer_name || '—',
+        t.receipt_number || "—",
+        a?.account.account_number || "—",
+        a?.holder || "—",
+        a?.member_code || "—",
+        a?.group_name || "—",
+        a?.branch_name || "—",
+        a?.officer_name || "—",
         t.payment_method,
         money(t.amount),
         money(t.balance_after),
@@ -547,14 +664,24 @@ const KpiDrillDown: React.FC<{
     });
     const total = tx.reduce((s, t) => s + Number(t.amount || 0), 0);
     return {
-      title: `${wantWithdrawal ? 'Withdrawals' : 'Deposits'} this week (${periodLabel})`,
+      title: `${wantWithdrawal ? "Withdrawals" : "Deposits"} this week (${periodLabel})`,
       head: [
-        'Date', 'Txn No.', 'Receipt No.', 'Account No.', 'Account Holder', 'Member Code',
-        'Group', 'Branch', 'LO', 'Method', 'Amount', 'Balance After',
+        "Date",
+        "Txn No.",
+        "Receipt No.",
+        "Account No.",
+        "Account Holder",
+        "Member Code",
+        "Group",
+        "Branch",
+        "LO",
+        "Method",
+        "Amount",
+        "Balance After",
       ],
       rows,
-      summary: `${tx.length} transaction${tx.length === 1 ? '' : 's'} • ${money(total)} total`,
-      empty: `No ${wantWithdrawal ? 'withdrawals' : 'deposits'} recorded this week.`,
+      summary: `${tx.length} transaction${tx.length === 1 ? "" : "s"} • ${money(total)} total`,
+      empty: `No ${wantWithdrawal ? "withdrawals" : "deposits"} recorded this week.`,
     };
   }, [drill, accounts, weekTx, accById, periodLabel]);
 
@@ -568,7 +695,7 @@ const KpiDrillDown: React.FC<{
           <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
             <tr className="[&>th]:whitespace-nowrap [&>th]:px-2 [&>th]:py-2">
               {view.head.map((h, i) => (
-                <th key={h} className={i >= view.head.length - 2 ? 'text-right' : ''}>
+                <th key={h} className={i >= view.head.length - 2 ? "text-right" : ""}>
                   {h}
                 </th>
               ))}
@@ -583,12 +710,15 @@ const KpiDrillDown: React.FC<{
               </tr>
             ) : (
               view.rows.map((r, i) => (
-                <tr key={i} className="hover:bg-slate-50 [&>td]:whitespace-nowrap [&>td]:px-2 [&>td]:py-2">
+                <tr
+                  key={i}
+                  className="hover:bg-slate-50 [&>td]:whitespace-nowrap [&>td]:px-2 [&>td]:py-2"
+                >
                   {r.map((cell, j) => (
                     <td
                       key={j}
                       className={
-                        j >= r.length - 2 ? 'text-right font-bold text-slate-900' : 'text-slate-700'
+                        j >= r.length - 2 ? "text-right font-bold text-slate-900" : "text-slate-700"
                       }
                     >
                       {cell}
@@ -612,13 +742,13 @@ const KpiDrillDown: React.FC<{
 const Kpi: React.FC<{
   label: string;
   value: string;
-  tone?: 'navy' | 'green' | 'amber';
+  tone?: "navy" | "green" | "amber";
   onClick?: () => void;
 }> = ({ label, value, tone, onClick }) => {
   const tones: Record<string, string> = {
-    navy: 'text-[#0B4394]',
-    green: 'text-emerald-600',
-    amber: 'text-amber-600',
+    navy: "text-[#0B4394]",
+    green: "text-emerald-600",
+    amber: "text-amber-600",
   };
   const body = (
     <>
@@ -626,7 +756,7 @@ const Kpi: React.FC<{
         {label}
         {onClick && <ChevronRight className="h-3 w-3 text-slate-400" />}
       </p>
-      <p className={`mt-1 text-sm font-black ${tone ? tones[tone] : 'text-slate-900'}`}>{value}</p>
+      <p className={`mt-1 text-sm font-black ${tone ? tones[tone] : "text-slate-900"}`}>{value}</p>
     </>
   );
 
@@ -645,9 +775,15 @@ const Kpi: React.FC<{
   );
 };
 
-const BreakdownTable: React.FC<{ title: string; head: string[]; rows: string[][] }> = ({ title, head, rows }) => (
+const BreakdownTable: React.FC<{ title: string; head: string[]; rows: string[][] }> = ({
+  title,
+  head,
+  rows,
+}) => (
   <div className="rounded border border-slate-200">
-    <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-[12px] font-bold text-slate-700">{title}</div>
+    <div className="border-b border-slate-200 bg-slate-100 px-3 py-2 text-[12px] font-bold text-slate-700">
+      {title}
+    </div>
     <TableScroll maxHeight="14rem" arrows={false} ariaLabel={title}>
       {/* No min-width: two short columns already fit the narrowest phone, and
           a floor here would force a scrollbar that is not needed. */}
@@ -655,7 +791,7 @@ const BreakdownTable: React.FC<{ title: string; head: string[]; rows: string[][]
         <thead className="text-left text-slate-500">
           <tr>
             {head.map((h, i) => (
-              <th key={h} className={`px-3 py-1.5 ${i === 0 ? '' : 'text-right'}`}>
+              <th key={h} className={`px-3 py-1.5 ${i === 0 ? "" : "text-right"}`}>
                 {h}
               </th>
             ))}
@@ -665,7 +801,10 @@ const BreakdownTable: React.FC<{ title: string; head: string[]; rows: string[][]
           {rows.map(([key, ...cells]) => (
             <tr key={key} className="border-t border-slate-100">
               {cells.map((c, i) => (
-                <td key={i} className={`px-3 py-1.5 ${i === 0 ? 'font-semibold text-slate-800' : 'text-right'}`}>
+                <td
+                  key={i}
+                  className={`px-3 py-1.5 ${i === 0 ? "font-semibold text-slate-800" : "text-right"}`}
+                >
                   {c}
                 </td>
               ))}
@@ -684,7 +823,6 @@ const BreakdownTable: React.FC<{ title: string; head: string[]; rows: string[][]
   </div>
 );
 
-
 const Info: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div className="rounded border border-slate-200 bg-slate-50 p-2">
     <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
@@ -699,8 +837,8 @@ const TransactionModal: React.FC<{
   onSubmit: (amount: number, method: PaymentMethod, notes: string) => Promise<void>;
 }> = ({ row, type, onClose, onSubmit }) => {
   const [amount, setAmount] = useState<number>(50000);
-  const [method, setMethod] = useState<PaymentMethod>('Cash');
-  const [notes, setNotes] = useState('');
+  const [method, setMethod] = useState<PaymentMethod>("Cash");
+  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -729,7 +867,11 @@ const TransactionModal: React.FC<{
           />
         </Field>
         <Field label="Payment Method">
-          <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="form-field">
+          <select
+            value={method}
+            onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+            className="form-field"
+          >
             <option value="Cash">Cash</option>
             <option value="Bank Transfer">Bank Transfer</option>
             <option value="Mobile Money">Mobile Money</option>
@@ -740,7 +882,11 @@ const TransactionModal: React.FC<{
         </Field>
       </div>
       <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="h-9 rounded border border-slate-300 px-4 text-[12px] font-bold text-slate-600">
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-9 rounded border border-slate-300 px-4 text-[12px] font-bold text-slate-600"
+        >
           Cancel
         </button>
         <button
@@ -749,7 +895,7 @@ const TransactionModal: React.FC<{
           disabled={saving}
           className="h-9 rounded bg-[#0B4394] px-4 text-[12px] font-bold text-white hover:bg-[#093672] disabled:opacity-60"
         >
-          {saving ? 'Saving…' : `Confirm ${type}`}
+          {saving ? "Saving…" : `Confirm ${type}`}
         </button>
       </div>
     </MisModal>

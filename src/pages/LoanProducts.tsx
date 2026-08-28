@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { useDatabase } from '../context/DatabaseContext';
-import { useAuth } from '../context/AuthContext';
-import { useNotifications } from '../context/NotificationContext';
-import { LoanProduct, InterestType } from '../types/database.types';
-import { formatUGX } from '../lib/loanCalculations';
-import { FEES } from '../lib/fees';
-import { Briefcase, Pencil, Plus, X } from 'lucide-react';
+import React, { useState } from "react";
+import { useDatabase } from "../context/DatabaseContext";
+import { useAuth } from "../context/AuthContext";
+import { useNotifications } from "../context/NotificationContext";
+import { LoanProduct, InterestType } from "../types/database.types";
+import { formatUGX } from "../lib/loanCalculations";
+import { FEES } from "../lib/fees";
+import { Briefcase, Pencil, Plus, X } from "lucide-react";
 
-const field = 'form-field';
-const label = 'form-label';
+const field = "form-field";
+const label = "form-label";
 
 interface ProductForm {
   product_name: string;
@@ -22,14 +22,14 @@ interface ProductForm {
   max_amount: number;
   min_weeks: number;
   max_weeks: number;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
 }
 
 const emptyForm: ProductForm = {
-  product_name: '',
-  description: '',
+  product_name: "",
+  description: "",
   interest_rate: 15.0,
-  interest_type: 'Flat Rate',
+  interest_type: "Flat Rate",
   processing_fee_percentage: FEES.processingFeePct,
   penalty_rate: 1.0,
   grace_period_weeks: 1,
@@ -37,12 +37,14 @@ const emptyForm: ProductForm = {
   max_amount: 10000000,
   min_weeks: 4,
   max_weeks: 52,
-  status: 'Active',
+  status: "Active",
 };
 
 /** Section heading, matching the Group Create form. */
 const Section: React.FC<{ title: string; description?: string; children: React.ReactNode }> = ({
-  title, description, children,
+  title,
+  description,
+  children,
 }) => (
   <section className="mb-5 last:mb-0">
     <div className="form-section-title">{title}</div>
@@ -69,7 +71,8 @@ export const LoanProducts: React.FC = () => {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((p) => ({ ...p, [k]: v }));
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
+    setForm((p) => ({ ...p, [k]: v }));
 
   const openCreate = () => {
     setEditing(null);
@@ -97,43 +100,51 @@ export const LoanProducts: React.FC = () => {
   };
 
   const validate = (): string | null => {
-    if (!form.product_name.trim()) return 'Give the product a name.';
-    if (form.min_amount <= 0) return 'The minimum amount must be greater than zero.';
-    if (form.max_amount < form.min_amount) return 'The maximum amount cannot be below the minimum.';
-    if (form.min_weeks <= 0) return 'The minimum period must be at least one week.';
-    if (form.max_weeks < form.min_weeks) return 'The maximum period cannot be below the minimum.';
-    if (form.interest_rate < 0) return 'The interest rate cannot be negative.';
+    if (!form.product_name.trim()) return "Give the product a name.";
+    if (form.min_amount <= 0) return "The minimum amount must be greater than zero.";
+    if (form.max_amount < form.min_amount) return "The maximum amount cannot be below the minimum.";
+    if (form.min_weeks <= 0) return "The minimum period must be at least one week.";
+    if (form.max_weeks < form.min_weeks) return "The maximum period cannot be below the minimum.";
+    if (form.interest_rate < 0) return "The interest rate cannot be negative.";
     return null;
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const problem = validate();
-    if (problem) return addToast('error', 'Check the form', problem);
+    if (problem) return addToast("error", "Check the form", problem);
     setSaving(true);
     try {
       if (editing) {
         await updateLoanProduct(editing.id, form);
-        addToast('success', 'Product updated', `${form.product_name} has been saved.`);
+        addToast("success", "Product updated", `${form.product_name} has been saved.`);
       } else {
         await addLoanProduct(form);
-        addToast('success', 'Product created', `${form.product_name} is ready to lend against.`);
+        addToast("success", "Product created", `${form.product_name} is ready to lend against.`);
       }
       setOpen(false);
     } catch (error) {
-      addToast('error', 'Could not save', error instanceof Error ? error.message : 'Please try again.');
+      addToast(
+        "error",
+        "Could not save",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     } finally {
       setSaving(false);
     }
   };
 
   const toggleStatus = async (p: LoanProduct) => {
-    const next = p.status === 'Active' ? 'Inactive' : 'Active';
+    const next = p.status === "Active" ? "Inactive" : "Active";
     try {
       await updateLoanProduct(p.id, { status: next });
-      addToast('info', 'Status changed', `${p.product_name} is now ${next}.`);
+      addToast("info", "Status changed", `${p.product_name} is now ${next}.`);
     } catch (error) {
-      addToast('error', 'Could not change status', error instanceof Error ? error.message : 'Please try again.');
+      addToast(
+        "error",
+        "Could not change status",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     }
   };
 
@@ -146,7 +157,8 @@ export const LoanProducts: React.FC = () => {
         </div>
         <h1 className="text-2xl font-bold tracking-tight">Loan Products</h1>
         <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
-          The rate, amount range and repayment period a loan can be written against. Every application picks one.
+          The rate, amount range and repayment period a loan can be written against. Every
+          application picks one.
         </p>
       </div>
 
@@ -167,8 +179,8 @@ export const LoanProducts: React.FC = () => {
           <p className="text-sm font-bold text-slate-700">No loan products yet</p>
           <p className="mt-1 text-[13px] text-slate-500">
             {canManage
-              ? 'Create one before officers can raise loan applications.'
-              : 'An Administrator needs to create one before loans can be raised.'}
+              ? "Create one before officers can raise loan applications."
+              : "An Administrator needs to create one before loans can be raised."}
           </p>
         </div>
       ) : (
@@ -183,7 +195,9 @@ export const LoanProducts: React.FC = () => {
                 <div className="flex shrink-0 items-center gap-2">
                   <span
                     className={`rounded px-2 py-0.5 text-[11px] font-bold ${
-                      p.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                      p.status === "Active"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-slate-100 text-slate-500"
                     }`}
                   >
                     {p.status}
@@ -204,9 +218,21 @@ export const LoanProducts: React.FC = () => {
 
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 px-4 py-3 sm:grid-cols-4">
                 <Stat label="Interest" value={`${p.interest_rate}%`} note={p.interest_type} />
-                <Stat label="Amount range" value={formatUGX(p.min_amount)} note={`up to ${formatUGX(p.max_amount)}`} />
-                <Stat label="Period" value={`${p.min_weeks}–${p.max_weeks} wks`} note="repayment term" />
-                <Stat label="Penalty" value={`${p.penalty_rate ?? 0}%`} note={`${p.grace_period_weeks ?? 0} wk grace`} />
+                <Stat
+                  label="Amount range"
+                  value={formatUGX(p.min_amount)}
+                  note={`up to ${formatUGX(p.max_amount)}`}
+                />
+                <Stat
+                  label="Period"
+                  value={`${p.min_weeks}–${p.max_weeks} wks`}
+                  note="repayment term"
+                />
+                <Stat
+                  label="Penalty"
+                  value={`${p.penalty_rate ?? 0}%`}
+                  note={`${p.grace_period_weeks ?? 0} wk grace`}
+                />
               </dl>
 
               {canManage && (
@@ -216,7 +242,7 @@ export const LoanProducts: React.FC = () => {
                     onClick={() => toggleStatus(p)}
                     className="text-[12px] font-semibold text-[#0B4394] hover:underline"
                   >
-                    {p.status === 'Active' ? 'Deactivate this product' : 'Reactivate this product'}
+                    {p.status === "Active" ? "Deactivate this product" : "Reactivate this product"}
                   </button>
                 </footer>
               )}
@@ -226,9 +252,9 @@ export const LoanProducts: React.FC = () => {
       )}
 
       <p className="text-[12px] leading-relaxed text-slate-500">
-        Upfront charges — processing {FEES.processingFeePct}%, CRB {FEES.crbFeePct}%, security{' '}
-        {FEES.securityDepositPct}% and UGX {FEES.groupMaintenanceFee.toLocaleString()} group maintenance — are
-        institution-wide and apply to every product.
+        Upfront charges — processing {FEES.processingFeePct}%, CRB {FEES.crbFeePct}%, security{" "}
+        {FEES.securityDepositPct}% and UGX {FEES.groupMaintenanceFee.toLocaleString()} group
+        maintenance — are institution-wide and apply to every product.
       </p>
 
       {open && (
@@ -236,7 +262,7 @@ export const LoanProducts: React.FC = () => {
           <div className="w-full max-w-2xl rounded-lg bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <h2 className="text-sm font-bold text-slate-900">
-                {editing ? `Edit ${editing.product_name}` : 'New Loan Product'}
+                {editing ? `Edit ${editing.product_name}` : "New Loan Product"}
               </h2>
               <button
                 type="button"
@@ -249,37 +275,53 @@ export const LoanProducts: React.FC = () => {
             </div>
 
             <form onSubmit={submit} className="max-h-[80vh] overflow-y-auto p-4 sm:p-5">
-              <Section title="Product Identity" description="How officers will recognise this product.">
+              <Section
+                title="Product Identity"
+                description="How officers will recognise this product."
+              >
                 <div className="space-y-3.5">
                   <div>
-                    <label className={label} htmlFor="pname">Product Name *</label>
+                    <label className={label} htmlFor="pname">
+                      Product Name *
+                    </label>
                     <input
                       id="pname"
                       required
                       value={form.product_name}
-                      onChange={(e) => set('product_name', e.target.value)}
+                      onChange={(e) => set("product_name", e.target.value)}
                       placeholder="e.g. Umoja Micro Loan"
                       className={field}
                     />
                   </div>
                   <div>
-                    <label className={label} htmlFor="pdesc">Description</label>
+                    <label className={label} htmlFor="pdesc">
+                      Description
+                    </label>
                     <textarea
                       id="pdesc"
                       rows={2}
                       value={form.description}
-                      onChange={(e) => set('description', e.target.value)}
+                      onChange={(e) => set("description", e.target.value)}
                       placeholder="Who this product is for"
                       className={`${field} resize-none`}
                     />
                   </div>
                   <div>
-                    <label className={label} htmlFor="pstatus">Status *</label>
-                    <select id="pstatus" value={form.status} onChange={(e) => set('status', e.target.value as 'Active' | 'Inactive')} className={field}>
+                    <label className={label} htmlFor="pstatus">
+                      Status *
+                    </label>
+                    <select
+                      id="pstatus"
+                      value={form.status}
+                      onChange={(e) => set("status", e.target.value as "Active" | "Inactive")}
+                      className={field}
+                    >
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
                     </select>
-                    <p className="mt-1 text-[11px] text-slate-500">Only active products are offered on a new application.</p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Only active products are offered on a new application.
+                    </p>
                   </div>
                 </div>
               </Section>
@@ -287,7 +329,9 @@ export const LoanProducts: React.FC = () => {
               <Section title="Interest" description="How the cost of the loan is calculated.">
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                   <div>
-                    <label className={label} htmlFor="prate">Interest Rate (%) *</label>
+                    <label className={label} htmlFor="prate">
+                      Interest Rate (%) *
+                    </label>
                     <input
                       id="prate"
                       type="number"
@@ -295,13 +339,20 @@ export const LoanProducts: React.FC = () => {
                       min={0}
                       required
                       value={form.interest_rate}
-                      onChange={(e) => set('interest_rate', parseFloat(e.target.value) || 0)}
+                      onChange={(e) => set("interest_rate", parseFloat(e.target.value) || 0)}
                       className={field}
                     />
                   </div>
                   <div>
-                    <label className={label} htmlFor="ptype">Interest Type *</label>
-                    <select id="ptype" value={form.interest_type} onChange={(e) => set('interest_type', e.target.value as InterestType)} className={field}>
+                    <label className={label} htmlFor="ptype">
+                      Interest Type *
+                    </label>
+                    <select
+                      id="ptype"
+                      value={form.interest_type}
+                      onChange={(e) => set("interest_type", e.target.value as InterestType)}
+                      className={field}
+                    >
                       <option value="Flat Rate">Flat Rate</option>
                       <option value="Reducing Balance">Reducing Balance</option>
                     </select>
@@ -309,27 +360,68 @@ export const LoanProducts: React.FC = () => {
                 </div>
               </Section>
 
-              <Section title="Limits" description="The amount and period an application may request.">
+              <Section
+                title="Limits"
+                description="The amount and period an application may request."
+              >
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                   <div>
-                    <label className={label} htmlFor="pmin">Minimum Amount (UGX) *</label>
-                    <input id="pmin" type="number" min={0} step={10000} required value={form.min_amount}
-                      onChange={(e) => set('min_amount', parseFloat(e.target.value) || 0)} className={field} />
+                    <label className={label} htmlFor="pmin">
+                      Minimum Amount (UGX) *
+                    </label>
+                    <input
+                      id="pmin"
+                      type="number"
+                      min={0}
+                      step={10000}
+                      required
+                      value={form.min_amount}
+                      onChange={(e) => set("min_amount", parseFloat(e.target.value) || 0)}
+                      className={field}
+                    />
                   </div>
                   <div>
-                    <label className={label} htmlFor="pmax">Maximum Amount (UGX) *</label>
-                    <input id="pmax" type="number" min={0} step={10000} required value={form.max_amount}
-                      onChange={(e) => set('max_amount', parseFloat(e.target.value) || 0)} className={field} />
+                    <label className={label} htmlFor="pmax">
+                      Maximum Amount (UGX) *
+                    </label>
+                    <input
+                      id="pmax"
+                      type="number"
+                      min={0}
+                      step={10000}
+                      required
+                      value={form.max_amount}
+                      onChange={(e) => set("max_amount", parseFloat(e.target.value) || 0)}
+                      className={field}
+                    />
                   </div>
                   <div>
-                    <label className={label} htmlFor="pminw">Minimum Period (weeks) *</label>
-                    <input id="pminw" type="number" min={1} required value={form.min_weeks}
-                      onChange={(e) => set('min_weeks', parseInt(e.target.value) || 0)} className={field} />
+                    <label className={label} htmlFor="pminw">
+                      Minimum Period (weeks) *
+                    </label>
+                    <input
+                      id="pminw"
+                      type="number"
+                      min={1}
+                      required
+                      value={form.min_weeks}
+                      onChange={(e) => set("min_weeks", parseInt(e.target.value) || 0)}
+                      className={field}
+                    />
                   </div>
                   <div>
-                    <label className={label} htmlFor="pmaxw">Maximum Period (weeks) *</label>
-                    <input id="pmaxw" type="number" min={1} required value={form.max_weeks}
-                      onChange={(e) => set('max_weeks', parseInt(e.target.value) || 0)} className={field} />
+                    <label className={label} htmlFor="pmaxw">
+                      Maximum Period (weeks) *
+                    </label>
+                    <input
+                      id="pmaxw"
+                      type="number"
+                      min={1}
+                      required
+                      value={form.max_weeks}
+                      onChange={(e) => set("max_weeks", parseInt(e.target.value) || 0)}
+                      className={field}
+                    />
                   </div>
                 </div>
               </Section>
@@ -337,26 +429,49 @@ export const LoanProducts: React.FC = () => {
               <Section title="Arrears" description="Applied when an instalment is missed.">
                 <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
                   <div>
-                    <label className={label} htmlFor="ppen">Penalty Rate (%)</label>
-                    <input id="ppen" type="number" step="0.5" min={0} value={form.penalty_rate}
-                      onChange={(e) => set('penalty_rate', parseFloat(e.target.value) || 0)} className={field} />
+                    <label className={label} htmlFor="ppen">
+                      Penalty Rate (%)
+                    </label>
+                    <input
+                      id="ppen"
+                      type="number"
+                      step="0.5"
+                      min={0}
+                      value={form.penalty_rate}
+                      onChange={(e) => set("penalty_rate", parseFloat(e.target.value) || 0)}
+                      className={field}
+                    />
                   </div>
                   <div>
-                    <label className={label} htmlFor="pgrace">Grace Period (weeks)</label>
-                    <input id="pgrace" type="number" min={0} value={form.grace_period_weeks}
-                      onChange={(e) => set('grace_period_weeks', parseInt(e.target.value) || 0)} className={field} />
+                    <label className={label} htmlFor="pgrace">
+                      Grace Period (weeks)
+                    </label>
+                    <input
+                      id="pgrace"
+                      type="number"
+                      min={0}
+                      value={form.grace_period_weeks}
+                      onChange={(e) => set("grace_period_weeks", parseInt(e.target.value) || 0)}
+                      className={field}
+                    />
                   </div>
                 </div>
               </Section>
 
               <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => setOpen(false)}
-                  className="h-[52px] rounded-lg bg-slate-100 px-5 text-base font-semibold text-slate-700 sm:h-10 sm:text-[13px]">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="h-[52px] rounded-lg bg-slate-100 px-5 text-base font-semibold text-slate-700 sm:h-10 sm:text-[13px]"
+                >
                   Cancel
                 </button>
-                <button type="submit" disabled={saving}
-                  className="h-[52px] rounded-lg bg-[#0B4394] px-6 text-base font-semibold text-white hover:bg-[#093672] disabled:opacity-50 sm:h-10 sm:text-[13px]">
-                  {saving ? 'Saving…' : editing ? 'Save changes' : 'Create product'}
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="h-[52px] rounded-lg bg-[#0B4394] px-6 text-base font-semibold text-white hover:bg-[#093672] disabled:opacity-50 sm:h-10 sm:text-[13px]"
+                >
+                  {saving ? "Saving…" : editing ? "Save changes" : "Create product"}
                 </button>
               </div>
             </form>
@@ -367,7 +482,11 @@ export const LoanProducts: React.FC = () => {
   );
 };
 
-const Stat: React.FC<{ label: string; value: string; note?: string }> = ({ label, value, note }) => (
+const Stat: React.FC<{ label: string; value: string; note?: string }> = ({
+  label,
+  value,
+  note,
+}) => (
   <div>
     <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</dt>
     <dd className="mt-0.5 text-[13px] font-bold tabular-nums text-slate-900">{value}</dd>

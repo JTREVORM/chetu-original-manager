@@ -7,27 +7,30 @@
  * Writes docs/Chetu-Microfinance-User-Manual.pdf (and the HTML it was
  * rendered from, so the wording can be corrected without re-shooting).
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, resolve } from 'node:path';
-import puppeteer from 'puppeteer-core';
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, resolve } from "node:path";
+import puppeteer from "puppeteer-core";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DOCS = resolve(HERE, '..', 'docs');
-const SHOTS = resolve(DOCS, 'manual', 'shots');
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const DOCS = resolve(HERE, "..", "docs");
+const SHOTS = resolve(DOCS, "manual", "shots");
+const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
 
 /** Screenshots are inlined so the HTML and the PDF are both self-contained. */
 const img = (stem) => {
   const file = resolve(SHOTS, `${stem}.png`);
   if (!existsSync(file)) return null;
-  return `data:image/png;base64,${readFileSync(file).toString('base64')}`;
+  return `data:image/png;base64,${readFileSync(file).toString("base64")}`;
 };
 
 const missing = [];
-const figure = (stem, caption, kind = 'desktop') => {
+const figure = (stem, caption, kind = "desktop") => {
   const src = img(stem);
-  if (!src) { missing.push(stem); return ''; }
+  if (!src) {
+    missing.push(stem);
+    return "";
+  }
   return `<figure class="shot ${kind}">
       <img src="${src}" alt="${caption}">
       <figcaption>${caption}</figcaption>
@@ -38,10 +41,13 @@ const figure = (stem, caption, kind = 'desktop') => {
 const pair = (stem, caption) => {
   const d = img(`${stem}-desktop`);
   const m = img(`${stem}-mobile`);
-  if (!d && !m) { missing.push(stem); return ''; }
+  if (!d && !m) {
+    missing.push(stem);
+    return "";
+  }
   return `<div class="pair">
-      ${d ? `<figure class="shot desktop"><img src="${d}" alt="${caption} on desktop"><figcaption>On a computer</figcaption></figure>` : ''}
-      ${m ? `<figure class="shot phone"><img src="${m}" alt="${caption} on a phone"><figcaption>On a phone</figcaption></figure>` : ''}
+      ${d ? `<figure class="shot desktop"><img src="${d}" alt="${caption} on desktop"><figcaption>On a computer</figcaption></figure>` : ""}
+      ${m ? `<figure class="shot phone"><img src="${m}" alt="${caption} on a phone"><figcaption>On a phone</figcaption></figure>` : ""}
     </div>
     <p class="cap">${caption}</p>`;
 };
@@ -91,7 +97,7 @@ const html = `<!doctype html>
   <div class="rule"></div>
   <div class="sub">Management Information System<br>User Manual</div>
   <div class="meta">
-    Version 1.0 &middot; ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}<br>
+    Version 1.0 &middot; ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}<br>
     Covers Groups, Members, Loans, Collections, Reports, Transfers and Administration
   </div>
 </div>
@@ -130,7 +136,7 @@ both authorise and pay out. This is deliberate and is not a fault.</div>
 <p>Use <b>either your email address or your phone number</b>, together with your password. Your phone
 number works because that is what field officers are used to; your email works because that is your
 account.</p>
-${pair('login', 'The sign-in screen. The same details work on a computer and on a phone.')}
+${pair("login", "The sign-in screen. The same details work on a computer and on a phone.")}
 
 <div class="warn"><b>If you forget your password</b>, an Administrator resets it from
 System&nbsp;Settings → User&nbsp;Management. Nobody, including an Administrator, can read your existing password.</div>
@@ -140,19 +146,19 @@ System&nbsp;Settings → User&nbsp;Management. Nobody, including an Administrato
 <h2>2. Finding your way around</h2>
 <p>The menu on the left groups the system by the work you are doing. On a phone it is hidden behind
 the <b>☰</b> button in the top bar; tap a heading to open its screens.</p>
-${figure('sidebar-mobile', 'The menu on a phone, with the Members section opened.', 'phone')}
+${figure("sidebar-mobile", "The menu on a phone, with the Members section opened.", "phone")}
 
 <h3>The dashboard</h3>
 <p>The dashboard is what you see when you sign in. It greets you, states what is waiting for your
 attention, and then shows the portfolio <em>you</em> are responsible for.</p>
-${pair('dashboard', 'The Administrator dashboard: the whole institution, including the cash position.')}
-${figure('dashboard-officer-desktop', 'A Loan Officer sees only their own book — and no institutional cash figures, because they do not hold the ledger.')}
+${pair("dashboard", "The Administrator dashboard: the whole institution, including the cash position.")}
+${figure("dashboard-officer-desktop", "A Loan Officer sees only their own book — and no institutional cash figures, because they do not hold the ledger.")}
 
 <h3>Notifications</h3>
 <p>The bell in the top bar carries everything that has happened and everything waiting on you —
 groups and members submitted for approval, loans approved, cash disbursed, repayments received,
 transfers awaiting receipt. <b>Tap any notification to go straight to the screen where you act on it.</b></p>
-${figure('notifications-mobile', 'Notifications, newest first and grouped by day. Unread entries carry a blue bar.', 'phone')}
+${figure("notifications-mobile", "Notifications, newest first and grouped by day. Unread entries carry a blue bar.", "phone")}
 </div>
 
 <div class="section">
@@ -171,7 +177,7 @@ to pay.</p>
   <li>Approved groups appear in <b>Group List</b>. Rejected ones go to <b>Group Rejected List</b>, where
       the officer can correct and resubmit them.</li>
 </ol>
-${pair('groups-approval', 'Groups waiting for a manager\\u2019s decision. Tick, cross, or edit.')}
+${pair("groups-approval", "Groups waiting for a manager\\u2019s decision. Tick, cross, or edit.")}
 
 <div class="note">An officer cannot approve their own group. The system refuses it at the database
 level, so it cannot be worked around from any screen.</div>
@@ -188,7 +194,7 @@ level, so it cannot be worked around from any screen.</div>
 <p>Open <b>Members → Member Admission</b>. Choose the branch, officer and group, then capture the
 member's details. Only <b>approved</b> groups appear in the group list — a member cannot be put into a
 group that has not been passed.</p>
-${pair('member-admission', 'The admission form. Fields are full width on a phone so they can be filled in the field.')}
+${pair("member-admission", "The admission form. Fields are full width on a phone so they can be filled in the field.")}
 
 <p>On saving, the system charges <b>UGX 5,000 admission</b> and <b>UGX 5,000 passbook</b> against the
 member and opens their savings account.</p>
@@ -202,7 +208,7 @@ member and opens their savings account.</p>
   <li><b>Member Inactive List</b> — left or dormant</li>
   <li><b>Member Death List</b> — recorded deceased, kept separate so any open loan can be settled</li>
 </ul>
-${pair('member-list', 'Member List. Each record shows branch, officer, group and contact details, with actions on the right.')}
+${pair("member-list", "Member List. Each record shows branch, officer, group and contact details, with actions on the right.")}
 </div>
 
 <div class="section">
@@ -228,7 +234,7 @@ changes, existing loans keep what they were actually charged — history is neve
 <h3>Loan products</h3>
 <p>A product sets the interest rate, the amount range and the repayment period. Every application
 picks one. Only an Administrator can create or change products.</p>
-${pair('loan-products', 'Loan products, with the terms each one offers.')}
+${pair("loan-products", "Loan products, with the terms each one offers.")}
 
 <h3>From application to cash</h3>
 <div class="flow"><b>Loan Application</b> → <b>Waiting for Approval</b> → approved → <b>Waiting for Disburse</b> → disbursed → repayments begin<br>
@@ -242,10 +248,10 @@ ${pair('loan-products', 'Loan products, with the terms each one offers.')}
   <li><b>Waiting for Disburse</b> — approving creates the loan and its weekly schedule. The officer
       releases the cash here.</li>
 </ol>
-${pair('loan-application', 'Finding the member to lend to.')}
-${pair('loan-approval', 'The manager\\u2019s approval queue.')}
-${pair('loan-disburse', 'Approved loans waiting for cash, showing the net amount to hand over.')}
-${pair('loan-rejected', 'Rejected applications, with the reason. The officer corrects and resubmits.')}
+${pair("loan-application", "Finding the member to lend to.")}
+${pair("loan-approval", "The manager\\u2019s approval queue.")}
+${pair("loan-disburse", "Approved loans waiting for cash, showing the net amount to hand over.")}
+${pair("loan-rejected", "Rejected applications, with the reason. The officer corrects and resubmits.")}
 </div>
 
 <div class="section">
@@ -258,20 +264,20 @@ ${pair('loan-rejected', 'Rejected applications, with the reason. The officer cor
   <li><b>BadDebts Collection</b> — recovering on a loan already declared bad</li>
   <li><b>Loan Settlement</b> — a member clearing the whole balance early</li>
 </ul>
-${pair('collections', 'Group Wise Collection: pick branch, officer and group, then take the money.')}
+${pair("collections", "Group Wise Collection: pick branch, officer and group, then take the money.")}
 
 <h3>When a loan goes bad</h3>
 <p><b>Bad Loans List</b> ages every overdue loan and lets a manager declare it a bad debt with a
 comment. Only an Administrator can then <b>write it off</b>, which closes the loan and removes the
 balance from the portfolio.</p>
-${pair('bad-loans', 'Bad Loans List, aged by how long the loan has been in arrears.')}
+${pair("bad-loans", "Bad Loans List, aged by how long the loan has been in arrears.")}
 </div>
 
 <div class="section">
 <h2>7. Reports</h2>
 <p>Every report filters by branch, officer, group and date, and downloads as <b>PDF</b> or <b>Excel</b>
 using the buttons at the top right.</p>
-${pair('reports-index', 'The reports index.')}
+${pair("reports-index", "The reports index.")}
 
 <table>
   <thead><tr><th style="width:34%">Report</th><th>Answers</th></tr></thead>
@@ -289,8 +295,8 @@ ${pair('reports-index', 'The reports index.')}
     <tr><td>Fee Collection Report</td><td>What have we earned in fees?</td></tr>
   </tbody>
 </table>
-${pair('report-par', 'Portfolio at Risk: ageing bands, and the PAR ratio over the open book.')}
-${pair('report-fees', 'Fee Collection: admission, passbook, processing, CRB and group maintenance, with the refundable security kept separate.')}
+${pair("report-par", "Portfolio at Risk: ageing bands, and the PAR ratio over the open book.")}
+${pair("report-fees", "Fee Collection: admission, passbook, processing, CRB and group maintenance, with the refundable security kept separate.")}
 </div>
 
 <div class="section">
@@ -302,7 +308,7 @@ ${pair('report-fees', 'Fee Collection: admission, passbook, processing, CRB and 
   <li><b>Group Interchange</b> — moves a member to another group in the same branch. Immediate.</li>
   <li><b>Group LO Transfer</b> — hands a whole group and its members to another officer.</li>
 </ul>
-${pair('transfers-member', 'Sending a member to another branch. Open loans and arrears are shown before you send.')}
+${pair("transfers-member", "Sending a member to another branch. Open loans and arrears are shown before you send.")}
 <div class="note">A member with an open loan can still be transferred — the loan follows them, and the
 receiving branch takes over collection.</div>
 </div>
@@ -314,18 +320,18 @@ receiving branch takes over collection.</div>
 <p><b>System Settings → User Management.</b> Creating an account needs a full name, phone number,
 <b>email address</b>, an initial password, and a role. Branch Managers and Loan Officers must be
 attached to at least one branch — that attachment is what limits what they can see.</p>
-${pair('users', 'Staff accounts and the role each one holds.')}
+${pair("users", "Staff accounts and the role each one holds.")}
 
 <h3>Branches</h3>
 <p><b>System Settings → Branch Network.</b> Create a branch before creating staff, groups or members —
 everything else is attached to one.</p>
-${pair('branches', 'The branch network.')}
+${pair("branches", "The branch network.")}
 
 <h3>System settings</h3>
 <p>Institution name, currency and the text printed on reports and receipts. The fee schedule is shown
 here for reference but is fixed in the system, because charges are written onto each loan when it is
 approved.</p>
-${pair('settings', 'System settings, with the standing fee schedule.')}
+${pair("settings", "System settings, with the standing fee schedule.")}
 
 <div class="warn"><b>Danger zone.</b> "Reset all operational data" permanently deletes every member,
 group, loan, repayment and audit log. You must type <code>DELETE ALL DATA</code> to confirm. There is
@@ -335,7 +341,7 @@ no undo and no backup is taken.</div>
 <p><b>Audit Logs</b> records every action, who took it and when. The <b>Reversal Register</b> is the
 counterpart for rollbacks: reversing a receipt deletes it, so the register is the only surviving
 record that the money ever moved. It is the first thing an auditor should read.</p>
-${figure('dashboard-auditor-desktop', 'An Auditor sees the whole institution, read-only, with no action links.')}
+${figure("dashboard-auditor-desktop", "An Auditor sees the whole institution, read-only, with no action links.")}
 </div>
 
 <div class="section">
@@ -379,23 +385,30 @@ demonstration data and does not represent a real portfolio.</p>
 
 </body></html>`;
 
-const htmlPath = resolve(DOCS, 'Chetu-Microfinance-User-Manual.html');
+const htmlPath = resolve(DOCS, "Chetu-Microfinance-User-Manual.html");
 writeFileSync(htmlPath, html);
 
-const browser = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox'] });
+const browser = await puppeteer.launch({
+  executablePath: CHROME,
+  headless: "new",
+  args: ["--no-sandbox"],
+});
 const page = await browser.newPage();
-await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'networkidle0', timeout: 180000 });
-const pdfPath = resolve(DOCS, 'Chetu-Microfinance-User-Manual.pdf');
+await page.goto(pathToFileURL(htmlPath).href, { waitUntil: "networkidle0", timeout: 180000 });
+const pdfPath = resolve(DOCS, "Chetu-Microfinance-User-Manual.pdf");
 await page.pdf({
-  path: pdfPath, format: 'A4', printBackground: true,
-  margin: { top: '16mm', right: '14mm', bottom: '18mm', left: '14mm' },
+  path: pdfPath,
+  format: "A4",
+  printBackground: true,
+  margin: { top: "16mm", right: "14mm", bottom: "18mm", left: "14mm" },
   displayHeaderFooter: true,
-  headerTemplate: '<div></div>',
+  headerTemplate: "<div></div>",
   footerTemplate:
     '<div style="width:100%;font-size:8pt;color:#94a3b8;padding:0 14mm;display:flex;justify-content:space-between;">' +
     '<span>Chetu Microfinance Ltd — User Manual</span><span class="pageNumber"></span></div>',
 });
 await browser.close();
 
-if (missing.length) console.log('screenshots not found (sections rendered without them):', missing.join(', '));
+if (missing.length)
+  console.log("screenshots not found (sections rendered without them):", missing.join(", "));
 console.log(`\nHTML → ${htmlPath}\nPDF  → ${pdfPath}`);

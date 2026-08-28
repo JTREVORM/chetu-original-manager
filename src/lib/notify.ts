@@ -1,8 +1,9 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured } from "./supabase";
 
-export type NotifyType = 'Application' | 'Repayment' | 'Overdue' | 'Disbursement' | 'Alert' | 'System';
+export type NotifyType =
+  "Application" | "Repayment" | "Overdue" | "Disbursement" | "Alert" | "System";
 
-export type NotifyAudience = 'admins' | 'managers' | 'all-staff';
+export type NotifyAudience = "admins" | "managers" | "all-staff";
 
 interface NotifyInput {
   title: string;
@@ -28,9 +29,9 @@ interface NotifyInput {
 }
 
 const rolesFor = (audience: NotifyAudience): string[] => {
-  if (audience === 'admins') return ['Administrator'];
-  if (audience === 'managers') return ['Administrator', 'Branch Manager'];
-  return ['Administrator', 'Branch Manager', 'Loan Officer', 'Auditor'];
+  if (audience === "admins") return ["Administrator"];
+  if (audience === "managers") return ["Administrator", "Branch Manager"];
+  return ["Administrator", "Branch Manager", "Loan Officer", "Auditor"];
 };
 
 /**
@@ -44,10 +45,10 @@ export const sendNotification = async (input: NotifyInput): Promise<void> => {
 
     if (input.audience) {
       const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .in('role', rolesFor(input.audience))
-        .eq('status', 'Active');
+        .from("profiles")
+        .select("id")
+        .in("role", rolesFor(input.audience))
+        .eq("status", "Active");
       (data || []).forEach((p: { id: string }) => ids.add(p.id));
     }
 
@@ -66,8 +67,8 @@ export const sendNotification = async (input: NotifyInput): Promise<void> => {
       link_url: input.link_url || null,
     }));
 
-    await supabase.from('notifications').insert(rows);
+    await supabase.from("notifications").insert(rows);
   } catch (err) {
-    console.warn('Notification delivery skipped', err);
+    console.warn("Notification delivery skipped", err);
   }
 };

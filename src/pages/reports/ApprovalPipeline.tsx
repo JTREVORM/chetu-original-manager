@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   Field,
   MisFilters,
@@ -10,18 +10,18 @@ import {
   shortDate,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
-import { useDatabase } from '../../context/DatabaseContext';
-import { useStaffNames } from './reportData';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
+import { useDatabase } from "../../context/DatabaseContext";
+import { useStaffNames } from "./reportData";
 
-type Kind = 'Group' | 'Member' | 'Loan Application';
-type State = 'Pending' | 'Rejected';
+type Kind = "Group" | "Member" | "Loan Application";
+type State = "Pending" | "Rejected";
 
 const KIND_ROUTE: Record<Kind, Record<State, string>> = {
-  Group: { Pending: '/groups/waiting-approval', Rejected: '/groups/rejected' },
-  Member: { Pending: '/member-waiting-approval', Rejected: '/member-rejected' },
-  'Loan Application': { Pending: '/loan-waiting-approval', Rejected: '/loan-rejected' },
+  Group: { Pending: "/groups/waiting-approval", Rejected: "/groups/rejected" },
+  Member: { Pending: "/member-waiting-approval", Rejected: "/member-rejected" },
+  "Loan Application": { Pending: "/loan-waiting-approval", Rejected: "/loan-rejected" },
 };
 
 interface Row {
@@ -52,17 +52,28 @@ export const ApprovalPipeline: React.FC = () => {
   const { clientGroups, clients, loanApplications } = useDatabase();
   const staffName = useStaffNames();
 
-  const [kind, setKind] = useState('');
-  const [state, setState] = useState('');
-  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState("");
+  const [state, setState] = useState("");
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const [applied, setApplied] = useState({ branchId: '', officerId: '', groupId: '', search: '', kind: '', state: '' });
+  const [applied, setApplied] = useState({
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    search: "",
+    kind: "",
+    state: "",
+  });
 
   const runSearch = () => {
     setHasSearched(true);
     setApplied({
-      branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId,
-      search, kind, state,
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+      kind,
+      state,
     });
   };
 
@@ -72,66 +83,66 @@ export const ApprovalPipeline: React.FC = () => {
     const out: Row[] = [];
 
     for (const g of clientGroups) {
-      if (g.approval_status !== 'Pending' && g.approval_status !== 'Rejected') continue;
+      if (g.approval_status !== "Pending" && g.approval_status !== "Rejected") continue;
       out.push({
         id: `group-${g.id}`,
-        kind: 'Group',
+        kind: "Group",
         state: g.approval_status,
         reference: g.group_code,
         name: g.group_name,
-        branch_id: g.branch_id || '',
+        branch_id: g.branch_id || "",
         branch_name: scope.branchName(g.branch_id),
-        officer_id: g.loan_officer_id || '',
+        officer_id: g.loan_officer_id || "",
         officer_name: g.loan_officer_name || scope.officerName(g.loan_officer_id),
         group_name: g.group_name,
         amount: null,
-        submitted_on: g.created_at.split('T')[0]!,
+        submitted_on: g.created_at.split("T")[0]!,
         submitted_by: staffName(g.created_by),
-        reason: g.rejection_reason || '—',
+        reason: g.rejection_reason || "—",
       });
     }
 
     for (const c of clients) {
-      if (c.approval_status !== 'Pending' && c.approval_status !== 'Rejected') continue;
+      if (c.approval_status !== "Pending" && c.approval_status !== "Rejected") continue;
       const group = c.group_id ? groupById.get(c.group_id) : undefined;
       out.push({
         id: `member-${c.id}`,
-        kind: 'Member',
+        kind: "Member",
         state: c.approval_status,
         reference: c.client_number,
         name: c.full_name,
-        branch_id: c.branch_id || '',
+        branch_id: c.branch_id || "",
         branch_name: scope.branchName(c.branch_id),
-        officer_id: c.loan_officer_id || group?.loan_officer_id || '',
+        officer_id: c.loan_officer_id || group?.loan_officer_id || "",
         officer_name: group?.loan_officer_name || scope.officerName(c.loan_officer_id),
-        group_name: group?.group_name || '—',
+        group_name: group?.group_name || "—",
         amount: null,
-        submitted_on: (c.date_registered || c.created_at).split('T')[0]!,
+        submitted_on: (c.date_registered || c.created_at).split("T")[0]!,
         submitted_by: staffName(c.registered_by),
-        reason: c.rejection_reason || '—',
+        reason: c.rejection_reason || "—",
       });
     }
 
     for (const a of loanApplications) {
-      if (a.status !== 'Pending' && a.status !== 'Rejected') continue;
+      if (a.status !== "Pending" && a.status !== "Rejected") continue;
       const client = clientById.get(a.client_id);
       if (!client) continue;
       const group = client.group_id ? groupById.get(client.group_id) : undefined;
       out.push({
         id: `application-${a.id}`,
-        kind: 'Loan Application',
+        kind: "Loan Application",
         state: a.status,
         reference: a.application_number,
         name: client.full_name,
-        branch_id: client.branch_id || '',
+        branch_id: client.branch_id || "",
         branch_name: scope.branchName(client.branch_id),
-        officer_id: client.loan_officer_id || group?.loan_officer_id || '',
+        officer_id: client.loan_officer_id || group?.loan_officer_id || "",
         officer_name: group?.loan_officer_name || scope.officerName(client.loan_officer_id),
-        group_name: group?.group_name || '—',
+        group_name: group?.group_name || "—",
         amount: Number(a.requested_amount),
-        submitted_on: a.created_at.split('T')[0]!,
+        submitted_on: a.created_at.split("T")[0]!,
         submitted_by: staffName(a.submitted_by),
-        reason: a.rejection_reason || '—',
+        reason: a.rejection_reason || "—",
       });
     }
 
@@ -157,7 +168,7 @@ export const ApprovalPipeline: React.FC = () => {
     const c = { pending: 0, rejected: 0, oldest: 0 };
     const today = Date.now();
     for (const r of filtered) {
-      if (r.state === 'Pending') {
+      if (r.state === "Pending") {
         c.pending += 1;
         const age = Math.floor((today - new Date(r.submitted_on).getTime()) / 86400000);
         if (age > c.oldest) c.oldest = age;
@@ -167,42 +178,78 @@ export const ApprovalPipeline: React.FC = () => {
   }, [filtered]);
 
   const columns: MisColumn<Row>[] = [
-    { key: 'kind', label: 'Type', width: '11%', render: (r) => r.kind, text: (r) => r.kind },
+    { key: "kind", label: "Type", width: "11%", render: (r) => r.kind, text: (r) => r.kind },
     {
-      key: 'state',
-      label: 'Status',
-      width: '8%',
+      key: "state",
+      label: "Status",
+      width: "8%",
       render: (r) => (
-        <span className={`font-bold ${r.state === 'Pending' ? 'text-amber-600' : 'text-chetu-red'}`}>{r.state}</span>
+        <span
+          className={`font-bold ${r.state === "Pending" ? "text-amber-600" : "text-chetu-red"}`}
+        >
+          {r.state}
+        </span>
       ),
       text: (r) => r.state,
     },
-    { key: 'ref', label: 'Reference', width: '11%', render: (r) => r.reference, text: (r) => r.reference },
     {
-      key: 'name',
-      label: 'Name',
-      width: '14%',
+      key: "ref",
+      label: "Reference",
+      width: "11%",
+      render: (r) => r.reference,
+      text: (r) => r.reference,
+    },
+    {
+      key: "name",
+      label: "Name",
+      width: "14%",
       render: (r) => <span className="font-semibold text-slate-900">{r.name}</span>,
       text: (r) => r.name,
     },
-    { key: 'group', label: 'Group', width: '11%', render: (r) => r.group_name, text: (r) => r.group_name },
-    { key: 'branch', label: 'Branch', width: '9%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'lo', label: 'LO', width: '9%', render: (r) => r.officer_name, text: (r) => r.officer_name },
     {
-      key: 'amt',
-      label: 'Amount',
-      width: '8%',
-      align: 'right',
-      render: (r) => (r.amount === null ? '—' : money(r.amount)),
-      text: (r) => (r.amount === null ? '—' : money(r.amount)),
+      key: "group",
+      label: "Group",
+      width: "11%",
+      render: (r) => r.group_name,
+      text: (r) => r.group_name,
     },
-    { key: 'on', label: 'Submitted', width: '8%', render: (r) => shortDate(r.submitted_on) },
-    { key: 'by', label: 'Submitted By', width: '11%', render: (r) => r.submitted_by, text: (r) => r.submitted_by },
+    {
+      key: "branch",
+      label: "Branch",
+      width: "9%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "lo",
+      label: "LO",
+      width: "9%",
+      render: (r) => r.officer_name,
+      text: (r) => r.officer_name,
+    },
+    {
+      key: "amt",
+      label: "Amount",
+      width: "8%",
+      align: "right",
+      render: (r) => (r.amount === null ? "—" : money(r.amount)),
+      text: (r) => (r.amount === null ? "—" : money(r.amount)),
+    },
+    { key: "on", label: "Submitted", width: "8%", render: (r) => shortDate(r.submitted_on) },
+    {
+      key: "by",
+      label: "Submitted By",
+      width: "11%",
+      render: (r) => r.submitted_by,
+      text: (r) => r.submitted_by,
+    },
   ];
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Approval Pipeline" columns={columns} rows={filtered} />}>
+      <MisPageTitle
+        right={<ReportExportButtons title="Approval Pipeline" columns={columns} rows={filtered} />}
+      >
         Approval Pipeline
       </MisPageTitle>
 
@@ -246,10 +293,10 @@ export const ApprovalPipeline: React.FC = () => {
           filtered.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 text-xs font-bold text-slate-700">
               <span className="font-normal text-slate-400">
-                Act on these in{' '}
+                Act on these in{" "}
                 {applied.kind
-                  ? KIND_ROUTE[applied.kind as Kind][(applied.state as State) || 'Pending']
-                  : 'the Groups, Members and Loan queues'}
+                  ? KIND_ROUTE[applied.kind as Kind][(applied.state as State) || "Pending"]
+                  : "the Groups, Members and Loan queues"}
               </span>
               <span className="flex flex-wrap gap-6">
                 <span className="text-amber-600">Waiting: {counts.pending}</span>

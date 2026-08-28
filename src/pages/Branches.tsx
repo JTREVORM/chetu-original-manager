@@ -1,266 +1,532 @@
-import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useDatabase } from '../context/DatabaseContext';
-import { useNotifications } from '../context/NotificationContext';
-import { Branch } from '../types/database.types';
-import { Building2, Plus, X, Pencil, Trash2, Users, MapPin, Phone } from 'lucide-react';
-
-const emptyForm = {
-  branch_name: '',
-  branch_code: '',
-  location: '',
-  phone: '',
-  manager_name: '',
-  status: 'Active' as 'Active' | 'Inactive'
-};
+/**
+ * Branch Network — the institution at a glance.
+ *
+ * Every figure on this screen is derived from the loans, receipts, accounts and
+ * members already loaded by DatabaseContext, through `branchMetrics`. Nothing is
+ * stored per branch and nothing is estimated, so a card can never disagree with
+ * the report that reads the same rows.
+ */
+import React, { useMemo, useState } from "react";
+import { Building2, Download, PiggyBank, Plus, TrendingUp, UsersRound, Wallet } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { useDatabase } from "../context/DatabaseContext";
+import { useNotifications } from "../context/NotificationContext";
+import type { Branch } from "../types/database.types";
+import { branchMetrics, buildBranchSlices, emptySlice, networkMetrics } from "../lib/branchMetrics";
+import { money, type MisColumn } from "../components/mis/MisKit";
+import { ReportExportButtons } from "../components/mis/ReportExport";
+import {
+  compactUGX,
+  EmptyState,
+  KpiCard,
+  NoticeBar,
+  parTone,
+  percent,
+  SkeletonCard,
+} from "../components/branches/BranchUi";
+import { BranchCard } from "../components/branches/BranchCard";
+import {
+  BranchTable,
+  sortRows,
+  type BranchRow,
+  type SortKey,
+} from "../components/branches/BranchTable";
+import {
+  BranchToolbar,
+  EMPTY_FILTERS,
+  type BranchFilters,
+} from "../components/branches/BranchToolbar";
+import { BranchFormDialog } from "../components/branches/BranchForm";
+import { DeactivateBranchDialog } from "../components/branches/DeactivateBranchDialog";
+import { useStaffDirectory } from "../components/branches/useStaffDirectory";
 
 export const Branches: React.FC = () => {
   const { isAdmin, isAuditor } = useAuth();
-  const { branches, clients, clientGroups, addBranch, updateBranch, deleteBranch } = useDatabase();
-  const canManage = isAdmin && !isAuditor;
+  const db = useDatabase();
   const { addToast } = useNotifications();
+  const { byBranch: staffByBranch } = useStaffDirectory();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Branch | null>(null);
-  const [formData, setFormData] = useState(emptyForm);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const canManage = isAdmin && !isAuditor;
 
-  const openCreate = () => {
-    setEditing(null);
-    setFormData({ ...emptyForm, branch_code: `BR-${String(branches.length + 1).padStart(3, '0')}` });
-    setIsModalOpen(true);
-  };
+  const [filters, setFilters] = useState<BranchFilters>(EMPTY_FILTERS);
+  const [view, setView] = useState<"grid" | "table">("grid");
+  const [sortKey, setSortKey] = useState<SortKey>("branch");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [refreshing, setRefreshing] = useState(false);
 
-  const openEdit = (branch: Branch) => {
-    setEditing(branch);
-    setFormData({
-      branch_name: branch.branch_name,
-      branch_code: branch.branch_code,
-      location: branch.location || '',
-      phone: branch.phone || '',
-      manager_name: branch.manager_name || '',
-      status: branch.status
+  const [formOpen, setFormOpen] = useState(false);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [formBranch, setFormBranch] = useState<Branch | null>(null);
+  const [deactivating, setDeactivating] = useState<Branch | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Branch | null>(null);
+
+  const branches = db.branches;
+
+  const rows: BranchRow[] = useMemo(() => {
+    const slices = buildBranchSlices(
+      {
+        clients: db.clients,
+        clientGroups: db.clientGroups,
+        loans: db.loans,
+        loanApplications: db.loanApplications,
+        repayments: db.repayments,
+        savingsAccounts: db.savingsAccounts,
+        savingsTransactions: db.savingsTransactions,
+        expenses: db.expenses,
+        bankTransactions: db.bankTransactions,
+      },
+      branches.map((b) => b.id),
+    );
+    return branches.map((branch) => ({
+      branch,
+      metrics: branchMetrics(slices.get(branch.id) || emptySlice(branch.id), db.loanProducts),
+      staffCount: staffByBranch.get(branch.id)?.length ?? 0,
+      linkedRecords: db.branchLinkedRecordCount(branch.id),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    branches,
+    db.clients,
+    db.clientGroups,
+    db.loans,
+    db.loanApplications,
+    db.repayments,
+    db.savingsAccounts,
+    db.savingsTransactions,
+    db.expenses,
+    db.bankTransactions,
+    db.loanProducts,
+    staffByBranch,
+  ]);
+
+  const network = useMemo(
+    () => networkMetrics(rows.map((row) => ({ status: row.branch.status, metrics: row.metrics }))),
+    [rows],
+  );
+
+  const regions = useMemo(
+    () => [...new Set(branches.map((b) => b.region).filter((r): r is string => Boolean(r)))].sort(),
+    [branches],
+  );
+
+  const managers = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const branch of branches) {
+      if (branch.manager_id && branch.manager_name)
+        seen.set(branch.manager_id, branch.manager_name);
+    }
+    return [...seen.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [branches]);
+
+  const filteredRows = useMemo(() => {
+    const term = filters.search.trim().toLowerCase();
+    const matched = rows.filter(({ branch }) => {
+      if (filters.status !== "All" && branch.status !== filters.status) return false;
+      if (filters.region === "__none" && branch.region) return false;
+      if (
+        filters.region !== "All" &&
+        filters.region !== "__none" &&
+        branch.region !== filters.region
+      )
+        return false;
+      if (filters.managerId === "__none" && branch.manager_id) return false;
+      if (
+        filters.managerId !== "All" &&
+        filters.managerId !== "__none" &&
+        branch.manager_id !== filters.managerId
+      )
+        return false;
+      if (!term) return true;
+      return [
+        branch.branch_name,
+        branch.branch_code,
+        branch.town,
+        branch.district,
+        branch.region,
+        branch.manager_name,
+        branch.location,
+      ]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(term));
     });
-    setIsModalOpen(true);
+    return sortRows(matched, sortKey, sortDirection);
+  }, [rows, filters, sortKey, sortDirection]);
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDirection(
+        key === "branch" || key === "code" || key === "manager" || key === "status"
+          ? "asc"
+          : "desc",
+      );
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleRefresh = async () => {
+    setRefreshing(true);
     try {
-      if (editing) {
-        await updateBranch(editing.id, formData);
-        addToast('success', 'Branch Updated', `${formData.branch_name} was updated.`);
-      } else {
-        await addBranch(formData);
-        addToast('success', 'Branch Created', `${formData.branch_name} is now available across the system.`);
-      }
-      setIsModalOpen(false);
-      setEditing(null);
-      setFormData(emptyForm);
-    } catch (err) {
-      addToast('error', 'Save Failed', err instanceof Error ? err.message : 'Could not save branch');
+      await db.refetch({ silent: true });
+      addToast("info", "Branch data refreshed", "Figures are current as of now.");
     } finally {
-      setIsSubmitting(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleReactivate = async (branch: Branch) => {
+    try {
+      await db.reactivateBranch(branch.id);
+      addToast(
+        "success",
+        "Branch reactivated",
+        `${branch.branch_name} is open for operations again.`,
+      );
+    } catch (error) {
+      addToast(
+        "error",
+        "Could not reactivate",
+        error instanceof Error ? error.message : "The branch was not changed.",
+      );
     }
   };
 
   const handleDelete = async (branch: Branch) => {
     try {
-      await deleteBranch(branch.id);
-      addToast('success', 'Branch Removed', `${branch.branch_name} was deleted.`);
-    } catch (err) {
-      addToast('error', 'Delete Failed', err instanceof Error ? err.message : 'Could not delete branch');
+      await db.deleteBranch(branch.id);
+      addToast("success", "Branch removed", `${branch.branch_name} was deleted.`);
+    } catch (error) {
+      addToast(
+        "error",
+        "Could not delete",
+        error instanceof Error ? error.message : "The branch was not removed.",
+      );
     } finally {
       setConfirmDelete(null);
     }
   };
 
-  const countFor = (branchId: string) => ({
-    clients: clients.filter(c => c.branch_id === branchId).length,
-    groups: clientGroups.filter(g => g.branch_id === branchId).length
-  });
+  const openCreate = () => {
+    setFormMode("create");
+    setFormBranch(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (branch: Branch) => {
+    setFormMode("edit");
+    setFormBranch(branch);
+    setFormOpen(true);
+  };
+
+  // Export mirrors the table view, minus the action column.
+  const exportColumns: MisColumn<BranchRow>[] = [
+    {
+      key: "branch",
+      label: "Branch",
+      render: (r) => r.branch.branch_name,
+      text: (r) => r.branch.branch_name,
+    },
+    {
+      key: "code",
+      label: "Code",
+      render: (r) => r.branch.branch_code,
+      text: (r) => r.branch.branch_code,
+    },
+    {
+      key: "type",
+      label: "Type",
+      render: (r) => r.branch.branch_type,
+      text: (r) => r.branch.branch_type || "",
+    },
+    {
+      key: "region",
+      label: "Region",
+      render: (r) => r.branch.region || "",
+      text: (r) => r.branch.region || "",
+    },
+    {
+      key: "manager",
+      label: "Manager",
+      render: (r) => r.branch.manager_name || "",
+      text: (r) => r.branch.manager_name || "Unassigned",
+    },
+    {
+      key: "staff",
+      label: "Staff",
+      render: (r) => r.staffCount,
+      text: (r) => String(r.staffCount),
+    },
+    {
+      key: "members",
+      label: "Members",
+      render: (r) => r.metrics.members.total,
+      text: (r) => String(r.metrics.members.total),
+    },
+    {
+      key: "groups",
+      label: "Groups",
+      render: (r) => r.metrics.groups.total,
+      text: (r) => String(r.metrics.groups.total),
+    },
+    {
+      key: "loans",
+      label: "Active loans",
+      render: (r) => r.metrics.loans.active,
+      text: (r) => String(r.metrics.loans.active),
+    },
+    {
+      key: "portfolio",
+      label: "Outstanding (UGX)",
+      render: (r) => money(r.metrics.portfolio.outstanding),
+      text: (r) => money(r.metrics.portfolio.outstanding),
+    },
+    {
+      key: "savings",
+      label: "Savings (UGX)",
+      render: (r) => money(r.metrics.savings.balance),
+      text: (r) => money(r.metrics.savings.balance),
+    },
+    {
+      key: "par30",
+      label: "PAR 30",
+      render: (r) => percent(r.metrics.portfolio.par30Ratio),
+      text: (r) => percent(r.metrics.portfolio.par30Ratio),
+    },
+    {
+      key: "collections",
+      label: "Collections today (UGX)",
+      render: (r) => money(r.metrics.collections.today),
+      text: (r) => money(r.metrics.collections.today),
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (r) => r.branch.status,
+      text: (r) => r.branch.status,
+    },
+  ];
+
+  const loading = db.isLoading && branches.length === 0;
 
   return (
-    <div className="space-y-6 pb-12">
-      <div className="page-banner p-5 sm:p-6">
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-blue-100">
-          <Building2 className="h-3.5 w-3.5 text-amber-400" />
-          Branch Network
+    <div className="space-y-5 pb-12">
+      <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[#0B4394]/10 text-[#0B4394]">
+              <Building2 className="h-4 w-4" />
+            </span>
+            <h1 className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+              Branch Network
+            </h1>
+          </div>
+          <p className="mt-1 text-[13px] text-slate-500">
+            Manage all branches, view performance and operational overview.
+          </p>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Branch Network</h1>
-        <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-blue-100">
-          Every branch the institution operates. Staff, groups and members are all attached to one.
-        </p>
-      </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <ReportExportButtons
+            title="Branch Network"
+            columns={exportColumns}
+            rows={filteredRows}
+            period={`As at ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}`}
+            subtitle="Chetu Microfinance Ltd — branch performance summary"
+            totals={[
+              ["Outstanding portfolio", `UGX ${money(network.outstanding)}`],
+              ["Total savings", `UGX ${money(network.savings)}`],
+              ["PAR 30", percent(network.par30Ratio)],
+            ]}
+          />
+          {canManage && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#0B4394] px-4 text-[12px] font-bold text-white hover:bg-[#093672]"
+            >
+              <Plus className="h-4 w-4" />
+              New Branch
+            </button>
+          )}
+        </div>
+      </header>
 
-      {canManage && (
-        <button
-          onClick={openCreate}
-          className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-[#0B4394] px-5 text-base font-semibold text-white hover:bg-[#093672] sm:h-10 sm:w-auto sm:text-[13px]"
-        >
-          <Plus className="h-4 w-4" />
-          New branch
-        </button>
+      {/* Six across only on a genuinely wide screen — at laptop widths the
+          sidebar leaves each of six cards too narrow for its own label. */}
+      <section
+        aria-label="Network summary"
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6"
+      >
+        <KpiCard
+          label="Total Branches"
+          value={money(network.branchesTotal)}
+          hint="All branches"
+          icon={Building2}
+        />
+        <KpiCard
+          label="Active Branches"
+          value={money(network.branchesActive)}
+          hint={`${percent(network.activeShare, 1)} of total`}
+          icon={Building2}
+          tone="emerald"
+        />
+        <KpiCard
+          label="Total Members"
+          value={money(network.members)}
+          hint="Across all branches"
+          icon={UsersRound}
+        />
+        <KpiCard
+          label="Outstanding Loans"
+          value={compactUGX(network.outstanding)}
+          hint="Total portfolio"
+          icon={Wallet}
+          tone="navy"
+        />
+        <KpiCard
+          label="Total Savings"
+          value={compactUGX(network.savings)}
+          hint="Total savings held"
+          icon={PiggyBank}
+          tone="emerald"
+        />
+        <KpiCard
+          label="PAR 30"
+          value={<span className={parTone(network.par30Ratio)}>{percent(network.par30Ratio)}</span>}
+          hint={`UGX ${money(network.par30Amount)} at risk`}
+          icon={TrendingUp}
+          tone={network.par30Ratio <= 5 ? "emerald" : network.par30Ratio <= 10 ? "amber" : "red"}
+        />
+      </section>
+
+      <BranchToolbar
+        filters={filters}
+        onChange={setFilters}
+        regions={regions}
+        managers={managers}
+        view={view}
+        onViewChange={setView}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        resultCount={filteredRows.length}
+        totalCount={rows.length}
+      />
+
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <EmptyState
+          icon={Building2}
+          title="No branches yet"
+          message="Create the first branch to start admitting members, forming groups and assigning loan officers."
+          action={
+            canManage ? (
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0B4394] px-4 text-[12px] font-bold text-white hover:bg-[#093672]"
+              >
+                <Plus className="h-4 w-4" /> New Branch
+              </button>
+            ) : undefined
+          }
+        />
+      ) : filteredRows.length === 0 ? (
+        <EmptyState
+          icon={Building2}
+          title="No branches match these filters"
+          message="Try a different search term, or clear the filters to see the whole network."
+          action={
+            <button
+              type="button"
+              onClick={() => setFilters(EMPTY_FILTERS)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-4 text-[12px] font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Clear filters
+            </button>
+          }
+        />
+      ) : view === "grid" ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {filteredRows.map((row) => (
+            <BranchCard
+              key={row.branch.id}
+              branch={row.branch}
+              metrics={row.metrics}
+              staffCount={row.staffCount}
+              canManage={canManage}
+              linkedRecords={row.linkedRecords}
+              onEdit={() => openEdit(row.branch)}
+              onDeactivate={() => setDeactivating(row.branch)}
+              onReactivate={() => handleReactivate(row.branch)}
+              onDelete={() => setConfirmDelete(row.branch)}
+            />
+          ))}
+        </div>
+      ) : (
+        <BranchTable
+          rows={filteredRows}
+          canManage={canManage}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSort={handleSort}
+          onEdit={openEdit}
+          onDeactivate={setDeactivating}
+          onReactivate={handleReactivate}
+          onDelete={setConfirmDelete}
+        />
       )}
 
+      <BranchFormDialog
+        open={formOpen}
+        mode={formMode}
+        branch={formBranch}
+        onClose={() => setFormOpen(false)}
+      />
 
-      {branches.length === 0 && (
-        <div className="bg-white p-8 rounded-lg border border-dashed border-slate-300 text-center">
-          <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <p className="text-xs font-semibold text-slate-600">No branches yet.</p>
-          <p className="text-[11px] text-slate-500 mt-1">Create your first branch to start assigning loan officers and members.</p>
-        </div>
-      )}
+      <DeactivateBranchDialog
+        open={Boolean(deactivating)}
+        branch={deactivating}
+        onClose={() => setDeactivating(null)}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {branches.map(branch => {
-          const counts = countFor(branch.id);
-          return (
-            <div key={branch.id} className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-bold text-slate-900 truncate">{branch.branch_name}</h3>
-                  <p className="text-[11px] font-semibold text-slate-500">{branch.branch_code}</p>
-                </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${branch.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-                  {branch.status}
-                </span>
-              </div>
-
-              <div className="space-y-1.5 text-[11px] text-slate-600">
-                {branch.location && (
-                  <p className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-chetu-blue" />{branch.location}</p>
-                )}
-                {branch.phone && (
-                  <p className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-chetu-blue" />{branch.phone}</p>
-                )}
-                {branch.manager_name && (
-                  <p className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-chetu-blue" />{branch.manager_name}</p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 pt-2 border-t border-slate-100 text-[11px] font-semibold text-slate-700">
-                <span>{counts.clients} members</span>
-                <span>{counts.groups} groups</span>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-1">
-                <button onClick={() => openEdit(branch)} className="flex items-center gap-1 text-chetu-blue hover:underline text-xs font-bold">
-                  <Pencil className="w-3.5 h-3.5" /> Edit
-                </button>
-                {confirmDelete === branch.id ? (
-                  <>
-                    <button onClick={() => setConfirmDelete(null)} className="text-xs font-bold text-slate-500 hover:underline">Cancel</button>
-                    <button onClick={() => handleDelete(branch)} className="text-xs font-bold text-red-600 hover:underline">Confirm</button>
-                  </>
-                ) : (
-                  <button onClick={() => setConfirmDelete(branch.id)} className="flex items-center gap-1 text-red-600 hover:underline text-xs font-bold">
-                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                  </button>
-                )}
-              </div>
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+            <h2 className="text-sm font-bold text-slate-900">
+              Delete {confirmDelete.branch_name}?
+            </h2>
+            <p className="mt-2 text-[12px] leading-relaxed text-slate-600">
+              This branch holds no members, groups or ledger entries, so it can be removed outright.
+              This cannot be undone.
+            </p>
+            <div className="mt-3">
+              <NoticeBar tone="amber">
+                If this branch is simply no longer in use, deactivate it instead — that keeps the
+                record and its history.
+              </NoticeBar>
             </div>
-          );
-        })}
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div data-testid="branch-modal" className="w-[calc(100vw-1.5rem)] md:w-full max-w-md bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="p-5 bg-chetu-blue text-white flex items-center justify-between">
-              <h3 className="text-base font-bold">{editing ? 'Edit Branch' : 'Create New Branch'}</h3>
-              <button onClick={() => { setIsModalOpen(false); setEditing(null); }} className="text-slate-200 hover:text-white">
-                <X className="w-5 h-5" />
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                className="inline-flex h-9 items-center justify-center rounded-lg px-4 text-[12px] font-bold text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(confirmDelete)}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-chetu-red px-4 text-[12px] font-bold text-white hover:bg-chetu-darkred"
+              >
+                Delete branch
               </button>
             </div>
-
-            <form onSubmit={handleSubmit} className="p-4 md:p-6 space-y-4">
-              <div>
-                <label className="form-label">Branch Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.branch_name}
-                  onChange={(e) => setFormData({ ...formData, branch_name: e.target.value })}
-                  placeholder="e.g. Mbarara Branch"
-                  className="form-field"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">Branch Code *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.branch_code}
-                    onChange={(e) => setFormData({ ...formData, branch_code: e.target.value })}
-                    className="form-field"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Status *</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as 'Active' | 'Inactive' })}
-                    className="form-field"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="form-label">Location / Town</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="form-field"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="form-label">Branch Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="form-field"
-                  />
-                </div>
-                <div>
-                  <label className="form-label">Branch Manager</label>
-                  <input
-                    type="text"
-                    value={formData.manager_name}
-                    onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
-                    className="form-field"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col-reverse gap-2 pt-4 border-t md:flex-row md:justify-end">
-                <button
-                  type="button"
-                  onClick={() => { setIsModalOpen(false); setEditing(null); }}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 bg-chetu-blue text-white rounded-xl text-xs font-bold shadow-md hover:bg-chetu-darkblue disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Saving…' : editing ? 'Save Changes' : 'Create Branch'}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-declare module '*.asset.json' {
+declare module "*.asset.json" {
   const asset: {
     version: number;
     asset_id: string;

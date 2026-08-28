@@ -6,9 +6,15 @@ export const Route = createFileRoute("/overdue-collection")({
   head: () => ({
     meta: [
       { title: "Overdue Collection | Chetu Microfinance" },
-      { name: "description", content: "Collect arrears from members whose weekly loan instalments are behind." },
+      {
+        name: "description",
+        content: "Collect arrears from members whose weekly loan instalments are behind.",
+      },
       { property: "og:title", content: "Overdue Collection | Chetu Microfinance" },
-      { property: "og:description", content: "Collect arrears from members whose weekly loan instalments are behind." },
+      {
+        property: "og:description",
+        content: "Collect arrears from members whose weekly loan instalments are behind.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

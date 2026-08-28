@@ -17,7 +17,8 @@ export const FEES = {
   securityDepositPct: 15,
 } as const;
 
-const pct = (amount: number, percentage: number) => Math.round((Math.max(0, amount) * percentage) / 100);
+const pct = (amount: number, percentage: number) =>
+  Math.round((Math.max(0, amount) * percentage) / 100);
 
 export const processingFeeOn = (principal: number) => pct(principal, FEES.processingFeePct);
 export const crbFeeOn = (principal: number) => pct(principal, FEES.crbFeePct);
@@ -59,15 +60,17 @@ export const admissionFees = () => ({
 });
 
 /** Label/amount pairs so every screen renders the identical breakdown. */
-export function feeLines(principal: number): { label: string; amount: number; emphasis?: boolean }[] {
+export function feeLines(
+  principal: number,
+): { label: string; amount: number; emphasis?: boolean }[] {
   const f = loanFees(principal);
   return [
     { label: `Processing Fee (${FEES.processingFeePct}%)`, amount: f.processingFee },
     { label: `CRB Fee (${FEES.crbFeePct}%)`, amount: f.crbFee },
     { label: `Security Deposit (${FEES.securityDepositPct}%)`, amount: f.securityDeposit },
-    { label: 'Group Maintenance Fee', amount: f.groupMaintenanceFee },
-    { label: 'Total Deductions', amount: f.totalDeductions, emphasis: true },
-    { label: 'Net Cash To Member', amount: f.netDisbursed, emphasis: true },
+    { label: "Group Maintenance Fee", amount: f.groupMaintenanceFee },
+    { label: "Total Deductions", amount: f.totalDeductions, emphasis: true },
+    { label: "Net Cash To Member", amount: f.netDisbursed, emphasis: true },
   ];
 }
 
@@ -88,13 +91,15 @@ export function validateLoanRequest(
   limits?: LoanRequestLimits | null,
 ): string[] {
   const errors: string[] = [];
-  if (!Number.isFinite(principal) || principal <= 0) errors.push('Enter a valid principal amount.');
-  if (!Number.isFinite(weeks) || weeks <= 0) errors.push('Select a valid loan period.');
+  if (!Number.isFinite(principal) || principal <= 0) errors.push("Enter a valid principal amount.");
+  if (!Number.isFinite(weeks) || weeks <= 0) errors.push("Select a valid loan period.");
 
   const min = Number(limits?.min_amount ?? 0);
   const max = Number(limits?.max_amount ?? 0);
-  if (min > 0 && principal < min) errors.push(`Principal must be at least UGX ${min.toLocaleString()}.`);
-  if (max > 0 && principal > max) errors.push(`Principal cannot exceed UGX ${max.toLocaleString()}.`);
+  if (min > 0 && principal < min)
+    errors.push(`Principal must be at least UGX ${min.toLocaleString()}.`);
+  if (max > 0 && principal > max)
+    errors.push(`Principal cannot exceed UGX ${max.toLocaleString()}.`);
 
   const minW = Number(limits?.min_weeks ?? 0);
   const maxW = Number(limits?.max_weeks ?? 0);
@@ -104,9 +109,10 @@ export function validateLoanRequest(
   if (errors.length === 0) {
     const f = loanFees(principal);
     const sum = f.processingFee + f.crbFee + f.securityDeposit + f.groupMaintenanceFee;
-    if (sum !== f.totalDeductions) errors.push('Fee breakdown does not reconcile. Contact support.');
+    if (sum !== f.totalDeductions)
+      errors.push("Fee breakdown does not reconcile. Contact support.");
     if (f.totalDeductions >= Math.round(principal))
-      errors.push('Charges and deductions exceed the principal. Increase the loan amount.');
+      errors.push("Charges and deductions exceed the principal. Increase the loan amount.");
   }
   return errors;
 }
@@ -123,7 +129,10 @@ export function feesMatchStored(
   if (Math.round(storedSecurityAmount) !== securityDepositOn(principal)) return false;
   // Older loans predate these columns; only compare when a value is present.
   if (storedCrbFee !== undefined && Math.round(storedCrbFee) !== crbFeeOn(principal)) return false;
-  if (storedGroupMaintenanceFee !== undefined && Math.round(storedGroupMaintenanceFee) !== FEES.groupMaintenanceFee) {
+  if (
+    storedGroupMaintenanceFee !== undefined &&
+    Math.round(storedGroupMaintenanceFee) !== FEES.groupMaintenanceFee
+  ) {
     return false;
   }
   return true;
@@ -151,11 +160,17 @@ export function storedLoanFees(loan: StoredLoanFees): LoanFeeBreakdown {
   const principal = Number(loan.principal_amount || 0);
   const schedule = loanFees(principal);
 
-  const processingFee = loan.processing_fee_amount != null ? Number(loan.processing_fee_amount) : schedule.processingFee;
+  const processingFee =
+    loan.processing_fee_amount != null
+      ? Number(loan.processing_fee_amount)
+      : schedule.processingFee;
   const crbFee = loan.crb_fee_amount != null ? Number(loan.crb_fee_amount) : schedule.crbFee;
-  const securityDeposit = loan.security_amount != null ? Number(loan.security_amount) : schedule.securityDeposit;
+  const securityDeposit =
+    loan.security_amount != null ? Number(loan.security_amount) : schedule.securityDeposit;
   const groupMaintenanceFee =
-    loan.group_maintenance_fee != null ? Number(loan.group_maintenance_fee) : schedule.groupMaintenanceFee;
+    loan.group_maintenance_fee != null
+      ? Number(loan.group_maintenance_fee)
+      : schedule.groupMaintenanceFee;
 
   const totalDeductions = processingFee + crbFee + securityDeposit + groupMaintenanceFee;
   return {
@@ -170,4 +185,3 @@ export function storedLoanFees(loan: StoredLoanFees): LoanFeeBreakdown {
         : Math.max(0, Math.round(principal) - totalDeductions),
   };
 }
-

@@ -1,12 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { NotificationItem } from '../types/database.types';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { useAuth } from './AuthContext';
-import { showDeviceNotification } from '../lib/pushNotifications';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { NotificationItem } from "../types/database.types";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { useAuth } from "./AuthContext";
+import { showDeviceNotification } from "../lib/pushNotifications";
 
 interface ToastMessage {
   id: string;
-  type: 'success' | 'error' | 'info' | 'warning';
+  type: "success" | "error" | "info" | "warning";
   title: string;
   message: string;
 }
@@ -18,7 +18,11 @@ interface NotificationContextType {
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   refreshNotifications: () => Promise<void>;
-  addToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
+  addToast: (
+    type: "success" | "error" | "info" | "warning",
+    title: string,
+    message: string,
+  ) => void;
   removeToast: (id: string) => void;
 }
 
@@ -30,35 +34,43 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const seenIds = useRef<Set<string>>(new Set());
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const removeToast = useCallback((id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const addToast = useCallback((type: ToastMessage['type'], title: string, message: string) => {
-    const newToast: ToastMessage = { id: `toast-${Date.now()}-${Math.random()}`, type, title, message };
-    setToasts(prev => [newToast, ...prev]);
-    setTimeout(() => removeToast(newToast.id), 4500);
-  }, [removeToast]);
+  const addToast = useCallback(
+    (type: ToastMessage["type"], title: string, message: string) => {
+      const newToast: ToastMessage = {
+        id: `toast-${Date.now()}-${Math.random()}`,
+        type,
+        title,
+        message,
+      };
+      setToasts((prev) => [newToast, ...prev]);
+      setTimeout(() => removeToast(newToast.id), 4500);
+    },
+    [removeToast],
+  );
 
   const refreshNotifications = useCallback(async () => {
     if (!isSupabaseConfigured || !user?.id) return;
     const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .order('created_at', { ascending: false })
+      .from("notifications")
+      .select("*")
+      .order("created_at", { ascending: false })
       .limit(50);
     if (error || !data) return;
 
     const rows = data as NotificationItem[];
     // Toast anything that arrived while the app was open (skip the first load).
     if (seenIds.current.size > 0) {
-      const fresh = rows.filter(r => !seenIds.current.has(r.id) && !r.is_read);
-      fresh.slice(0, 3).forEach(r => addToast('info', r.title, r.message));
+      const fresh = rows.filter((r) => !seenIds.current.has(r.id) && !r.is_read);
+      fresh.slice(0, 3).forEach((r) => addToast("info", r.title, r.message));
       // The same alerts go to the device, so a phone in a pocket still buzzes.
       // Capped for the same reason the toasts are: a backlog must not spam.
-      fresh.slice(0, 3).forEach(r => {
+      fresh.slice(0, 3).forEach((r) => {
         void showDeviceNotification({
           title: r.title,
           message: r.message,
@@ -67,7 +79,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
       });
     }
-    rows.forEach(r => seenIds.current.add(r.id));
+    rows.forEach((r) => seenIds.current.add(r.id));
     setNotifications(rows);
   }, [user?.id, addToast]);
 
@@ -81,8 +93,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     refreshNotifications();
 
     const channel = supabase
-      .channel('notifications-feed')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+      .channel("notifications-feed")
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
         refreshNotifications();
       })
       .subscribe();
@@ -98,17 +110,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [user?.id, refreshNotifications]);
 
   const markAsRead = async (id: string) => {
-    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, is_read: true } : n)));
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
     if (isSupabaseConfigured) {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+      await supabase.from("notifications").update({ is_read: true }).eq("id", id);
     }
   };
 
   const markAllAsRead = async () => {
-    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id);
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     if (isSupabaseConfigured && unreadIds.length) {
-      await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
+      await supabase.from("notifications").update({ is_read: true }).in("id", unreadIds);
     }
   };
 
@@ -122,7 +134,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         markAllAsRead,
         refreshNotifications,
         addToast,
-        removeToast
+        removeToast,
       }}
     >
       {children}
@@ -132,6 +144,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
 export const useNotifications = () => {
   const context = useContext(NotificationContext);
-  if (!context) throw new Error('useNotifications must be used within NotificationProvider');
+  if (!context) throw new Error("useNotifications must be used within NotificationProvider");
   return context;
 };

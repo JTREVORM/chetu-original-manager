@@ -7,15 +7,15 @@
  * `public/sw.js` for why it deliberately caches almost nothing.
  */
 export function registerServiceWorker(): void {
-  if (typeof window === 'undefined') return;
-  if (!('serviceWorker' in navigator)) return;
+  if (typeof window === "undefined") return;
+  if (!("serviceWorker" in navigator)) return;
   // The dev server rebuilds constantly; a worker there only causes confusion.
   if (import.meta.env.DEV) return;
 
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch((error) => {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => {
       // Installability is a nicety — never let it break the app.
-      console.warn('Service worker registration failed', error);
+      console.warn("Service worker registration failed", error);
     });
   });
 }

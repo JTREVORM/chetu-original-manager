@@ -1,5 +1,5 @@
-import { addDays, format } from 'date-fns';
-import { InterestType, WeeklyScheduleRow } from '../types/database.types';
+import { addDays, format } from "date-fns";
+import { InterestType, WeeklyScheduleRow } from "../types/database.types";
 
 /**
  * The smallest amount that can actually change hands. Uganda has no coin below
@@ -53,7 +53,7 @@ export function calculateLoanSchedule(
   interestType: InterestType,
   loanPeriodWeeks: number,
   processingFeePercentage: number = 2.0,
-  startDateInput?: string | Date
+  startDateInput?: string | Date,
 ): LoanCalculationSummary {
   const principal = Math.max(0, principalAmount);
   const weeks = Math.max(1, loanPeriodWeeks);
@@ -68,7 +68,7 @@ export function calculateLoanSchedule(
   let weeklyInstallment = 0;
   const schedule: WeeklyScheduleRow[] = [];
 
-  if (interestType === 'Flat Rate') {
+  if (interestType === "Flat Rate") {
     /*
      * Flat Rate: the interest is a straight percentage of the principal for
      * the whole loan cycle, not prorated by term.
@@ -106,18 +106,18 @@ export function calculateLoanSchedule(
 
       schedule.push({
         week_number: i,
-        due_date: format(dueDate, 'yyyy-MM-dd'),
+        due_date: format(dueDate, "yyyy-MM-dd"),
         installment_amount: installment,
         principal_portion: principalPortion,
         interest_portion: interestPortion,
         paid_amount: 0,
         remaining_balance: currentRemaining,
-        status: 'Pending'
+        status: "Pending",
       });
     }
   } else {
     // Reducing Balance
-    const weeklyRate = (interestRate / 100) / 52;
+    const weeklyRate = interestRate / 100 / 52;
     if (weeklyRate === 0) {
       totalInterestAmount = 0;
       totalAmountPayable = principal;
@@ -126,7 +126,7 @@ export function calculateLoanSchedule(
       // The annuity is rounded up to a collectable figure; the final week then
       // clears whatever is genuinely left rather than repeating this amount.
       weeklyInstallment = ceilToStep(
-        (principal * weeklyRate) / (1 - Math.pow(1 + weeklyRate, -weeks))
+        (principal * weeklyRate) / (1 - Math.pow(1 + weeklyRate, -weeks)),
       );
     }
 
@@ -154,13 +154,13 @@ export function calculateLoanSchedule(
 
       schedule.push({
         week_number: i,
-        due_date: format(dueDate, 'yyyy-MM-dd'),
+        due_date: format(dueDate, "yyyy-MM-dd"),
         installment_amount: installment,
         principal_portion: principalPortion,
         interest_portion: interestPortion,
         paid_amount: 0,
         remaining_balance: 0, // Will update total remaining after loop
-        status: 'Pending'
+        status: "Pending",
       });
     }
 
@@ -175,7 +175,10 @@ export function calculateLoanSchedule(
     }
   }
 
-  const finalDueDate = schedule.length > 0 ? schedule[schedule.length - 1].due_date : format(firstRepaymentDateObj, 'yyyy-MM-dd');
+  const finalDueDate =
+    schedule.length > 0
+      ? schedule[schedule.length - 1].due_date
+      : format(firstRepaymentDateObj, "yyyy-MM-dd");
 
   return {
     principalAmount: principal,
@@ -187,9 +190,9 @@ export function calculateLoanSchedule(
     totalAmountPayable,
     weeklyInstallment,
     processingFeeAmount,
-    firstRepaymentDate: format(firstRepaymentDateObj, 'yyyy-MM-dd'),
+    firstRepaymentDate: format(firstRepaymentDateObj, "yyyy-MM-dd"),
     finalDueDate,
-    schedule
+    schedule,
   };
 }
 
@@ -211,7 +214,7 @@ export function formatUGX(amount: number): string {
 }
 
 export function formatNumber(amount: number): string {
-  return new Intl.NumberFormat('en-UG', {
-    maximumFractionDigits: 0
+  return new Intl.NumberFormat("en-UG", {
+    maximumFractionDigits: 0,
   }).format(amount);
 }

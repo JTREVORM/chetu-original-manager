@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { useNotifications } from '../../context/NotificationContext';
-import { useNavigate } from '../../lib/router-compat';
+import React, { useMemo, useState } from "react";
+import { useNotifications } from "../../context/NotificationContext";
+import { useNavigate } from "../../lib/router-compat";
 import {
   AlertTriangle,
   Banknote,
@@ -11,7 +11,7 @@ import {
   FileSpreadsheet,
   Settings2,
   X,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface NotificationDrawerProps {
   isOpen: boolean;
@@ -20,26 +20,26 @@ interface NotificationDrawerProps {
 
 /** Each notification type gets one icon and one accent — no rainbow. */
 const TYPE_STYLE: Record<string, { icon: React.ElementType; ring: string; text: string }> = {
-  Application:  { icon: FileSpreadsheet, ring: 'bg-[#0B4394]/10', text: 'text-[#0B4394]' },
-  Disbursement: { icon: Banknote,        ring: 'bg-emerald-50',   text: 'text-emerald-700' },
-  Repayment:    { icon: Banknote,        ring: 'bg-emerald-50',   text: 'text-emerald-700' },
-  Overdue:      { icon: Clock,           ring: 'bg-amber-50',     text: 'text-amber-700' },
-  Alert:        { icon: AlertTriangle,   ring: 'bg-red-50',       text: 'text-chetu-red' },
-  System:       { icon: Settings2,       ring: 'bg-slate-100',    text: 'text-slate-600' },
+  Application: { icon: FileSpreadsheet, ring: "bg-[#0B4394]/10", text: "text-[#0B4394]" },
+  Disbursement: { icon: Banknote, ring: "bg-emerald-50", text: "text-emerald-700" },
+  Repayment: { icon: Banknote, ring: "bg-emerald-50", text: "text-emerald-700" },
+  Overdue: { icon: Clock, ring: "bg-amber-50", text: "text-amber-700" },
+  Alert: { icon: AlertTriangle, ring: "bg-red-50", text: "text-chetu-red" },
+  System: { icon: Settings2, ring: "bg-slate-100", text: "text-slate-600" },
 };
 
 /** "just now", "14 min ago", "3 h ago", then the calendar date. */
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins} min ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs} h ago`;
   const days = Math.floor(hrs / 24);
-  if (days === 1) return 'yesterday';
+  if (days === 1) return "yesterday";
   if (days < 7) return `${days} days ago`;
-  return new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
+  return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short" });
 }
 
 const dayBucket = (iso: string): string => {
@@ -47,9 +47,9 @@ const dayBucket = (iso: string): string => {
   const today = new Date();
   const yday = new Date(Date.now() - 86400000);
   const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  if (same(d, today)) return 'Today';
-  if (same(d, yday)) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' });
+  if (same(d, today)) return "Today";
+  if (same(d, yday)) return "Yesterday";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "long", year: "numeric" });
 };
 
 /**
@@ -104,7 +104,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
               <div className="min-w-0">
                 <h2 className="text-sm font-bold">Notifications</h2>
                 <p className="text-[11px] text-blue-200">
-                  {unreadCount > 0 ? `${unreadCount} unread` : 'You are up to date'}
+                  {unreadCount > 0 ? `${unreadCount} unread` : "You are up to date"}
                 </p>
               </div>
             </div>
@@ -122,16 +122,16 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
             <button
               type="button"
               onClick={() => setShowUnreadOnly(false)}
-              className={`rounded px-2.5 py-1 text-[11px] font-semibold ${!showUnreadOnly ? 'bg-white text-[#0B4394]' : 'bg-white/10 text-blue-100 hover:bg-white/20'}`}
+              className={`rounded px-2.5 py-1 text-[11px] font-semibold ${!showUnreadOnly ? "bg-white text-[#0B4394]" : "bg-white/10 text-blue-100 hover:bg-white/20"}`}
             >
               All
             </button>
             <button
               type="button"
               onClick={() => setShowUnreadOnly(true)}
-              className={`rounded px-2.5 py-1 text-[11px] font-semibold ${showUnreadOnly ? 'bg-white text-[#0B4394]' : 'bg-white/10 text-blue-100 hover:bg-white/20'}`}
+              className={`rounded px-2.5 py-1 text-[11px] font-semibold ${showUnreadOnly ? "bg-white text-[#0B4394]" : "bg-white/10 text-blue-100 hover:bg-white/20"}`}
             >
-              Unread{unreadCount > 0 ? ` (${unreadCount})` : ''}
+              Unread{unreadCount > 0 ? ` (${unreadCount})` : ""}
             </button>
             {unreadCount > 0 && (
               <button
@@ -151,12 +151,12 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
             <div className="px-6 py-16 text-center">
               <Bell className="mx-auto mb-3 h-9 w-9 text-slate-200" />
               <p className="text-sm font-semibold text-slate-600">
-                {showUnreadOnly ? 'Nothing unread' : 'No notifications yet'}
+                {showUnreadOnly ? "Nothing unread" : "No notifications yet"}
               </p>
               <p className="mt-1 text-[13px] text-slate-400">
                 {showUnreadOnly
-                  ? 'Everything here has been read.'
-                  : 'Approvals, disbursements and collections will appear here as they happen.'}
+                  ? "Everything here has been read."
+                  : "Approvals, disbursements and collections will appear here as they happen."}
               </p>
             </div>
           ) : (
@@ -176,25 +176,32 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
                           onClick={() => open(item)}
                           className={`flex w-full items-start gap-3 py-3 pr-4 text-left transition-colors ${
                             item.is_read
-                              ? 'bg-white pl-4 hover:bg-slate-50'
+                              ? "bg-white pl-4 hover:bg-slate-50"
                               : // Unread reads as a distinct state, not a tint a
                                 // tired eye has to hunt for: tinted row, solid
                                 // accent rail and darker copy.
-                                'border-l-4 border-[#0B4394] bg-blue-50/70 pl-3 hover:bg-blue-100/70'
+                                "border-l-4 border-[#0B4394] bg-blue-50/70 pl-3 hover:bg-blue-100/70"
                           }`}
                         >
-                          <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded ${style.ring} ${style.text}`}>
+                          <span
+                            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded ${style.ring} ${style.text}`}
+                          >
                             <Icon className="h-4 w-4" />
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="flex items-baseline justify-between gap-2">
                               <span className="flex min-w-0 items-center gap-1.5">
                                 {!item.is_read && (
-                                  <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#0B4394]" />
+                                  <span
+                                    aria-hidden
+                                    className="h-2 w-2 shrink-0 rounded-full bg-[#0B4394]"
+                                  />
                                 )}
                                 <span
                                   className={`min-w-0 truncate text-[13px] ${
-                                    item.is_read ? 'font-semibold text-slate-600' : 'font-black text-slate-900'
+                                    item.is_read
+                                      ? "font-semibold text-slate-600"
+                                      : "font-black text-slate-900"
                                   }`}
                                 >
                                   {item.title}
@@ -202,7 +209,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
                               </span>
                               <span
                                 className={`shrink-0 text-[11px] ${
-                                  item.is_read ? 'text-slate-400' : 'font-bold text-[#0B4394]'
+                                  item.is_read ? "text-slate-400" : "font-bold text-[#0B4394]"
                                 }`}
                               >
                                 {relativeTime(item.created_at)}
@@ -210,14 +217,16 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
                             </span>
                             <span
                               className={`mt-0.5 block text-[12px] leading-relaxed ${
-                                item.is_read ? 'text-slate-500' : 'text-slate-700'
+                                item.is_read ? "text-slate-500" : "text-slate-700"
                               }`}
                             >
                               {item.message}
                             </span>
                             {!item.is_read && <span className="sr-only">Unread</span>}
                           </span>
-                          {item.link_url && <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-slate-300" />}
+                          {item.link_url && (
+                            <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-slate-300" />
+                          )}
                         </button>
                       </li>
                     );
@@ -229,7 +238,9 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, 
         </div>
 
         <footer className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-2.5">
-          <p className="text-[11px] text-slate-500">Tap a notification to go to the screen where it can be actioned.</p>
+          <p className="text-[11px] text-slate-500">
+            Tap a notification to go to the screen where it can be actioned.
+          </p>
         </footer>
       </aside>
     </div>

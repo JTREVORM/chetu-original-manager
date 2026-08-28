@@ -1,7 +1,12 @@
-import React, { useMemo, useState } from 'react';
-import { useDatabase } from '../context/DatabaseContext';
-import { useNotifications } from '../context/NotificationContext';
-import { CLOSED_LOAN_STATUSES, type Client, type Loan, type PaymentMethod } from '../types/database.types';
+import React, { useMemo, useState } from "react";
+import { useDatabase } from "../context/DatabaseContext";
+import { useNotifications } from "../context/NotificationContext";
+import {
+  CLOSED_LOAN_STATUSES,
+  type Client,
+  type Loan,
+  type PaymentMethod,
+} from "../types/database.types";
 import {
   Field,
   MisFilters,
@@ -14,8 +19,8 @@ import {
   todayISO,
   useMisScope,
   type MisColumn,
-} from '../components/mis/MisKit';
-import { ReportExportButtons } from '../components/mis/ReportExport';
+} from "../components/mis/MisKit";
+import { ReportExportButtons } from "../components/mis/ReportExport";
 
 interface CollectRow {
   loan: Loan;
@@ -37,7 +42,7 @@ const weeksBetween = (from?: string | null) => {
 };
 
 /** Builds the collectable loan rows visible to the current user, scoped by filters. */
-function useCollectRows(kind: 'Regular' | 'Overdue' | 'Advance' | 'BadDebt') {
+function useCollectRows(kind: "Regular" | "Overdue" | "Advance" | "BadDebt") {
   const scope = useMisScope();
   const { loans, clients, clientGroups, repayments } = useDatabase();
 
@@ -50,43 +55,51 @@ function useCollectRows(kind: 'Regular' | 'Overdue' | 'Advance' | 'BadDebt') {
         // Settled and written-off loans are closed — nothing more is collectable
         // on them, so they drop out of every collection screen.
         if (CLOSED_LOAN_STATUSES.includes(l.status)) return false;
-        if (kind === 'BadDebt') return l.is_bad_debt || l.status === 'Defaulted';
-        return ['Active', 'Overdue', 'Defaulted'].includes(l.status) && Number(l.outstanding_balance) > 0;
+        if (kind === "BadDebt") return l.is_bad_debt || l.status === "Defaulted";
+        return (
+          ["Active", "Overdue", "Defaulted"].includes(l.status) && Number(l.outstanding_balance) > 0
+        );
       })
       .map<CollectRow | null>((l) => {
         const client = clientById.get(l.client_id);
         if (!client) return null;
         const group = client.group_id ? groupById.get(client.group_id) : undefined;
-        const officerId = client.loan_officer_id || group?.loan_officer_id || '';
+        const officerId = client.loan_officer_id || group?.loan_officer_id || "";
 
-        const paid = repayments.filter((r) => r.loan_id === l.id).reduce((s, r) => s + Number(r.amount_paid || 0), 0);
-        const weeksElapsed = Math.min(l.loan_period_weeks || 0, weeksBetween(l.first_repayment_date) + 1);
+        const paid = repayments
+          .filter((r) => r.loan_id === l.id)
+          .reduce((s, r) => s + Number(r.amount_paid || 0), 0);
+        const weeksElapsed = Math.min(
+          l.loan_period_weeks || 0,
+          weeksBetween(l.first_repayment_date) + 1,
+        );
         const expected = weeksElapsed * Number(l.weekly_installment || 0);
         const arrears = Math.max(0, expected - paid);
-        const overdueWeeks = Number(l.weekly_installment) > 0 ? Math.floor(arrears / Number(l.weekly_installment)) : 0;
+        const overdueWeeks =
+          Number(l.weekly_installment) > 0 ? Math.floor(arrears / Number(l.weekly_installment)) : 0;
 
         return {
           loan: l,
           client,
-          group_name: group?.group_name || '—',
-          group_code: group?.group_code || '—',
+          group_name: group?.group_name || "—",
+          group_code: group?.group_code || "—",
           branch_name: scope.branchName(client.branch_id),
           officer_name: group?.loan_officer_name || scope.officerName(officerId),
           officer_id: officerId,
-          group_id: group?.id || '',
+          group_id: group?.id || "",
           overdue_weeks: overdueWeeks,
           overdue_amount: arrears,
         };
       })
       .filter((r): r is CollectRow => r !== null)
-      .filter((r) => (kind === 'Overdue' ? r.overdue_amount > 0 : true));
+      .filter((r) => (kind === "Overdue" ? r.overdue_amount > 0 : true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loans, clients, clientGroups, repayments, kind, scope.officers, scope.activeBranches]);
 }
 
 const CollectionBase: React.FC<{
   title: string;
-  kind: 'Regular' | 'Overdue' | 'Advance' | 'BadDebt';
+  kind: "Regular" | "Overdue" | "Advance" | "BadDebt";
   amountLabel: string;
   requireGroup?: boolean;
 }> = ({ title, kind, amountLabel, requireGroup }) => {
@@ -97,11 +110,11 @@ const CollectionBase: React.FC<{
   const { recordRepayment } = useDatabase();
   const { addToast } = useNotifications();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const [applied, setApplied] = useState({ branchId: '', officerId: '', groupId: '', search: '' });
+  const [applied, setApplied] = useState({ branchId: "", officerId: "", groupId: "", search: "" });
   const [collectionDate, setCollectionDate] = useState(todayISO());
-  const [method, setMethod] = useState<PaymentMethod>('Cash');
+  const [method, setMethod] = useState<PaymentMethod>("Cash");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -113,7 +126,8 @@ const CollectionBase: React.FC<{
       if (applied.officerId && r.officer_id !== applied.officerId) return false;
       if (applied.groupId && r.group_id !== applied.groupId) return false;
       if (q) {
-        const hay = `${r.group_name} ${r.group_code} ${r.client.full_name} ${r.client.client_number} ${r.loan.loan_number}`.toLowerCase();
+        const hay =
+          `${r.group_name} ${r.group_code} ${r.client.full_name} ${r.client.client_number} ${r.loan.loan_number}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -122,15 +136,20 @@ const CollectionBase: React.FC<{
 
   const runSearch = () => {
     if (requireGroup && !scope.groupId) {
-      addToast('warning', 'Select a group', 'Choose the group you are collecting from.');
+      addToast("warning", "Select a group", "Choose the group you are collecting from.");
       return;
     }
     setHasSearched(true);
-    setApplied({ branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId, search });
+    setApplied({
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+    });
   };
 
   const defaultAmount = (r: CollectRow) =>
-    kind === 'Overdue' || kind === 'BadDebt'
+    kind === "Overdue" || kind === "BadDebt"
       ? Math.round(r.overdue_amount) || Number(r.loan.weekly_installment || 0)
       : Number(r.loan.weekly_installment || 0);
 
@@ -144,7 +163,7 @@ const CollectionBase: React.FC<{
   const saveAll = async () => {
     const payable = filtered.filter((r) => entered(r) > 0);
     if (payable.length === 0) {
-      addToast('warning', 'Nothing to collect', 'Enter at least one collection amount.');
+      addToast("warning", "Nothing to collect", "Enter at least one collection amount.");
       return;
     }
     setSaving(true);
@@ -157,46 +176,92 @@ const CollectionBase: React.FC<{
           `${kind} collection on ${collectionDate}`,
         );
       }
-      addToast('success', 'Collection Saved', `${payable.length} payment(s) totalling ${money(total)} recorded.`);
+      addToast(
+        "success",
+        "Collection Saved",
+        `${payable.length} payment(s) totalling ${money(total)} recorded.`,
+      );
       setAmounts({});
     } catch (error) {
-      addToast('error', 'Collection failed', error instanceof Error ? error.message : 'Please try again.');
+      addToast(
+        "error",
+        "Collection failed",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     } finally {
       setSaving(false);
     }
   };
 
   const columns: MisColumn<CollectRow>[] = [
-    { key: 'gcode', label: 'Group Code', width: '9%', render: (r) => r.group_code, text: (r) => r.group_code },
-    { key: 'mcode', label: 'Member Code', width: '10%', render: (r) => r.client.client_number, text: (r) => r.client.client_number },
     {
-      key: 'mname',
-      label: 'Member Name',
-      width: '14%',
+      key: "gcode",
+      label: "Group Code",
+      width: "9%",
+      render: (r) => r.group_code,
+      text: (r) => r.group_code,
+    },
+    {
+      key: "mcode",
+      label: "Member Code",
+      width: "10%",
+      render: (r) => r.client.client_number,
+      text: (r) => r.client.client_number,
+    },
+    {
+      key: "mname",
+      label: "Member Name",
+      width: "14%",
       render: (r) => <span className="font-semibold text-slate-900">{r.client.full_name}</span>,
       text: (r) => r.client.full_name,
     },
-    { key: 'loan', label: 'Loan No', width: '11%', render: (r) => r.loan.loan_number, text: (r) => r.loan.loan_number },
-    { key: 'disb', label: 'Disburse Date', width: '9%', render: (r) => shortDate(r.loan.disbursed_at), text: (r) => shortDate(r.loan.disbursed_at) },
-    { key: 'inst', label: 'Installment', width: '9%', align: 'right', render: (r) => money(r.loan.weekly_installment) },
-    { key: 'out', label: 'Outstanding', width: '10%', align: 'right', render: (r) => money(r.loan.outstanding_balance) },
     {
-      key: 'over',
-      label: 'Overdue',
-      width: '10%',
-      align: 'right',
+      key: "loan",
+      label: "Loan No",
+      width: "11%",
+      render: (r) => r.loan.loan_number,
+      text: (r) => r.loan.loan_number,
+    },
+    {
+      key: "disb",
+      label: "Disburse Date",
+      width: "9%",
+      render: (r) => shortDate(r.loan.disbursed_at),
+      text: (r) => shortDate(r.loan.disbursed_at),
+    },
+    {
+      key: "inst",
+      label: "Installment",
+      width: "9%",
+      align: "right",
+      render: (r) => money(r.loan.weekly_installment),
+    },
+    {
+      key: "out",
+      label: "Outstanding",
+      width: "10%",
+      align: "right",
+      render: (r) => money(r.loan.outstanding_balance),
+    },
+    {
+      key: "over",
+      label: "Overdue",
+      width: "10%",
+      align: "right",
       render: (r) => (
-        <span className={r.overdue_amount > 0 ? 'font-bold text-chetu-red' : ''}>
+        <span className={r.overdue_amount > 0 ? "font-bold text-chetu-red" : ""}>
           {money(r.overdue_amount)}
-          {r.overdue_weeks > 0 && <span className="ml-1 text-[10px] text-slate-400">({r.overdue_weeks}w)</span>}
+          {r.overdue_weeks > 0 && (
+            <span className="ml-1 text-[10px] text-slate-400">({r.overdue_weeks}w)</span>
+          )}
         </span>
       ),
     },
     {
-      key: 'amount',
+      key: "amount",
       label: amountLabel,
-      width: '12%',
-      align: 'right',
+      width: "12%",
+      align: "right",
       render: (r) => (
         <input
           type="number"
@@ -224,7 +289,12 @@ const CollectionBase: React.FC<{
       >
         <ScopeFields scope={scope} />
         <Field label="Collection Date">
-          <input type="date" value={collectionDate} onChange={(e) => setCollectionDate(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={collectionDate}
+            onChange={(e) => setCollectionDate(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <SearchButton onClick={runSearch} />
       </MisFilters>
@@ -244,7 +314,11 @@ const CollectionBase: React.FC<{
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-xs">
           <div className="flex items-center gap-3">
             <label className="text-[11px] font-bold uppercase text-slate-500">Payment Method</label>
-            <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="form-field h-8 w-40">
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+              className="form-field h-8 w-40"
+            >
               <option value="Cash">Cash</option>
               <option value="Bank Transfer">Bank Transfer</option>
               <option value="Mobile Money">Mobile Money</option>
@@ -253,14 +327,14 @@ const CollectionBase: React.FC<{
           <div className="flex items-center gap-4">
             <span className="text-xs font-bold text-slate-700">Total: {money(total)}</span>
             {canCollect && (
-            <button
-              type="button"
-              disabled={saving}
-              onClick={saveAll}
-              className="rounded bg-[#0B4394] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-            >
-              {saving ? 'Saving…' : 'Collect'}
-            </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={saveAll}
+                className="rounded bg-[#0B4394] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {saving ? "Saving…" : "Collect"}
+              </button>
             )}
           </div>
         </div>
@@ -270,7 +344,12 @@ const CollectionBase: React.FC<{
 };
 
 export const GroupWiseCollection: React.FC = () => (
-  <CollectionBase title="Group Wise Collection" kind="Regular" amountLabel="Collect Amount" requireGroup />
+  <CollectionBase
+    title="Group Wise Collection"
+    kind="Regular"
+    amountLabel="Collect Amount"
+    requireGroup
+  />
 );
 
 export const OverdueCollection: React.FC = () => (

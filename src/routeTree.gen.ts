@@ -45,11 +45,14 @@ import { Route as OverdueCollectionRouteImport } from './routes/overdue-collecti
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RepaymentsRouteImport } from './routes/repayments'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as RolesPermissionsRouteImport } from './routes/roles-permissions'
 import { Route as SavingsRouteImport } from './routes/savings'
 import { Route as SavingsAccountsRouteImport } from './routes/savings-accounts'
 import { Route as SecurityReturnsRouteImport } from './routes/security-returns'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as UsersRouteImport } from './routes/users'
+import { Route as BranchesIndexRouteImport } from './routes/branches.index'
+import { Route as BranchesBranchIdRouteImport } from './routes/branches.$branchId'
 import { Route as GroupsRejectedRouteImport } from './routes/groups.rejected'
 import { Route as GroupsWaitingApprovalRouteImport } from './routes/groups.waiting-approval'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
@@ -251,6 +254,11 @@ const ReportsRoute = ReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RolesPermissionsRoute = RolesPermissionsRouteImport.update({
+  id: '/roles-permissions',
+  path: '/roles-permissions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SavingsRoute = SavingsRouteImport.update({
   id: '/savings',
   path: '/savings',
@@ -275,6 +283,16 @@ const UsersRoute = UsersRouteImport.update({
   id: '/users',
   path: '/users',
   getParentRoute: () => rootRouteImport,
+} as any)
+const BranchesIndexRoute = BranchesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BranchesRoute,
+} as any)
+const BranchesBranchIdRoute = BranchesBranchIdRouteImport.update({
+  id: '/$branchId',
+  path: '/$branchId',
+  getParentRoute: () => BranchesRoute,
 } as any)
 const GroupsRejectedRoute = GroupsRejectedRouteImport.update({
   id: '/groups/rejected',
@@ -390,7 +408,7 @@ export interface FileRoutesByFullPath {
   '/bad-debts-collection': typeof BadDebtsCollectionRoute
   '/bad-loans': typeof BadLoansRoute
   '/bank-management': typeof BankManagementRoute
-  '/branches': typeof BranchesRoute
+  '/branches': typeof BranchesRouteWithChildren
   '/business-day': typeof BusinessDayRoute
   '/calculator': typeof CalculatorRoute
   '/client-groups': typeof ClientGroupsRoute
@@ -418,11 +436,13 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/repayments': typeof RepaymentsRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/roles-permissions': typeof RolesPermissionsRoute
   '/savings': typeof SavingsRoute
   '/savings-accounts': typeof SavingsAccountsRoute
   '/security-returns': typeof SecurityReturnsRoute
   '/settings': typeof SettingsRoute
   '/users': typeof UsersRoute
+  '/branches/$branchId': typeof BranchesBranchIdRoute
   '/groups/rejected': typeof GroupsRejectedRoute
   '/groups/waiting-approval': typeof GroupsWaitingApprovalRoute
   '/reports/approvals': typeof ReportsApprovalsRoute
@@ -441,6 +461,7 @@ export interface FileRoutesByFullPath {
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
   '/transfers/receive': typeof TransfersReceiveRoute
+  '/branches/': typeof BranchesIndexRoute
   '/reports/': typeof ReportsIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
 }
@@ -453,7 +474,6 @@ export interface FileRoutesByTo {
   '/bad-debts-collection': typeof BadDebtsCollectionRoute
   '/bad-loans': typeof BadLoansRoute
   '/bank-management': typeof BankManagementRoute
-  '/branches': typeof BranchesRoute
   '/business-day': typeof BusinessDayRoute
   '/calculator': typeof CalculatorRoute
   '/client-groups': typeof ClientGroupsRoute
@@ -480,11 +500,13 @@ export interface FileRoutesByTo {
   '/overdue-collection': typeof OverdueCollectionRoute
   '/profile': typeof ProfileRoute
   '/repayments': typeof RepaymentsRoute
+  '/roles-permissions': typeof RolesPermissionsRoute
   '/savings': typeof SavingsRoute
   '/savings-accounts': typeof SavingsAccountsRoute
   '/security-returns': typeof SecurityReturnsRoute
   '/settings': typeof SettingsRoute
   '/users': typeof UsersRoute
+  '/branches/$branchId': typeof BranchesBranchIdRoute
   '/groups/rejected': typeof GroupsRejectedRoute
   '/groups/waiting-approval': typeof GroupsWaitingApprovalRoute
   '/reports/approvals': typeof ReportsApprovalsRoute
@@ -503,6 +525,7 @@ export interface FileRoutesByTo {
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
   '/transfers/receive': typeof TransfersReceiveRoute
+  '/branches': typeof BranchesIndexRoute
   '/reports': typeof ReportsIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
 }
@@ -516,7 +539,7 @@ export interface FileRoutesById {
   '/bad-debts-collection': typeof BadDebtsCollectionRoute
   '/bad-loans': typeof BadLoansRoute
   '/bank-management': typeof BankManagementRoute
-  '/branches': typeof BranchesRoute
+  '/branches': typeof BranchesRouteWithChildren
   '/business-day': typeof BusinessDayRoute
   '/calculator': typeof CalculatorRoute
   '/client-groups': typeof ClientGroupsRoute
@@ -544,11 +567,13 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/repayments': typeof RepaymentsRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/roles-permissions': typeof RolesPermissionsRoute
   '/savings': typeof SavingsRoute
   '/savings-accounts': typeof SavingsAccountsRoute
   '/security-returns': typeof SecurityReturnsRoute
   '/settings': typeof SettingsRoute
   '/users': typeof UsersRoute
+  '/branches/$branchId': typeof BranchesBranchIdRoute
   '/groups/rejected': typeof GroupsRejectedRoute
   '/groups/waiting-approval': typeof GroupsWaitingApprovalRoute
   '/reports/approvals': typeof ReportsApprovalsRoute
@@ -567,6 +592,7 @@ export interface FileRoutesById {
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
   '/transfers/receive': typeof TransfersReceiveRoute
+  '/branches/': typeof BranchesIndexRoute
   '/reports/': typeof ReportsIndexRoute
   '/api/public/bootstrap-admin': typeof ApiPublicBootstrapAdminRoute
 }
@@ -609,11 +635,13 @@ export interface FileRouteTypes {
     | '/profile'
     | '/repayments'
     | '/reports'
+    | '/roles-permissions'
     | '/savings'
     | '/savings-accounts'
     | '/security-returns'
     | '/settings'
     | '/users'
+    | '/branches/$branchId'
     | '/groups/rejected'
     | '/groups/waiting-approval'
     | '/reports/approvals'
@@ -632,6 +660,7 @@ export interface FileRouteTypes {
     | '/transfers/group-officer'
     | '/transfers/member'
     | '/transfers/receive'
+    | '/branches/'
     | '/reports/'
     | '/api/public/bootstrap-admin'
   fileRoutesByTo: FileRoutesByTo
@@ -644,7 +673,6 @@ export interface FileRouteTypes {
     | '/bad-debts-collection'
     | '/bad-loans'
     | '/bank-management'
-    | '/branches'
     | '/business-day'
     | '/calculator'
     | '/client-groups'
@@ -671,11 +699,13 @@ export interface FileRouteTypes {
     | '/overdue-collection'
     | '/profile'
     | '/repayments'
+    | '/roles-permissions'
     | '/savings'
     | '/savings-accounts'
     | '/security-returns'
     | '/settings'
     | '/users'
+    | '/branches/$branchId'
     | '/groups/rejected'
     | '/groups/waiting-approval'
     | '/reports/approvals'
@@ -694,6 +724,7 @@ export interface FileRouteTypes {
     | '/transfers/group-officer'
     | '/transfers/member'
     | '/transfers/receive'
+    | '/branches'
     | '/reports'
     | '/api/public/bootstrap-admin'
   id:
@@ -734,11 +765,13 @@ export interface FileRouteTypes {
     | '/profile'
     | '/repayments'
     | '/reports'
+    | '/roles-permissions'
     | '/savings'
     | '/savings-accounts'
     | '/security-returns'
     | '/settings'
     | '/users'
+    | '/branches/$branchId'
     | '/groups/rejected'
     | '/groups/waiting-approval'
     | '/reports/approvals'
@@ -757,6 +790,7 @@ export interface FileRouteTypes {
     | '/transfers/group-officer'
     | '/transfers/member'
     | '/transfers/receive'
+    | '/branches/'
     | '/reports/'
     | '/api/public/bootstrap-admin'
   fileRoutesById: FileRoutesById
@@ -770,7 +804,7 @@ export interface RootRouteChildren {
   BadDebtsCollectionRoute: typeof BadDebtsCollectionRoute
   BadLoansRoute: typeof BadLoansRoute
   BankManagementRoute: typeof BankManagementRoute
-  BranchesRoute: typeof BranchesRoute
+  BranchesRoute: typeof BranchesRouteWithChildren
   BusinessDayRoute: typeof BusinessDayRoute
   CalculatorRoute: typeof CalculatorRoute
   ClientGroupsRoute: typeof ClientGroupsRoute
@@ -798,6 +832,7 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   RepaymentsRoute: typeof RepaymentsRoute
   ReportsRoute: typeof ReportsRouteWithChildren
+  RolesPermissionsRoute: typeof RolesPermissionsRoute
   SavingsRoute: typeof SavingsRoute
   SavingsAccountsRoute: typeof SavingsAccountsRoute
   SecurityReturnsRoute: typeof SecurityReturnsRoute
@@ -1066,6 +1101,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/roles-permissions': {
+      id: '/roles-permissions'
+      path: '/roles-permissions'
+      fullPath: '/roles-permissions'
+      preLoaderRoute: typeof RolesPermissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/savings': {
       id: '/savings'
       path: '/savings'
@@ -1100,6 +1142,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/users'
       preLoaderRoute: typeof UsersRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/branches/': {
+      id: '/branches/'
+      path: '/'
+      fullPath: '/branches/'
+      preLoaderRoute: typeof BranchesIndexRouteImport
+      parentRoute: typeof BranchesRoute
+    }
+    '/branches/$branchId': {
+      id: '/branches/$branchId'
+      path: '/$branchId'
+      fullPath: '/branches/$branchId'
+      preLoaderRoute: typeof BranchesBranchIdRouteImport
+      parentRoute: typeof BranchesRoute
     }
     '/groups/rejected': {
       id: '/groups/rejected'
@@ -1244,6 +1300,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface BranchesRouteChildren {
+  BranchesBranchIdRoute: typeof BranchesBranchIdRoute
+  BranchesIndexRoute: typeof BranchesIndexRoute
+}
+
+const BranchesRouteChildren: BranchesRouteChildren = {
+  BranchesBranchIdRoute: BranchesBranchIdRoute,
+  BranchesIndexRoute: BranchesIndexRoute,
+}
+
+const BranchesRouteWithChildren = BranchesRoute._addFileChildren(
+  BranchesRouteChildren,
+)
+
 interface ReportsRouteChildren {
   ReportsApprovalsRoute: typeof ReportsApprovalsRoute
   ReportsDailyOverdueRoute: typeof ReportsDailyOverdueRoute
@@ -1288,7 +1358,7 @@ const rootRouteChildren: RootRouteChildren = {
   BadDebtsCollectionRoute: BadDebtsCollectionRoute,
   BadLoansRoute: BadLoansRoute,
   BankManagementRoute: BankManagementRoute,
-  BranchesRoute: BranchesRoute,
+  BranchesRoute: BranchesRouteWithChildren,
   BusinessDayRoute: BusinessDayRoute,
   CalculatorRoute: CalculatorRoute,
   ClientGroupsRoute: ClientGroupsRoute,
@@ -1316,6 +1386,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   RepaymentsRoute: RepaymentsRoute,
   ReportsRoute: ReportsRouteWithChildren,
+  RolesPermissionsRoute: RolesPermissionsRoute,
   SavingsRoute: SavingsRoute,
   SavingsAccountsRoute: SavingsAccountsRoute,
   SecurityReturnsRoute: SecurityReturnsRoute,

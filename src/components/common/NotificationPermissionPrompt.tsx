@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Bell, BellOff, X } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
-import { useNotifications } from '../../context/NotificationContext';
+import React, { useEffect, useState } from "react";
+import { Bell, BellOff, X } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
+import { useNotifications } from "../../context/NotificationContext";
 import {
   markPushPromptAnswered,
   pushPromptAnswered,
   pushSupported,
   requestPushPermission,
-} from '../../lib/pushNotifications';
+} from "../../lib/pushNotifications";
 
 /**
  * Asks permission to send alerts to this device.
@@ -27,7 +27,7 @@ export const NotificationPermissionPrompt: React.FC = () => {
   useEffect(() => {
     if (!user?.id || !pushSupported()) return;
     // 'denied' is the browser's decision to keep; re-asking cannot override it.
-    if (Notification.permission !== 'default' || pushPromptAnswered()) return;
+    if (Notification.permission !== "default" || pushPromptAnswered()) return;
     // A beat after sign-in, so it does not collide with the page settling.
     const t = window.setTimeout(() => setVisible(true), 4000);
     return () => window.clearTimeout(t);
@@ -44,13 +44,13 @@ export const NotificationPermissionPrompt: React.FC = () => {
     setBusy(true);
     try {
       const result = await requestPushPermission();
-      if (result === 'granted') {
-        addToast('success', 'Alerts on', 'This device will now be notified as things happen.');
-      } else if (result === 'denied') {
+      if (result === "granted") {
+        addToast("success", "Alerts on", "This device will now be notified as things happen.");
+      } else if (result === "denied") {
         addToast(
-          'info',
-          'Alerts blocked',
-          'You can turn them on later from your browser’s site settings.',
+          "info",
+          "Alerts blocked",
+          "You can turn them on later from your browser’s site settings.",
         );
       }
     } finally {
@@ -90,7 +90,7 @@ export const NotificationPermissionPrompt: React.FC = () => {
             className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-amber-500 text-[13px] font-bold text-white transition-colors hover:bg-amber-400 disabled:opacity-70"
           >
             <Bell className="h-4 w-4" />
-            {busy ? 'Waiting…' : 'Allow alerts'}
+            {busy ? "Waiting…" : "Allow alerts"}
           </button>
           <button
             type="button"

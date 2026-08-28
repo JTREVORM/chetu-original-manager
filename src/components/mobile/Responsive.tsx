@@ -41,7 +41,9 @@ export const FilterBar: React.FC<{ search?: React.ReactNode; children?: React.Re
     <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
       {search && <div className="w-full min-w-0 md:max-w-96">{search}</div>}
       {children && (
-        <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-2">{children}</div>
+        <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-center md:gap-2">
+          {children}
+        </div>
       )}
     </div>
   </div>
@@ -126,13 +128,17 @@ export const RecordCard: React.FC<{
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               {f.label}
             </dt>
-            <dd className="break-word text-right text-xs font-semibold text-slate-800">{f.value}</dd>
+            <dd className="break-word text-right text-xs font-semibold text-slate-800">
+              {f.value}
+            </dd>
           </div>
         ))}
       </dl>
     )}
 
-    {actions && <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">{actions}</div>}
+    {actions && (
+      <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">{actions}</div>
+    )}
   </div>
 );
 

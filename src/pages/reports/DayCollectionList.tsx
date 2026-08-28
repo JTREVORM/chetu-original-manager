@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Info } from 'lucide-react';
+import React, { useMemo, useState } from "react";
+import { Info } from "lucide-react";
 import {
   ActionButton,
   Field,
@@ -14,11 +14,11 @@ import {
   todayISO,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
-import { useDatabase } from '../../context/DatabaseContext';
-import { matchScope, useLoanRows, type LoanRow } from './reportData';
-import { MiniTable } from './MasterRoll';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
+import { useDatabase } from "../../context/DatabaseContext";
+import { matchScope, useLoanRows, type LoanRow } from "./reportData";
+import { MiniTable } from "./MasterRoll";
 
 interface Row {
   id: string;
@@ -35,12 +35,20 @@ export const DayCollectionList: React.FC = () => {
   const { repayments, loanProducts } = useDatabase();
   const { rows: loanRows, loading } = useLoanRows(scope);
 
-  const [loanType, setLoanType] = useState('');
+  const [loanType, setLoanType] = useState("");
   const [fromDate, setFromDate] = useState(todayISO());
   const [tillDate, setTillDate] = useState(todayISO());
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const [applied, setApplied] = useState({ branchId: '', officerId: '', groupId: '', search: '', loanType: '', from: '', till: '' });
+  const [applied, setApplied] = useState({
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    search: "",
+    loanType: "",
+    from: "",
+    till: "",
+  });
   const [detail, setDetail] = useState<Row | null>(null);
 
   const runSearch = () => {
@@ -59,7 +67,11 @@ export const DayCollectionList: React.FC = () => {
   const filtered = useMemo<Row[]>(() => {
     const baseByLoan = new Map(loanRows.map((r) => [r.loan.id, r]));
     return repayments
-      .filter((p) => (!applied.from || p.payment_date >= applied.from) && (!applied.till || p.payment_date <= applied.till))
+      .filter(
+        (p) =>
+          (!applied.from || p.payment_date >= applied.from) &&
+          (!applied.till || p.payment_date <= applied.till),
+      )
       .map<Row | null>((p) => {
         const base = baseByLoan.get(p.loan_id);
         if (!base) return null;
@@ -68,7 +80,10 @@ export const DayCollectionList: React.FC = () => {
         return {
           id: p.id,
           base,
-          collectedBy: scope.officerName(p.recorded_by) === '—' ? base.officer_name : scope.officerName(p.recorded_by),
+          collectedBy:
+            scope.officerName(p.recorded_by) === "—"
+              ? base.officer_name
+              : scope.officerName(p.recorded_by),
           collectionDate: p.payment_date,
           collectionAmount: Number(p.amount_paid),
           loanType: base.product_name,
@@ -82,47 +97,58 @@ export const DayCollectionList: React.FC = () => {
   const total = filtered.reduce((s, r) => s + r.collectionAmount, 0);
 
   const columns: MisColumn<Row>[] = [
-    { key: 'branch', label: 'Branch', width: '9%', render: (r) => r.base.branch_name },
-    { key: 'group', label: 'Group', width: '11%', render: (r) => r.base.group_name },
+    { key: "branch", label: "Branch", width: "9%", render: (r) => r.base.branch_name },
+    { key: "group", label: "Group", width: "11%", render: (r) => r.base.group_name },
     {
-      key: 'member',
-      label: 'Member',
-      width: '13%',
-      render: (r) => <span className="font-semibold text-slate-900">{r.base.client.full_name}</span>,
+      key: "member",
+      label: "Member",
+      width: "13%",
+      render: (r) => (
+        <span className="font-semibold text-slate-900">{r.base.client.full_name}</span>
+      ),
       text: (r) => r.base.client.full_name,
     },
-    { key: 'loan', label: 'Loan No', width: '11%', render: (r) => r.base.loan.loan_number },
-    { key: 'by', label: 'Collected By', width: '10%', render: (r) => r.collectedBy },
-    { key: 'type', label: 'Loan Type', width: '10%', render: (r) => r.loanType },
-    { key: 'day', label: 'Meeting Day', width: '8%', render: (r) => r.base.meeting_day },
-    { key: 'date', label: 'Collection Date', width: '9%', render: (r) => shortDate(r.collectionDate) },
+    { key: "loan", label: "Loan No", width: "11%", render: (r) => r.base.loan.loan_number },
+    { key: "by", label: "Collected By", width: "10%", render: (r) => r.collectedBy },
+    { key: "type", label: "Loan Type", width: "10%", render: (r) => r.loanType },
+    { key: "day", label: "Meeting Day", width: "8%", render: (r) => r.base.meeting_day },
     {
-      key: 'amount',
-      label: 'Collection Amount',
-      width: '10%',
-      align: 'right',
-      render: (r) => <span className="font-bold text-emerald-600">{money(r.collectionAmount)}</span>,
+      key: "date",
+      label: "Collection Date",
+      width: "9%",
+      render: (r) => shortDate(r.collectionDate),
+    },
+    {
+      key: "amount",
+      label: "Collection Amount",
+      width: "10%",
+      align: "right",
+      render: (r) => (
+        <span className="font-bold text-emerald-600">{money(r.collectionAmount)}</span>
+      ),
       text: (r) => money(r.collectionAmount),
     },
     {
-      key: 'status',
-      label: 'Complete Status',
-      width: '9%',
+      key: "status",
+      label: "Complete Status",
+      width: "9%",
       render: (r) => (
         <span
           className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-            Number(r.base.loan.outstanding_balance) <= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            Number(r.base.loan.outstanding_balance) <= 0
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-amber-50 text-amber-700"
           }`}
         >
-          {Number(r.base.loan.outstanding_balance) <= 0 ? 'Completed' : 'Running'}
+          {Number(r.base.loan.outstanding_balance) <= 0 ? "Completed" : "Running"}
         </span>
       ),
-      text: (r) => (Number(r.base.loan.outstanding_balance) <= 0 ? 'Completed' : 'Running'),
+      text: (r) => (Number(r.base.loan.outstanding_balance) <= 0 ? "Completed" : "Running"),
     },
     {
-      key: 'action',
-      label: 'Action',
-      width: '6%',
+      key: "action",
+      label: "Action",
+      width: "6%",
       render: (r) => (
         <ActionButton tone="amber" title="Collection info" onClick={() => setDetail(r)}>
           <Info className="h-3 w-3" />
@@ -133,7 +159,16 @@ export const DayCollectionList: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Day Collection List" period={`${shortDate(applied.from || fromDate)} to ${shortDate(applied.till || tillDate)}`} columns={columns} rows={filtered} />}>
+      <MisPageTitle
+        right={
+          <ReportExportButtons
+            title="Day Collection List"
+            period={`${shortDate(applied.from || fromDate)} to ${shortDate(applied.till || tillDate)}`}
+            columns={columns}
+            rows={filtered}
+          />
+        }
+      >
         Day Collection List
       </MisPageTitle>
 
@@ -147,7 +182,11 @@ export const DayCollectionList: React.FC = () => {
       >
         <ScopeFields scope={scope} />
         <Field label="Loan Type">
-          <select value={loanType} onChange={(e) => setLoanType(e.target.value)} className="form-field">
+          <select
+            value={loanType}
+            onChange={(e) => setLoanType(e.target.value)}
+            className="form-field"
+          >
             <option value="">-- All --</option>
             {loanProducts.map((p) => (
               <option key={p.id} value={p.id}>
@@ -157,10 +196,20 @@ export const DayCollectionList: React.FC = () => {
           </select>
         </Field>
         <Field label="From Date">
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Till Date">
-          <input type="date" value={tillDate} onChange={(e) => setTillDate(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={tillDate}
+            onChange={(e) => setTillDate(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <SearchButton onClick={runSearch} />
       </MisFilters>
@@ -185,10 +234,23 @@ export const DayCollectionList: React.FC = () => {
       />
 
       {detail && (
-        <MisModal open onClose={() => setDetail(null)} title="Collection Details Info" width="max-w-3xl">
+        <MisModal
+          open
+          onClose={() => setDetail(null)}
+          title="Collection Details Info"
+          width="max-w-3xl"
+        >
           <div className="form-section-title">Loan Information</div>
           <MiniTable
-            headers={['Loan No', 'Member', 'Group', 'Principal', 'Total Payable', 'Outstanding', 'Status']}
+            headers={[
+              "Loan No",
+              "Member",
+              "Group",
+              "Principal",
+              "Total Payable",
+              "Outstanding",
+              "Status",
+            ]}
             rows={[
               [
                 detail.base.loan.loan_number,
@@ -203,7 +265,7 @@ export const DayCollectionList: React.FC = () => {
           />
           <div className="form-section-title mt-5">Repayment Schedule</div>
           <MiniTable
-            headers={['Week', 'Due Date', 'Instalment', 'Paid', 'Balance', 'Status']}
+            headers={["Week", "Due Date", "Instalment", "Paid", "Balance", "Status"]}
             rows={detail.base.schedule.map((s) => [
               String(s.week_number),
               shortDate(s.due_date),

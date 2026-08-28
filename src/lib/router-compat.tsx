@@ -44,7 +44,8 @@ type NavLinkProps = {
 
 export function NavLink({ to, end, className, children, ...rest }: NavLinkProps) {
   const { pathname } = useLocation();
-  const isActive = end || to === "/" ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
+  const isActive =
+    end || to === "/" ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
 
   return (
     <Link

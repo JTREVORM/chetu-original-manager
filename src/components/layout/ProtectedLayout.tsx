@@ -7,11 +7,11 @@ import { ToastContainer } from "../common/ToastContainer";
 import { InstallAppPrompt } from "../common/InstallAppPrompt";
 import { NotificationPermissionPrompt } from "../common/NotificationPermissionPrompt";
 
-export const ProtectedLayout: React.FC<{ children: React.ReactNode; adminOnly?: boolean; managementOnly?: boolean }> = ({
-  children,
-  adminOnly,
-  managementOnly,
-}) => {
+export const ProtectedLayout: React.FC<{
+  children: React.ReactNode;
+  adminOnly?: boolean;
+  managementOnly?: boolean;
+}> = ({ children, adminOnly, managementOnly }) => {
   const { user, isAdmin, isAuditor, isBranchManager } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 

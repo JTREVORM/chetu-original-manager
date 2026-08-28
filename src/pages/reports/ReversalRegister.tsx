@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   Field,
   MisFilters,
@@ -12,15 +12,21 @@ import {
   monthStartISO,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
-import { matchScope, useLoanReversals, useLoanRows, useStaffNames, type LoanRow } from './reportData';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
+import {
+  matchScope,
+  useLoanReversals,
+  useLoanRows,
+  useStaffNames,
+  type LoanRow,
+} from "./reportData";
 
 const TYPE_TONE: Record<string, string> = {
-  Disbursement: 'text-amber-700',
-  Repayment: 'text-chetu-red',
-  Settlement: 'text-chetu-red',
-  'Write Off': 'text-slate-700',
+  Disbursement: "text-amber-700",
+  Repayment: "text-chetu-red",
+  Settlement: "text-chetu-red",
+  "Write Off": "text-slate-700",
 };
 
 interface Row {
@@ -48,18 +54,29 @@ export const ReversalRegister: React.FC = () => {
 
   const [from, setFrom] = useState(monthStartISO());
   const [till, setTill] = useState(todayISO());
-  const [type, setType] = useState('');
-  const [search, setSearch] = useState('');
+  const [type, setType] = useState("");
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [applied, setApplied] = useState({
-    branchId: '', officerId: '', groupId: '', search: '', from: '', till: '', type: '',
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    search: "",
+    from: "",
+    till: "",
+    type: "",
   });
 
   const runSearch = () => {
     setHasSearched(true);
     setApplied({
-      branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId,
-      search, from, till, type,
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+      from,
+      till,
+      type,
     });
   };
 
@@ -75,11 +92,11 @@ export const ReversalRegister: React.FC = () => {
           id: rev.id,
           loanRow,
           type: rev.reversal_type,
-          reference: rev.reference_number || '—',
+          reference: rev.reference_number || "—",
           amount: Number(rev.amount || 0),
           reason: rev.reason,
           by: staffName(rev.reversed_by),
-          on: rev.created_at.split('T')[0]!,
+          on: rev.created_at.split("T")[0]!,
         };
       })
       .filter((r): r is Row => r !== null)
@@ -89,7 +106,7 @@ export const ReversalRegister: React.FC = () => {
         if (applied.till && r.on > applied.till) return false;
         // Branch / officer / group scoping only — the text search is applied
         // below so it can also reach the receipt number and the reason.
-        if (!matchScope(r.loanRow, { ...applied, search: '' }, scope)) return false;
+        if (!matchScope(r.loanRow, { ...applied, search: "" }, scope)) return false;
         const q = applied.search.trim().toLowerCase();
         if (q) {
           const hay = `${r.loanRow.group_name} ${r.loanRow.client.full_name} ${r.loanRow.client.client_number} ${r.loanRow.loan.loan_number} ${r.reference} ${r.reason}`;
@@ -104,52 +121,89 @@ export const ReversalRegister: React.FC = () => {
     const t = { count: filtered.length, amount: 0, disbursements: 0, receipts: 0 };
     for (const r of filtered) {
       t.amount += r.amount;
-      if (r.type === 'Disbursement') t.disbursements += 1;
+      if (r.type === "Disbursement") t.disbursements += 1;
       else t.receipts += 1;
     }
     return t;
   }, [filtered]);
 
   const columns: MisColumn<Row>[] = [
-    { key: 'on', label: 'Reversed On', width: '9%', render: (r) => shortDate(r.on) },
+    { key: "on", label: "Reversed On", width: "9%", render: (r) => shortDate(r.on) },
     {
-      key: 'type',
-      label: 'Transaction',
-      width: '10%',
-      render: (r) => <span className={`font-bold ${TYPE_TONE[r.type] || 'text-slate-700'}`}>{r.type}</span>,
+      key: "type",
+      label: "Transaction",
+      width: "10%",
+      render: (r) => (
+        <span className={`font-bold ${TYPE_TONE[r.type] || "text-slate-700"}`}>{r.type}</span>
+      ),
       text: (r) => r.type,
     },
-    { key: 'branch', label: 'Branch', width: '9%', render: (r) => r.loanRow.branch_name, text: (r) => r.loanRow.branch_name },
-    { key: 'group', label: 'Group', width: '10%', render: (r) => r.loanRow.group_name, text: (r) => r.loanRow.group_name },
     {
-      key: 'member',
-      label: 'Member',
-      width: '13%',
+      key: "branch",
+      label: "Branch",
+      width: "9%",
+      render: (r) => r.loanRow.branch_name,
+      text: (r) => r.loanRow.branch_name,
+    },
+    {
+      key: "group",
+      label: "Group",
+      width: "10%",
+      render: (r) => r.loanRow.group_name,
+      text: (r) => r.loanRow.group_name,
+    },
+    {
+      key: "member",
+      label: "Member",
+      width: "13%",
       render: (r) => (
         <span className="font-semibold text-slate-900">
           {r.loanRow.client.full_name}
-          <span className="block text-[10px] font-normal text-slate-400">{r.loanRow.client.client_number}</span>
+          <span className="block text-[10px] font-normal text-slate-400">
+            {r.loanRow.client.client_number}
+          </span>
         </span>
       ),
       text: (r) => r.loanRow.client.full_name,
     },
-    { key: 'loan', label: 'Loan No', width: '10%', render: (r) => r.loanRow.loan.loan_number, text: (r) => r.loanRow.loan.loan_number },
-    { key: 'ref', label: 'Reference', width: '10%', render: (r) => r.reference, text: (r) => r.reference },
     {
-      key: 'amt',
-      label: 'Amount',
-      width: '9%',
-      align: 'right',
+      key: "loan",
+      label: "Loan No",
+      width: "10%",
+      render: (r) => r.loanRow.loan.loan_number,
+      text: (r) => r.loanRow.loan.loan_number,
+    },
+    {
+      key: "ref",
+      label: "Reference",
+      width: "10%",
+      render: (r) => r.reference,
+      text: (r) => r.reference,
+    },
+    {
+      key: "amt",
+      label: "Amount",
+      width: "9%",
+      align: "right",
       render: (r) => <span className="font-bold text-chetu-red">{money(r.amount)}</span>,
       text: (r) => money(r.amount),
     },
-    { key: 'by', label: 'Reversed By', width: '10%', render: (r) => r.by, text: (r) => r.by },
-    { key: 'why', label: 'Reason', width: '13%', render: (r) => r.reason, text: (r) => r.reason },
+    { key: "by", label: "Reversed By", width: "10%", render: (r) => r.by, text: (r) => r.by },
+    { key: "why", label: "Reason", width: "13%", render: (r) => r.reason, text: (r) => r.reason },
   ];
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Reversal Register" period={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`} columns={columns} rows={filtered} />}>
+      <MisPageTitle
+        right={
+          <ReportExportButtons
+            title="Reversal Register"
+            period={`${shortDate(applied.from || from)} to ${shortDate(applied.till || till)}`}
+            columns={columns}
+            rows={filtered}
+          />
+        }
+      >
         Reversal Register
       </MisPageTitle>
 
@@ -163,10 +217,20 @@ export const ReversalRegister: React.FC = () => {
       >
         <ScopeFields scope={scope} />
         <Field label="From Date">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Till Date">
-          <input type="date" value={till} onChange={(e) => setTill(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={till}
+            onChange={(e) => setTill(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Transaction">
           <select value={type} onChange={(e) => setType(e.target.value)} className="form-field">

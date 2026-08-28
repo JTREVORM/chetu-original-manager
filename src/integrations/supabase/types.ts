@@ -10,56 +10,176 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
+      access_requests: {
+        Row: {
+          branch_id: string | null
+          business_date: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_reason: string | null
+          expires_at: string | null
+          id: string
+          reason: string
+          requester_id: string
+          starts_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          business_date?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          expires_at?: string | null
+          id?: string
+          reason: string
+          requester_id: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          business_date?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_reason?: string | null
+          expires_at?: string | null
+          id?: string
+          reason?: string
+          requester_id?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_requests_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
+          branch_id: string | null
           created_at: string
           details: string
           device_info: string | null
           id: string
           ip_address: string | null
           module: string
+          new_value: string | null
+          previous_value: string | null
+          reason: string | null
           record_id: string | null
+          target_user_id: string | null
           user_id: string | null
           user_name: string
           user_role: string
         }
         Insert: {
           action: string
+          branch_id?: string | null
           created_at?: string
           details: string
           device_info?: string | null
           id?: string
           ip_address?: string | null
           module: string
+          new_value?: string | null
+          previous_value?: string | null
+          reason?: string | null
           record_id?: string | null
+          target_user_id?: string | null
           user_id?: string | null
           user_name: string
           user_role: string
         }
         Update: {
           action?: string
+          branch_id?: string | null
           created_at?: string
           details?: string
           device_info?: string | null
           id?: string
           ip_address?: string | null
           module?: string
+          new_value?: string | null
+          previous_value?: string | null
+          reason?: string | null
           record_id?: string | null
+          target_user_id?: string | null
           user_id?: string | null
           user_name?: string
           user_role?: string
         }
         Relationships: [
           {
+            foreignKeyName: "audit_logs_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "audit_logs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -95,6 +215,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bad_loan_comments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bad_loan_comments_loan_id_fkey"
             columns: ["loan_id"]
             isOneToOne: false
@@ -108,6 +235,7 @@ export type Database = {
           amount: number
           balance_after: number
           branch_id: string | null
+          business_day_id: string | null
           category: string
           created_at: string
           description: string
@@ -122,6 +250,7 @@ export type Database = {
           amount: number
           balance_after: number
           branch_id?: string | null
+          business_day_id?: string | null
           category: string
           created_at?: string
           description: string
@@ -136,6 +265,7 @@ export type Database = {
           amount?: number
           balance_after?: number
           branch_id?: string | null
+          business_day_id?: string | null
           category?: string
           created_at?: string
           description?: string
@@ -155,49 +285,334 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bank_transactions_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bank_transactions_recorded_by_fkey"
             columns: ["recorded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "bank_transactions_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
         ]
       }
       branches: {
         Row: {
+          alt_phone: string | null
+          approval_level: string | null
+          assistant_manager_id: string | null
           branch_code: string
           branch_name: string
+          branch_type: string
+          closing_time: string | null
           created_at: string
+          currency: string
+          deactivated_at: string | null
+          deactivated_by: string | null
+          deactivation_reason: string | null
+          district: string | null
+          email: string | null
           id: string
+          latitude: number | null
           location: string | null
+          longitude: number | null
+          manager_id: string | null
           manager_name: string | null
+          max_cash_holding: number | null
+          opening_time: string | null
           phone: string | null
+          physical_address: string | null
+          region: string | null
           status: string
+          town: string | null
           updated_at: string | null
+          working_days: string[]
         }
         Insert: {
+          alt_phone?: string | null
+          approval_level?: string | null
+          assistant_manager_id?: string | null
           branch_code: string
           branch_name: string
+          branch_type?: string
+          closing_time?: string | null
           created_at?: string
+          currency?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_reason?: string | null
+          district?: string | null
+          email?: string | null
           id?: string
+          latitude?: number | null
           location?: string | null
+          longitude?: number | null
+          manager_id?: string | null
           manager_name?: string | null
+          max_cash_holding?: number | null
+          opening_time?: string | null
           phone?: string | null
+          physical_address?: string | null
+          region?: string | null
           status?: string
+          town?: string | null
           updated_at?: string | null
+          working_days?: string[]
         }
         Update: {
+          alt_phone?: string | null
+          approval_level?: string | null
+          assistant_manager_id?: string | null
           branch_code?: string
           branch_name?: string
+          branch_type?: string
+          closing_time?: string | null
+          created_at?: string
+          currency?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_reason?: string | null
+          district?: string | null
+          email?: string | null
+          id?: string
+          latitude?: number | null
+          location?: string | null
+          longitude?: number | null
+          manager_id?: string | null
+          manager_name?: string | null
+          max_cash_holding?: number | null
+          opening_time?: string | null
+          phone?: string | null
+          physical_address?: string | null
+          region?: string | null
+          status?: string
+          town?: string | null
+          updated_at?: string | null
+          working_days?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branches_assistant_manager_id_fkey"
+            columns: ["assistant_manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_assistant_manager_id_fkey"
+            columns: ["assistant_manager_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_deactivated_by_fkey"
+            columns: ["deactivated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_deactivated_by_fkey"
+            columns: ["deactivated_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branches_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_day_audit: {
+        Row: {
+          action: string
+          actor_id: string | null
+          actor_name: string | null
+          actor_role: string | null
+          branch_id: string | null
+          business_date: string | null
+          client_info: string | null
+          created_at: string
+          id: number
+          new_status: string | null
+          previous_status: string | null
+          reason: string | null
+          subject_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
+          branch_id?: string | null
+          business_date?: string | null
+          client_info?: string | null
+          created_at?: string
+          id?: number
+          new_status?: string | null
+          previous_status?: string | null
+          reason?: string | null
+          subject_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          actor_name?: string | null
+          actor_role?: string | null
+          branch_id?: string | null
+          business_date?: string | null
+          client_info?: string | null
+          created_at?: string
+          id?: number
+          new_status?: string | null
+          previous_status?: string | null
+          reason?: string | null
+          subject_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_day_audit_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_day_audit_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_day_audit_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_days: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          branch_id: string
+          business_date: string
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          opened_at: string | null
+          opened_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          branch_id: string
+          business_date: string
+          closed_at?: string | null
+          closed_by?: string | null
           created_at?: string
           id?: string
-          location?: string | null
-          manager_name?: string | null
-          phone?: string | null
+          notes?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
           status?: string
-          updated_at?: string | null
+          updated_at?: string
         }
-        Relationships: []
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          branch_id?: string
+          business_date?: string
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          opened_at?: string | null
+          opened_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_days_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_days_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_days_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_days_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_days_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_days_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_days_opened_by_fkey"
+            columns: ["opened_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       client_documents: {
         Row: {
@@ -248,6 +663,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "client_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
         ]
       }
       client_groups: {
@@ -255,6 +677,7 @@ export type Database = {
           approval_status: string
           branch: string | null
           branch_id: string | null
+          business_day_id: string | null
           chairperson: string | null
           created_at: string
           created_by: string | null
@@ -284,6 +707,7 @@ export type Database = {
           approval_status?: string
           branch?: string | null
           branch_id?: string | null
+          business_day_id?: string | null
           chairperson?: string | null
           created_at?: string
           created_by?: string | null
@@ -313,6 +737,7 @@ export type Database = {
           approval_status?: string
           branch?: string | null
           branch_id?: string | null
+          business_day_id?: string | null
           chairperson?: string | null
           created_at?: string
           created_by?: string | null
@@ -347,10 +772,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_groups_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "client_groups_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
           {
@@ -361,10 +800,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "client_groups_loan_officer_id_fkey"
+            columns: ["loan_officer_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "client_groups_reviewed_by_fkey"
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_groups_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -374,6 +827,7 @@ export type Database = {
           alt_phone_number: string | null
           approval_status: string
           branch_id: string | null
+          business_day_id: string | null
           client_number: string
           created_at: string
           date_of_birth: string
@@ -414,6 +868,7 @@ export type Database = {
           alt_phone_number?: string | null
           approval_status?: string
           branch_id?: string | null
+          business_day_id?: string | null
           client_number: string
           created_at?: string
           date_of_birth: string
@@ -454,6 +909,7 @@ export type Database = {
           alt_phone_number?: string | null
           approval_status?: string
           branch_id?: string | null
+          business_day_id?: string | null
           client_number?: string
           created_at?: string
           date_of_birth?: string
@@ -499,6 +955,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "clients_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "clients_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
@@ -513,10 +976,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "clients_loan_officer_id_fkey"
+            columns: ["loan_officer_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "clients_registered_by_fkey"
             columns: ["registered_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_registered_by_fkey"
+            columns: ["registered_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
           {
@@ -526,12 +1003,20 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "clients_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
         ]
       }
       expenses: {
         Row: {
           amount: number
           branch_id: string | null
+          business_day_id: string | null
           category: string
           created_at: string
           description: string
@@ -545,6 +1030,7 @@ export type Database = {
         Insert: {
           amount: number
           branch_id?: string | null
+          business_day_id?: string | null
           category: string
           created_at?: string
           description: string
@@ -558,6 +1044,7 @@ export type Database = {
         Update: {
           amount?: number
           branch_id?: string | null
+          business_day_id?: string | null
           category?: string
           created_at?: string
           description?: string
@@ -577,10 +1064,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "expenses_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "expenses_recorded_by_fkey"
             columns: ["recorded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -588,6 +1089,7 @@ export type Database = {
       group_attendance: {
         Row: {
           attendees: string[]
+          business_day_id: string | null
           created_at: string
           group_id: string
           id: string
@@ -597,6 +1099,7 @@ export type Database = {
         }
         Insert: {
           attendees?: string[]
+          business_day_id?: string | null
           created_at?: string
           group_id: string
           id?: string
@@ -606,6 +1109,7 @@ export type Database = {
         }
         Update: {
           attendees?: string[]
+          business_day_id?: string | null
           created_at?: string
           group_id?: string
           id?: string
@@ -614,6 +1118,13 @@ export type Database = {
           recorded_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "group_attendance_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "group_attendance_group_id_fkey"
             columns: ["group_id"]
@@ -626,6 +1137,13 @@ export type Database = {
             columns: ["recorded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_attendance_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -719,6 +1237,7 @@ export type Database = {
       loan_applications: {
         Row: {
           application_number: string
+          business_day_id: string | null
           client_id: string
           client_photo: string | null
           created_at: string
@@ -746,6 +1265,7 @@ export type Database = {
         }
         Insert: {
           application_number: string
+          business_day_id?: string | null
           client_id: string
           client_photo?: string | null
           created_at?: string
@@ -773,6 +1293,7 @@ export type Database = {
         }
         Update: {
           application_number?: string
+          business_day_id?: string | null
           client_id?: string
           client_photo?: string | null
           created_at?: string
@@ -800,6 +1321,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "loan_applications_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "loan_applications_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
@@ -821,10 +1349,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "loan_applications_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "loan_applications_submitted_by_fkey"
             columns: ["submitted_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_applications_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -869,6 +1411,13 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_officers_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -977,6 +1526,7 @@ export type Database = {
       loan_repayments: {
         Row: {
           amount_paid: number
+          business_day_id: string | null
           client_id: string
           collection_type: string
           created_at: string
@@ -993,6 +1543,7 @@ export type Database = {
         }
         Insert: {
           amount_paid: number
+          business_day_id?: string | null
           client_id: string
           collection_type?: string
           created_at?: string
@@ -1009,6 +1560,7 @@ export type Database = {
         }
         Update: {
           amount_paid?: number
+          business_day_id?: string | null
           client_id?: string
           collection_type?: string
           created_at?: string
@@ -1024,6 +1576,13 @@ export type Database = {
           security_amount?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "loan_repayments_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "loan_repayments_client_id_fkey"
             columns: ["client_id"]
@@ -1043,6 +1602,13 @@ export type Database = {
             columns: ["recorded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_repayments_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
           {
@@ -1098,6 +1664,13 @@ export type Database = {
             columns: ["reversed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loan_reversals_reversed_by_fkey"
+            columns: ["reversed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -1183,6 +1756,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "loan_security_returns_processed_by_fkey"
+            columns: ["processed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
         ]
       }
       loans: {
@@ -1191,6 +1771,7 @@ export type Database = {
           approved_by: string | null
           bad_debt_comment: string | null
           bad_debt_declared_at: string | null
+          business_day_id: string | null
           client_id: string
           completion_percentage: number
           crb_fee_amount: number
@@ -1233,6 +1814,7 @@ export type Database = {
           approved_by?: string | null
           bad_debt_comment?: string | null
           bad_debt_declared_at?: string | null
+          business_day_id?: string | null
           client_id: string
           completion_percentage?: number
           crb_fee_amount?: number
@@ -1275,6 +1857,7 @@ export type Database = {
           approved_by?: string | null
           bad_debt_comment?: string | null
           bad_debt_declared_at?: string | null
+          business_day_id?: string | null
           client_id?: string
           completion_percentage?: number
           crb_fee_amount?: number
@@ -1328,6 +1911,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "loans_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "loans_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
@@ -1339,6 +1936,13 @@ export type Database = {
             columns: ["disbursed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_disbursed_by_fkey"
+            columns: ["disbursed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
           {
@@ -1356,10 +1960,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "loans_settled_by_fkey"
+            columns: ["settled_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "loans_writeoff_by_fkey"
             columns: ["writeoff_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_writeoff_by_fkey"
+            columns: ["writeoff_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -1429,6 +2047,13 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "member_fees_collected_by_fkey"
+            columns: ["collected_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notifications: {
@@ -1470,46 +2095,246 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "notifications_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      officer_days: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          branch_id: string
+          business_date: string
+          business_day_id: string
+          created_at: string
+          id: string
+          officer_id: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          started_at: string
+          status: string
+          submitted_at: string | null
+          summary: Json | null
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          branch_id: string
+          business_date: string
+          business_day_id: string
+          created_at?: string
+          id?: string
+          officer_id: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          started_at?: string
+          status?: string
+          submitted_at?: string | null
+          summary?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          branch_id?: string
+          business_date?: string
+          business_day_id?: string
+          created_at?: string
+          id?: string
+          officer_id?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          started_at?: string
+          status?: string
+          submitted_at?: string | null
+          summary?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "officer_days_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_days_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_days_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_days_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_days_officer_id_fkey"
+            columns: ["officer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_days_officer_id_fkey"
+            columns: ["officer_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_days_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "officer_days_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permissions: {
+        Row: {
+          category: string
+          description: string | null
+          key: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          category: string
+          description?: string | null
+          key: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          category?: string
+          description?: string | null
+          key?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
           avatar_url: string | null
           branch_ids: string[]
           created_at: string
+          date_joined: string | null
           email: string
+          failed_login_attempts: number
           full_name: string
           id: string
+          last_login_at: string | null
+          last_password_change_at: string | null
+          must_change_password: boolean
           phone_number: string | null
+          primary_branch_id: string | null
           role: string
+          staff_code: string | null
           status: string
+          status_changed_at: string | null
+          status_changed_by: string | null
+          status_reason: string | null
+          two_factor_enabled: boolean
           updated_at: string
         }
         Insert: {
           avatar_url?: string | null
           branch_ids?: string[]
           created_at?: string
+          date_joined?: string | null
           email: string
+          failed_login_attempts?: number
           full_name: string
           id: string
+          last_login_at?: string | null
+          last_password_change_at?: string | null
+          must_change_password?: boolean
           phone_number?: string | null
+          primary_branch_id?: string | null
           role?: string
+          staff_code?: string | null
           status?: string
+          status_changed_at?: string | null
+          status_changed_by?: string | null
+          status_reason?: string | null
+          two_factor_enabled?: boolean
           updated_at?: string
         }
         Update: {
           avatar_url?: string | null
           branch_ids?: string[]
           created_at?: string
+          date_joined?: string | null
           email?: string
+          failed_login_attempts?: number
           full_name?: string
           id?: string
+          last_login_at?: string | null
+          last_password_change_at?: string | null
+          must_change_password?: boolean
           phone_number?: string | null
+          primary_branch_id?: string | null
           role?: string
+          staff_code?: string | null
           status?: string
+          status_changed_at?: string | null
+          status_changed_by?: string | null
+          status_reason?: string | null
+          two_factor_enabled?: boolean
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_primary_branch_id_fkey"
+            columns: ["primary_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_status_changed_by_fkey"
+            columns: ["status_changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_status_changed_by_fkey"
+            columns: ["status_changed_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reports: {
         Row: {
@@ -1549,6 +2374,42 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_permissions: {
+        Row: {
+          level: string
+          permission_key: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          level?: string
+          permission_key: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          level?: string
+          permission_key?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
           },
         ]
       }
@@ -1629,6 +2490,7 @@ export type Database = {
           account_id: string
           amount: number
           balance_after: number
+          business_day_id: string | null
           created_at: string
           id: string
           notes: string | null
@@ -1642,6 +2504,7 @@ export type Database = {
           account_id: string
           amount: number
           balance_after: number
+          business_day_id?: string | null
           created_at?: string
           id?: string
           notes?: string | null
@@ -1655,6 +2518,7 @@ export type Database = {
           account_id?: string
           amount?: number
           balance_after?: number
+          business_day_id?: string | null
           created_at?: string
           id?: string
           notes?: string | null
@@ -1673,10 +2537,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "savings_transactions_business_day_id_fkey"
+            columns: ["business_day_id"]
+            isOneToOne: false
+            referencedRelation: "business_days"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "savings_transactions_recorded_by_fkey"
             columns: ["recorded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "savings_transactions_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
         ]
@@ -1793,6 +2671,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transfers_actioned_by_fkey"
+            columns: ["actioned_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "transfers_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
@@ -1821,6 +2706,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "transfers_from_officer_id_fkey"
+            columns: ["from_officer_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "transfers_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
@@ -1832,6 +2724,13 @@ export type Database = {
             columns: ["requested_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transfers_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
             referencedColumns: ["id"]
           },
           {
@@ -1855,13 +2754,92 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "transfers_to_officer_id_fkey"
+            columns: ["to_officer_id"]
+            isOneToOne: false
+            referencedRelation: "staff_directory"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      staff_directory: {
+        Row: {
+          avatar_url: string | null
+          branch_ids: string[] | null
+          business_date: string | null
+          business_day_status: string | null
+          created_at: string | null
+          date_joined: string | null
+          email: string | null
+          failed_login_attempts: number | null
+          full_name: string | null
+          id: string | null
+          last_login_at: string | null
+          last_password_change_at: string | null
+          must_change_password: boolean | null
+          officer_day_rejection_reason: string | null
+          officer_day_status: string | null
+          officer_day_submitted_at: string | null
+          phone_number: string | null
+          primary_branch_code: string | null
+          primary_branch_id: string | null
+          primary_branch_name: string | null
+          role: string | null
+          staff_code: string | null
+          status: string | null
+          status_changed_at: string | null
+          status_reason: string | null
+          two_factor_enabled: boolean | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_primary_branch_id_fkey"
+            columns: ["primary_branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      account_email_for_phone: { Args: { _phone: string }; Returns: string }
+      expire_access_requests: { Args: never; Returns: number }
+      log_business_day_audit: {
+        Args: {
+          _action: string
+          _branch_id?: string
+          _business_date?: string
+          _client_info?: string
+          _new_status?: string
+          _previous_status?: string
+          _reason?: string
+          _subject_id?: string
+        }
+        Returns: undefined
+      }
+      my_permissions: {
+        Args: never
+        Returns: {
+          level: string
+          permission_key: string
+        }[]
+      }
+      my_working_state: {
+        Args: never
+        Returns: {
+          business_date: string
+          business_day_status: string
+          can_transact: boolean
+          is_weekend: boolean
+          officer_day_status: string
+          reason: string
+        }[]
+      }
       receive_member_transfer: {
         Args: {
           _to_group_id?: string
@@ -1896,6 +2874,8 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_failed_login: { Args: { _identifier: string }; Returns: undefined }
+      record_successful_login: { Args: never; Returns: undefined }
       reject_member_transfer: {
         Args: { _reason: string; _transfer_id: string }
         Returns: {
@@ -1925,6 +2905,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      server_time: {
+        Args: never
+        Returns: {
+          is_weekend: boolean
+          server_date: string
+          server_now: string
+        }[]
       }
       transfer_group_officer: {
         Args: { _group_id: string; _reason?: string; _to_officer_id: string }

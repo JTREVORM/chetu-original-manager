@@ -6,9 +6,15 @@ export const Route = createFileRoute("/advance-collection")({
   head: () => ({
     meta: [
       { title: "Advance Collection | Chetu Microfinance" },
-      { name: "description", content: "Record advance loan repayments made ahead of the weekly schedule." },
+      {
+        name: "description",
+        content: "Record advance loan repayments made ahead of the weekly schedule.",
+      },
       { property: "og:title", content: "Advance Collection | Chetu Microfinance" },
-      { property: "og:description", content: "Record advance loan repayments made ahead of the weekly schedule." },
+      {
+        property: "og:description",
+        content: "Record advance loan repayments made ahead of the weekly schedule.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

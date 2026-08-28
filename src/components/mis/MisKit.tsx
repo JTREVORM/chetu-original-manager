@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Inbox, SlidersHorizontal } from 'lucide-react';
-import { ScrollArea, TableScroll } from '../common/ScrollArea';
-import { LoaderBlock } from '../common/Loader';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '../../context/AuthContext';
-import { useDatabase } from '../../context/DatabaseContext';
+import React, { useEffect, useMemo, useState } from "react";
+import { Search, Inbox, SlidersHorizontal } from "lucide-react";
+import { ScrollArea, TableScroll } from "../common/ScrollArea";
+import { LoaderBlock } from "../common/Loader";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "../../context/AuthContext";
+import { useDatabase } from "../../context/DatabaseContext";
 
 export const money = (n: number | null | undefined) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -12,13 +12,15 @@ export const money = (n: number | null | undefined) =>
 export const money2 = (n: number | null | undefined) =>
   Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export const todayISO = () => new Date().toISOString().split('T')[0];
+export const todayISO = () => new Date().toISOString().split("T")[0];
 export const monthStartISO = () => {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split("T")[0];
 };
 export const shortDate = (v?: string | null) =>
-  v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  v
+    ? new Date(v).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
 
 export interface OfficerRow {
   id: string;
@@ -32,24 +34,24 @@ export function useMisScope() {
   const { branches, clientGroups, dataVersion } = useDatabase();
   const { user, role } = useAuth();
 
-  const isLoanOfficer = role === 'Loan Officer';
-  const isBranchManager = role === 'Branch Manager';
-  const isAdmin = role === 'Administrator';
-  const isAuditor = role === 'Auditor';
+  const isLoanOfficer = role === "Loan Officer";
+  const isBranchManager = role === "Branch Manager";
+  const isAdmin = role === "Administrator";
+  const isAuditor = role === "Auditor";
 
   const branchLocked = isBranchManager || isLoanOfficer;
   const officerLocked = isLoanOfficer;
 
   const myBranches = user?.branch_ids ?? [];
-  const myBranchKey = myBranches.join(',');
+  const myBranchKey = myBranches.join(",");
 
   const [officers, setOfficers] = useState<OfficerRow[]>([]);
-  const [branchId, setBranchId] = useState('');
-  const [officerId, setOfficerId] = useState(isLoanOfficer ? user?.id || '' : '');
-  const [groupId, setGroupId] = useState('');
+  const [branchId, setBranchId] = useState("");
+  const [officerId, setOfficerId] = useState(isLoanOfficer ? user?.id || "" : "");
+  const [groupId, setGroupId] = useState("");
 
   const activeBranches = useMemo(() => {
-    const list = branches.filter((b) => b.status === 'Active');
+    const list = branches.filter((b) => b.status === "Active");
     if (isAdmin || isAuditor) return list;
     return myBranches.length ? list.filter((b) => myBranches.includes(b.id)) : list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -59,11 +61,12 @@ export function useMisScope() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
-        .from('profiles')
-        .select('id, full_name, branch_ids, status')
-        .eq('role', 'Loan Officer')
-        .order('full_name');
-      if (!cancelled) setOfficers(((data || []) as OfficerRow[]).filter((o) => o.status === 'Active'));
+        .from("profiles")
+        .select("id, full_name, branch_ids, status")
+        .eq("role", "Loan Officer")
+        .order("full_name");
+      if (!cancelled)
+        setOfficers(((data || []) as OfficerRow[]).filter((o) => o.status === "Active"));
     })();
     return () => {
       cancelled = true;
@@ -71,7 +74,7 @@ export function useMisScope() {
   }, [dataVersion]);
 
   useEffect(() => {
-    if (branchLocked) setBranchId((prev) => prev || myBranches[0] || activeBranches[0]?.id || '');
+    if (branchLocked) setBranchId((prev) => prev || myBranches[0] || activeBranches[0]?.id || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchLocked, myBranchKey, activeBranches.length]);
 
@@ -88,8 +91,8 @@ export function useMisScope() {
     () =>
       clientGroups.filter(
         (g) =>
-          g.status === 'Active' &&
-          g.approval_status === 'Approved' &&
+          g.status === "Active" &&
+          g.approval_status === "Approved" &&
           (!branchId || g.branch_id === branchId) &&
           (isLoanOfficer
             ? g.loan_officer_id === user?.id
@@ -98,8 +101,8 @@ export function useMisScope() {
     [clientGroups, branchId, officerId, isLoanOfficer, user?.id],
   );
 
-  const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.branch_name || '—';
-  const officerName = (id?: string | null) => officers.find((o) => o.id === id)?.full_name || '—';
+  const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.branch_name || "—";
+  const officerName = (id?: string | null) => officers.find((o) => o.id === id)?.full_name || "—";
 
   return {
     user,
@@ -124,7 +127,7 @@ export function useMisScope() {
     branchName,
     officerName,
     lockedBranchName: branchName(branchId),
-    lockedOfficerName: user?.full_name || '—',
+    lockedOfficerName: user?.full_name || "—",
   };
 }
 
@@ -133,9 +136,14 @@ export function useMisScope() {
  * white filter card rather than above it, so `MisFilters` renders its own copy
  * and this one hides itself there; the export buttons stay visible on both.
  */
-export const MisPageTitle: React.FC<{ children: React.ReactNode; right?: React.ReactNode }> = ({ children, right }) => (
+export const MisPageTitle: React.FC<{ children: React.ReactNode; right?: React.ReactNode }> = ({
+  children,
+  right,
+}) => (
   <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-    <h1 className="hidden min-w-0 truncate text-lg font-bold text-slate-900 md:block md:text-xl">{children}</h1>
+    <h1 className="hidden min-w-0 truncate text-lg font-bold text-slate-900 md:block md:text-xl">
+      {children}
+    </h1>
     <span className="md:hidden" />
     {right && <div className="col-start-2 shrink-0">{right}</div>}
   </div>
@@ -144,7 +152,7 @@ export const MisPageTitle: React.FC<{ children: React.ReactNode; right?: React.R
 export const Field: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({
   label,
   children,
-  className = '',
+  className = "",
 }) => (
   <div className={className}>
     <label className="form-label">{label}</label>
@@ -152,7 +160,10 @@ export const Field: React.FC<{ label: string; children: React.ReactNode; classNa
   </div>
 );
 
-export const SearchButton: React.FC<{ onClick: () => void; label?: string }> = ({ onClick, label = 'Search' }) => (
+export const SearchButton: React.FC<{ onClick: () => void; label?: string }> = ({
+  onClick,
+  label = "Search",
+}) => (
   <button
     type="button"
     onClick={onClick}
@@ -165,10 +176,10 @@ export const SearchButton: React.FC<{ onClick: () => void; label?: string }> = (
 
 /** Filter panel: responsive grid of controls + optional wide search input row. */
 const COL_CLASS: Record<number, string> = {
-  3: 'lg:grid-cols-3',
-  4: 'lg:grid-cols-4',
-  5: 'lg:grid-cols-5',
-  6: 'lg:grid-cols-6',
+  3: "lg:grid-cols-3",
+  4: "lg:grid-cols-4",
+  5: "lg:grid-cols-5",
+  6: "lg:grid-cols-6",
 };
 
 /** Filter panel: responsive grid of controls + optional wide search input row. */
@@ -184,16 +195,18 @@ export const MisFilters: React.FC<{
 }> = ({ children, cols = 4, title, searchValue, onSearchChange, searchPlaceholder, onSubmit }) => (
   <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-xs sm:p-4">
     {title && <h1 className="mb-4 text-2xl font-bold text-slate-900 md:hidden">{title}</h1>}
-    <div className={`grid grid-cols-1 items-end gap-x-4 gap-y-3 sm:grid-cols-2 ${COL_CLASS[cols] || 'lg:grid-cols-4'}`}>
+    <div
+      className={`grid grid-cols-1 items-end gap-x-4 gap-y-3 sm:grid-cols-2 ${COL_CLASS[cols] || "lg:grid-cols-4"}`}
+    >
       {children}
     </div>
     {onSearchChange && (
       <div className="mt-3 flex items-center gap-2">
         <input
-          value={searchValue || ''}
+          value={searchValue || ""}
           onChange={(e) => onSearchChange(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && onSubmit?.()}
-          placeholder={searchPlaceholder || 'Search…'}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit?.()}
+          placeholder={searchPlaceholder || "Search…"}
           className="form-field flex-1"
         />
         <button
@@ -212,8 +225,14 @@ export const MisFilters: React.FC<{
 export interface MisColumn<T> {
   key: string;
   label: string;
+  /**
+   * Replaces `label` in the desktop header cell only — for a header that needs
+   * to be interactive, such as a sort control. The mobile card and the action
+   * detection both keep using the plain `label`.
+   */
+  header?: React.ReactNode;
   width?: string;
-  align?: 'left' | 'right' | 'center';
+  align?: "left" | "right" | "center";
   render: (row: T) => React.ReactNode;
   /** plain text used for the truncation tooltip and mobile card value */
   text?: (row: T) => string;
@@ -225,9 +244,9 @@ export interface MisColumn<T> {
   isAction?: boolean;
 }
 
-const ACTION_KEYS = new Set(['act', 'action', 'actions', 'pick']);
+const ACTION_KEYS = new Set(["act", "action", "actions", "pick"]);
 const isActionColumn = <T,>(c: MisColumn<T>) =>
-  c.isAction ?? (ACTION_KEYS.has(c.key) || c.label === 'Action' || c.label === '');
+  c.isAction ?? (ACTION_KEYS.has(c.key) || c.label === "Action" || c.label === "");
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -238,8 +257,8 @@ export function MisTable<T>({
   rowKey,
   loading,
   hasSearched = true,
-  emptyMessage = 'No details found!',
-  idleMessage = 'Choose your filters and press Search.',
+  emptyMessage = "No details found!",
+  idleMessage = "Choose your filters and press Search.",
   mobileTitle,
   mobileSubtitle,
   footer,
@@ -275,7 +294,9 @@ export function MisTable<T>({
   const [page, setPage] = useState(1);
 
   // A new result set always starts at the first page.
-  useEffect(() => { setPage(1); }, [rows.length]);
+  useEffect(() => {
+    setPage(1);
+  }, [rows.length]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const safePage = Math.min(page, pageCount);
@@ -292,7 +313,8 @@ export function MisTable<T>({
   // column to fit its (nowrap) content, using the declared width only as a
   // floor, and lets the table grow past its card — which is what the
   // horizontal-scroll wrapper below is for.
-  const colMinWidth = (w?: string) => (w ? `${Math.round((parseFloat(w) || 0) * 12)}px` : undefined);
+  const colMinWidth = (w?: string) =>
+    w ? `${Math.round((parseFloat(w) || 0) * 12)}px` : undefined;
 
   return (
     <>
@@ -314,9 +336,9 @@ export function MisTable<T>({
                   <th
                     key={c.key}
                     style={{ minWidth: colMinWidth(c.width) }}
-                    className={`px-2 py-2.5 ${c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : ''}`}
+                    className={`px-2 py-2.5 ${c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : ""}`}
                   >
-                    {c.label}
+                    {c.header ?? c.label}
                   </th>
                 ))}
               </tr>
@@ -346,7 +368,11 @@ export function MisTable<T>({
                         title={c.text ? c.text(row) : undefined}
                         style={{ minWidth: colMinWidth(c.width) }}
                         className={`px-2 py-2.5 text-slate-700 ${
-                          c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : ''
+                          c.align === "right"
+                            ? "text-right"
+                            : c.align === "center"
+                              ? "text-center"
+                              : ""
                         }`}
                       >
                         {c.render(row)}
@@ -358,7 +384,10 @@ export function MisTable<T>({
             {!loading && rows.length > 0 && footer && (
               <tfoot>
                 <tr>
-                  <td colSpan={columns.length} className="border-t border-slate-200 bg-slate-50/60 p-0">
+                  <td
+                    colSpan={columns.length}
+                    className="border-t border-slate-200 bg-slate-50/60 p-0"
+                  >
                     {footer}
                   </td>
                 </tr>
@@ -382,7 +411,9 @@ export function MisTable<T>({
         {(showIdle || showEmpty) && (
           <div className="rounded-lg bg-white p-8 text-center">
             <Inbox className="mx-auto mb-2 h-6 w-6 text-slate-300" />
-            <p className="text-sm font-bold text-slate-600">{showIdle ? 'No results yet' : emptyMessage}</p>
+            <p className="text-sm font-bold text-slate-600">
+              {showIdle ? "No results yet" : emptyMessage}
+            </p>
             {showIdle && <p className="mt-1 text-xs text-slate-400">{idleMessage}</p>}
           </div>
         )}
@@ -404,52 +435,56 @@ export function MisTable<T>({
               )}
             </div>
           ))}
-
       </div>
 
       {/* Pagination applies to both views, so it sits outside the mobile block. */}
       {!loading && rows.length > 0 && (
         <div className="space-y-2 pt-1 text-center">
-            <div className="flex items-center justify-center gap-2 text-[13px] text-slate-700">
-              <span>Show:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                className="rounded border border-slate-300 bg-white px-2 py-1.5 text-[13px]"
-                aria-label="Rows per page"
+          <div className="flex items-center justify-center gap-2 text-[13px] text-slate-700">
+            <span>Show:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              className="rounded border border-slate-300 bg-white px-2 py-1.5 text-[13px]"
+              aria-label="Rows per page"
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span>entries</span>
+          </div>
+          <p className="text-[13px] text-slate-600">
+            Showing {firstShown} to {lastShown} of {rows.length} entries
+          </p>
+          {pageCount > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 disabled:opacity-40"
               >
-                {PAGE_SIZES.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-              <span>entries</span>
+                Prev
+              </button>
+              <span className="text-[13px] text-slate-600">
+                Page {page} of {pageCount}
+              </span>
+              <button
+                type="button"
+                disabled={page >= pageCount}
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                className="rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 disabled:opacity-40"
+              >
+                Next
+              </button>
             </div>
-            <p className="text-[13px] text-slate-600">
-              Showing {firstShown} to {lastShown} of {rows.length} entries
-            </p>
-            {pageCount > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-1">
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 disabled:opacity-40"
-                >
-                  Prev
-                </button>
-                <span className="text-[13px] text-slate-600">
-                  Page {page} of {pageCount}
-                </span>
-                <button
-                  type="button"
-                  disabled={page >= pageCount}
-                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  className="rounded border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            )}
+          )}
         </div>
       )}
     </>
@@ -465,7 +500,7 @@ export const MisDataCard: React.FC<{
   rows: { label: string; value: React.ReactNode }[];
   footer?: React.ReactNode;
   className?: string;
-}> = ({ rows, footer, className = '' }) => (
+}> = ({ rows, footer, className = "" }) => (
   <div className={`rounded-lg bg-[#eaf1f8] px-4 py-3 ${className}`}>
     {rows.map((r) => (
       <p key={r.label} className="py-[3px] text-[13px] leading-snug text-slate-900">
@@ -484,7 +519,7 @@ export const MisModal: React.FC<{
   title: string;
   children: React.ReactNode;
   width?: string;
-}> = ({ open, onClose, title, children, width = 'max-w-3xl' }) => {
+}> = ({ open, onClose, title, children, width = "max-w-3xl" }) => {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-3 sm:p-6">
@@ -513,15 +548,15 @@ export const MisModal: React.FC<{
 export const ActionButton: React.FC<{
   onClick: () => void;
   title: string;
-  tone?: 'blue' | 'amber' | 'green' | 'navy' | 'red';
+  tone?: "blue" | "amber" | "green" | "navy" | "red";
   children: React.ReactNode;
-}> = ({ onClick, title, tone = 'blue', children }) => {
+}> = ({ onClick, title, tone = "blue", children }) => {
   const tones: Record<string, string> = {
-    blue: 'bg-sky-500 hover:bg-sky-600',
-    amber: 'bg-amber-500 hover:bg-amber-600',
-    green: 'bg-emerald-500 hover:bg-emerald-600',
-    navy: 'bg-[#0B4394] hover:bg-[#093672]',
-    red: 'bg-chetu-red hover:opacity-90',
+    blue: "bg-sky-500 hover:bg-sky-600",
+    amber: "bg-amber-500 hover:bg-amber-600",
+    green: "bg-emerald-500 hover:bg-emerald-600",
+    navy: "bg-[#0B4394] hover:bg-[#093672]",
+    red: "bg-chetu-red hover:opacity-90",
   };
   // Touch-sized on mobile, matching the original's button strip; compact in the
   // desktop table where the rows are dense.
@@ -553,8 +588,8 @@ export const ScopeFields: React.FC<{
           value={scope.branchId}
           onChange={(e) => {
             scope.setBranchId(e.target.value);
-            scope.setOfficerId('');
-            scope.setGroupId('');
+            scope.setOfficerId("");
+            scope.setGroupId("");
           }}
           className="form-field"
         >
@@ -576,7 +611,7 @@ export const ScopeFields: React.FC<{
           value={scope.officerId}
           onChange={(e) => {
             scope.setOfficerId(e.target.value);
-            scope.setGroupId('');
+            scope.setGroupId("");
           }}
           className="form-field"
         >
@@ -592,7 +627,11 @@ export const ScopeFields: React.FC<{
 
     {withGroup && (
       <Field label="Select Group">
-        <select value={scope.groupId} onChange={(e) => scope.setGroupId(e.target.value)} className="form-field">
+        <select
+          value={scope.groupId}
+          onChange={(e) => scope.setGroupId(e.target.value)}
+          className="form-field"
+        >
           <option value="">-- Select --</option>
           {scope.groupOptions.map((g) => (
             <option key={g.id} value={g.id}>

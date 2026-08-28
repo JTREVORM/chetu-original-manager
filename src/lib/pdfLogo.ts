@@ -24,22 +24,22 @@ export function loadPdfLogo(): Promise<PdfLogo | null> {
           const height = img.naturalHeight || img.height || 100;
           // Oversample for crisp print output at whatever mm size the PDF places it.
           const scale = 3;
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           canvas.width = width * scale;
           canvas.height = height * scale;
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext("2d");
           if (!ctx) {
             resolve(null);
             return;
           }
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve({ dataUrl: canvas.toDataURL('image/png'), width, height });
+          resolve({ dataUrl: canvas.toDataURL("image/png"), width, height });
         } catch {
           resolve(null);
         }
       };
       img.onerror = () => resolve(null);
-      img.src = '/logo.svg';
+      img.src = "/logo.svg";
     } catch {
       resolve(null);
     }

@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { Undo2 } from 'lucide-react';
-import { useDatabase } from '../context/DatabaseContext';
-import { useNotifications } from '../context/NotificationContext';
-import type { Client, Loan, LoanRepayment } from '../types/database.types';
+import React, { useMemo, useState } from "react";
+import { Undo2 } from "lucide-react";
+import { useDatabase } from "../context/DatabaseContext";
+import { useNotifications } from "../context/NotificationContext";
+import type { Client, Loan, LoanRepayment } from "../types/database.types";
 import {
   ActionButton,
   Field,
@@ -16,10 +16,10 @@ import {
   shortDate,
   useMisScope,
   type MisColumn,
-} from '../components/mis/MisKit';
-import { ReportExportButtons } from '../components/mis/ReportExport';
+} from "../components/mis/MisKit";
+import { ReportExportButtons } from "../components/mis/ReportExport";
 
-type Tab = 'disbursement' | 'repayment';
+type Tab = "disbursement" | "repayment";
 
 interface DisbursementRow {
   loan: Loan;
@@ -50,17 +50,30 @@ interface ReceiptRow {
  */
 export const LoanRollback: React.FC = () => {
   const scope = useMisScope();
-  const { loans, clients, clientGroups, repayments, undoDisbursement, undoRepayment } = useDatabase();
+  const { loans, clients, clientGroups, repayments, undoDisbursement, undoRepayment } =
+    useDatabase();
   const { addToast } = useNotifications();
 
   const canUndo = scope.isAdmin;
 
-  const [tab, setTab] = useState<Tab>('disbursement');
-  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<Tab>("disbursement");
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const [applied, setApplied] = useState({ branchId: '', officerId: '', groupId: '', search: '', tab: 'disbursement' as Tab });
-  const [target, setTarget] = useState<{ kind: Tab; id: string; label: string; detail: string; amount: number } | null>(null);
-  const [reason, setReason] = useState('');
+  const [applied, setApplied] = useState({
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    search: "",
+    tab: "disbursement" as Tab,
+  });
+  const [target, setTarget] = useState<{
+    kind: Tab;
+    id: string;
+    label: string;
+    detail: string;
+    amount: number;
+  } | null>(null);
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
   const clientById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
@@ -69,13 +82,13 @@ export const LoanRollback: React.FC = () => {
 
   const describe = (client: Client) => {
     const group = client.group_id ? groupById.get(client.group_id) : undefined;
-    const officerId = client.loan_officer_id || group?.loan_officer_id || '';
+    const officerId = client.loan_officer_id || group?.loan_officer_id || "";
     return {
-      group_name: group?.group_name || '—',
+      group_name: group?.group_name || "—",
       branch_name: scope.branchName(client.branch_id),
       officer_id: officerId,
-      group_id: group?.id || '',
-      branch_id: client.branch_id || '',
+      group_id: group?.id || "",
+      branch_id: client.branch_id || "",
     };
   };
 
@@ -84,7 +97,7 @@ export const LoanRollback: React.FC = () => {
   const disbursementRows = useMemo(() => {
     const paidLoanIds = new Set(repayments.map((r) => r.loan_id));
     return loans
-      .filter((l) => l.status === 'Active' && !paidLoanIds.has(l.id))
+      .filter((l) => l.status === "Active" && !paidLoanIds.has(l.id))
       .map<DisbursementRow | null>((loan) => {
         const client = clientById.get(loan.client_id);
         if (!client) return null;
@@ -109,7 +122,10 @@ export const LoanRollback: React.FC = () => {
     [repayments, loanById, clientById, groupById, scope.officers, scope.activeBranches],
   );
 
-  const matchesScope = (row: { officer_id: string; group_id: string; branch_id: string }, haystack: string) => {
+  const matchesScope = (
+    row: { officer_id: string; group_id: string; branch_id: string },
+    haystack: string,
+  ) => {
     const q = applied.search.trim().toLowerCase();
     if (applied.branchId && row.branch_id !== applied.branchId) return false;
     if (applied.officerId && row.officer_id !== applied.officerId) return false;
@@ -121,7 +137,10 @@ export const LoanRollback: React.FC = () => {
   const filteredDisbursements = useMemo(
     () =>
       disbursementRows.filter((r) =>
-        matchesScope(r, `${r.group_name} ${r.client.full_name} ${r.client.client_number} ${r.loan.loan_number}`),
+        matchesScope(
+          r,
+          `${r.group_name} ${r.client.full_name} ${r.client.client_number} ${r.loan.loan_number}`,
+        ),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [disbursementRows, applied],
@@ -141,64 +160,113 @@ export const LoanRollback: React.FC = () => {
 
   const runSearch = () => {
     setHasSearched(true);
-    setApplied({ branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId, search, tab });
+    setApplied({
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+      tab,
+    });
   };
 
   const confirmUndo = async () => {
     if (!target) return;
     if (!reason.trim()) {
-      addToast('warning', 'Reason required', 'Say why this transaction is being reversed.');
+      addToast("warning", "Reason required", "Say why this transaction is being reversed.");
       return;
     }
     setBusy(true);
     try {
-      if (target.kind === 'disbursement') {
+      if (target.kind === "disbursement") {
         await undoDisbursement(target.id, reason.trim());
-        addToast('success', 'Disbursement rolled back', `${target.label} is back in the disbursement queue.`);
+        addToast(
+          "success",
+          "Disbursement rolled back",
+          `${target.label} is back in the disbursement queue.`,
+        );
       } else {
         await undoRepayment(target.id, reason.trim());
-        addToast('success', 'Receipt reversed', `${target.label} has been reversed.`);
+        addToast("success", "Receipt reversed", `${target.label} has been reversed.`);
       }
       setTarget(null);
-      setReason('');
+      setReason("");
     } catch (error) {
-      addToast('error', 'Rollback failed', error instanceof Error ? error.message : 'Please try again.');
+      addToast(
+        "error",
+        "Rollback failed",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     } finally {
       setBusy(false);
     }
   };
 
   const disbursementColumns: MisColumn<DisbursementRow>[] = [
-    { key: 'branch', label: 'Branch', width: '11%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'group', label: 'Group Name', width: '12%', render: (r) => r.group_name, text: (r) => r.group_name },
-    { key: 'mcode', label: 'Member Code', width: '11%', render: (r) => r.client.client_number, text: (r) => r.client.client_number },
     {
-      key: 'mname',
-      label: 'Member Name',
-      width: '15%',
+      key: "branch",
+      label: "Branch",
+      width: "11%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "group",
+      label: "Group Name",
+      width: "12%",
+      render: (r) => r.group_name,
+      text: (r) => r.group_name,
+    },
+    {
+      key: "mcode",
+      label: "Member Code",
+      width: "11%",
+      render: (r) => r.client.client_number,
+      text: (r) => r.client.client_number,
+    },
+    {
+      key: "mname",
+      label: "Member Name",
+      width: "15%",
       render: (r) => <span className="font-semibold text-slate-900">{r.client.full_name}</span>,
       text: (r) => r.client.full_name,
     },
-    { key: 'loan', label: 'Loan No', width: '13%', render: (r) => r.loan.loan_number, text: (r) => r.loan.loan_number },
-    { key: 'amt', label: 'Principal', width: '11%', align: 'right', render: (r) => money(r.loan.principal_amount) },
-    { key: 'on', label: 'Disbursed On', width: '11%', render: (r) => shortDate(r.loan.disbursed_at) },
     {
-      key: 'act',
-      label: 'Action',
-      width: '6%',
-      align: 'center',
+      key: "loan",
+      label: "Loan No",
+      width: "13%",
+      render: (r) => r.loan.loan_number,
+      text: (r) => r.loan.loan_number,
+    },
+    {
+      key: "amt",
+      label: "Principal",
+      width: "11%",
+      align: "right",
+      render: (r) => money(r.loan.principal_amount),
+    },
+    {
+      key: "on",
+      label: "Disbursed On",
+      width: "11%",
+      render: (r) => shortDate(r.loan.disbursed_at),
+    },
+    {
+      key: "act",
+      label: "Action",
+      width: "6%",
+      align: "center",
       render: (r) =>
         canUndo ? (
           <ActionButton
             onClick={() => {
               setTarget({
-                kind: 'disbursement',
+                kind: "disbursement",
                 id: r.loan.id,
                 label: r.loan.loan_number,
                 detail: `${r.client.full_name} • disbursed ${shortDate(r.loan.disbursed_at)}`,
                 amount: Number(r.loan.principal_amount),
               });
-              setReason('');
+              setReason("");
             }}
             title="Undo this disbursement"
             tone="amber"
@@ -212,37 +280,77 @@ export const LoanRollback: React.FC = () => {
   ];
 
   const receiptColumns: MisColumn<ReceiptRow>[] = [
-    { key: 'branch', label: 'Branch', width: '10%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'group', label: 'Group Name', width: '11%', render: (r) => r.group_name, text: (r) => r.group_name },
     {
-      key: 'mname',
-      label: 'Member Name',
-      width: '14%',
+      key: "branch",
+      label: "Branch",
+      width: "10%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "group",
+      label: "Group Name",
+      width: "11%",
+      render: (r) => r.group_name,
+      text: (r) => r.group_name,
+    },
+    {
+      key: "mname",
+      label: "Member Name",
+      width: "14%",
       render: (r) => <span className="font-semibold text-slate-900">{r.client.full_name}</span>,
       text: (r) => r.client.full_name,
     },
-    { key: 'loan', label: 'Loan No', width: '12%', render: (r) => r.loan.loan_number, text: (r) => r.loan.loan_number },
-    { key: 'rcpt', label: 'Receipt No', width: '13%', render: (r) => r.repayment.receipt_number, text: (r) => r.repayment.receipt_number },
-    { key: 'type', label: 'Type', width: '9%', render: (r) => r.repayment.collection_type || 'Regular' },
-    { key: 'amt', label: 'Amount', width: '10%', align: 'right', render: (r) => money(r.repayment.amount_paid) },
-    { key: 'on', label: 'Paid On', width: '9%', render: (r) => shortDate(r.repayment.payment_date) },
     {
-      key: 'act',
-      label: 'Action',
-      width: '6%',
-      align: 'center',
+      key: "loan",
+      label: "Loan No",
+      width: "12%",
+      render: (r) => r.loan.loan_number,
+      text: (r) => r.loan.loan_number,
+    },
+    {
+      key: "rcpt",
+      label: "Receipt No",
+      width: "13%",
+      render: (r) => r.repayment.receipt_number,
+      text: (r) => r.repayment.receipt_number,
+    },
+    {
+      key: "type",
+      label: "Type",
+      width: "9%",
+      render: (r) => r.repayment.collection_type || "Regular",
+    },
+    {
+      key: "amt",
+      label: "Amount",
+      width: "10%",
+      align: "right",
+      render: (r) => money(r.repayment.amount_paid),
+    },
+    {
+      key: "on",
+      label: "Paid On",
+      width: "9%",
+      render: (r) => shortDate(r.repayment.payment_date),
+    },
+    {
+      key: "act",
+      label: "Action",
+      width: "6%",
+      align: "center",
       render: (r) =>
         canUndo ? (
           <ActionButton
             onClick={() => {
               setTarget({
-                kind: 'repayment',
+                kind: "repayment",
                 id: r.repayment.id,
                 label: r.repayment.receipt_number,
                 detail: `${r.client.full_name} • loan ${r.loan.loan_number} • paid ${shortDate(r.repayment.payment_date)}`,
                 amount: Number(r.repayment.amount_paid),
               });
-              setReason('');
+              setReason("");
             }}
             title="Reverse this receipt"
             tone="amber"
@@ -255,14 +363,18 @@ export const LoanRollback: React.FC = () => {
     },
   ];
 
-  const showingReceipts = applied.tab === 'repayment';
+  const showingReceipts = applied.tab === "repayment";
 
   return (
     <div className="space-y-4 pb-16">
       <MisPageTitle
         right={
           showingReceipts ? (
-            <ReportExportButtons title="Loan Rollback - Receipts" columns={receiptColumns} rows={filteredReceipts} />
+            <ReportExportButtons
+              title="Loan Rollback - Receipts"
+              columns={receiptColumns}
+              rows={filteredReceipts}
+            />
           ) : (
             <ReportExportButtons
               title="Loan Rollback - Disbursements"
@@ -277,7 +389,8 @@ export const LoanRollback: React.FC = () => {
 
       {!canUndo && (
         <p className="rounded border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-500">
-          Reversing a disbursement or a receipt is an Administrator action. You can review the transactions here.
+          Reversing a disbursement or a receipt is an Administrator action. You can review the
+          transactions here.
         </p>
       )}
 
@@ -291,7 +404,11 @@ export const LoanRollback: React.FC = () => {
       >
         <ScopeFields scope={scope} />
         <Field label="Transaction">
-          <select value={tab} onChange={(e) => setTab(e.target.value as Tab)} className="form-field">
+          <select
+            value={tab}
+            onChange={(e) => setTab(e.target.value as Tab)}
+            className="form-field"
+          >
             <option value="disbursement">Undo Disbursement</option>
             <option value="repayment">Undo Repayment / Settlement</option>
           </select>
@@ -308,7 +425,9 @@ export const LoanRollback: React.FC = () => {
           emptyMessage="No receipts found."
           idleMessage="Choose your filters and press Search."
           mobileTitle={(r) => r.client.full_name}
-          mobileSubtitle={(r) => `${r.repayment.receipt_number} • ${money(r.repayment.amount_paid)}`}
+          mobileSubtitle={(r) =>
+            `${r.repayment.receipt_number} • ${money(r.repayment.amount_paid)}`
+          }
         />
       ) : (
         <MisTable
@@ -326,7 +445,7 @@ export const LoanRollback: React.FC = () => {
       <MisModal
         open={!!target}
         onClose={() => setTarget(null)}
-        title={target?.kind === 'repayment' ? 'Reverse Receipt' : 'Undo Disbursement'}
+        title={target?.kind === "repayment" ? "Reverse Receipt" : "Undo Disbursement"}
         width="max-w-md"
       >
         {target && (
@@ -343,22 +462,26 @@ export const LoanRollback: React.FC = () => {
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder={
-                  target.kind === 'repayment'
-                    ? 'Receipt captured against the wrong member, duplicate entry…'
-                    : 'Cash was never handed over, wrong loan disbursed…'
+                  target.kind === "repayment"
+                    ? "Receipt captured against the wrong member, duplicate entry…"
+                    : "Cash was never handed over, wrong loan disbursed…"
                 }
                 className="form-field resize-none"
               />
             </Field>
 
             <p className="rounded border border-amber-200 bg-amber-50 p-2.5 text-amber-800">
-              {target.kind === 'repayment'
-                ? 'The receipt is deleted and the repayment schedule is rebuilt from the receipts that remain.'
-                : 'The loan returns to the disbursement queue and the cash withdrawal is reversed with a matching deposit in the branch ledger.'}
+              {target.kind === "repayment"
+                ? "The receipt is deleted and the repayment schedule is rebuilt from the receipts that remain."
+                : "The loan returns to the disbursement queue and the cash withdrawal is reversed with a matching deposit in the branch ledger."}
             </p>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-3 sm:flex-row sm:justify-end">
-              <button type="button" onClick={() => setTarget(null)} className="rounded bg-slate-100 px-4 py-2 font-bold text-slate-700">
+              <button
+                type="button"
+                onClick={() => setTarget(null)}
+                className="rounded bg-slate-100 px-4 py-2 font-bold text-slate-700"
+              >
                 Cancel
               </button>
               <button
@@ -367,7 +490,7 @@ export const LoanRollback: React.FC = () => {
                 onClick={confirmUndo}
                 className="rounded bg-amber-600 px-5 py-2 font-bold text-white hover:bg-amber-700 disabled:opacity-50"
               >
-                {busy ? 'Reversing…' : 'Confirm Rollback'}
+                {busy ? "Reversing…" : "Confirm Rollback"}
               </button>
             </div>
           </div>

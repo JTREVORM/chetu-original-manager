@@ -1,7 +1,7 @@
-import React from 'react';
-import { CalendarDays, X } from 'lucide-react';
-import { useBusinessDay } from '../../lib/businessDay';
-import { ScrollArea } from '../common/ScrollArea';
+import React from "react";
+import { CalendarDays, X } from "lucide-react";
+import { useBusinessDay } from "../../lib/businessDay";
+import { ScrollArea } from "../common/ScrollArea";
 
 interface BusinessDayModalProps {
   isOpen: boolean;
@@ -31,7 +31,7 @@ export const BusinessDayModal: React.FC<BusinessDayModalProps> = ({ isOpen, onCl
         <ScrollArea axis="y" className="min-h-0 flex-1 p-6 space-y-3" ariaLabel="Business day">
           <div
             className={`flex items-center justify-between p-4 rounded-xl border ${
-              isBusinessOpen ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'
+              isBusinessOpen ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"
             }`}
           >
             <div>
@@ -39,7 +39,7 @@ export const BusinessDayModal: React.FC<BusinessDayModalProps> = ({ isOpen, onCl
               <p className="text-[11px] font-semibold text-slate-500 mt-0.5">{dateLabel}</p>
             </div>
             <span
-              className={`text-xs font-black uppercase ${isBusinessOpen ? 'text-emerald-600' : 'text-chetu-red'}`}
+              className={`text-xs font-black uppercase ${isBusinessOpen ? "text-emerald-600" : "text-chetu-red"}`}
             >
               {statusLabel}
             </span>

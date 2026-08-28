@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 /**
  * The Uganda flag.
@@ -11,7 +11,7 @@ import React, { useState } from 'react';
  * To use the photo, save it as `public/uganda-flag.jpg`; nothing else needs to
  * change.
  */
-const FLAG_SRC = '/uganda-flag.jpg';
+const FLAG_SRC = "/uganda-flag.jpg";
 
 export const UgandaFlag: React.FC<{ className?: string }> = ({ className }) => {
   const [usePhoto, setUsePhoto] = useState(true);
@@ -24,7 +24,7 @@ export const UgandaFlag: React.FC<{ className?: string }> = ({ className }) => {
         role="presentation"
         // object-cover keeps the flag's proportions inside the header's small
         // box rather than squashing the bands.
-        className={`object-cover ${className || ''}`}
+        className={`object-cover ${className || ""}`}
         onError={() => setUsePhoto(false)}
       />
     );
@@ -33,7 +33,13 @@ export const UgandaFlag: React.FC<{ className?: string }> = ({ className }) => {
   // Fallback: six bands, black / yellow / red repeated, with the white disc.
   // The crested crane is omitted — at header size it would be a smudge.
   return (
-    <svg viewBox="0 0 36 24" className={className} role="presentation" focusable="false" preserveAspectRatio="none">
+    <svg
+      viewBox="0 0 36 24"
+      className={className}
+      role="presentation"
+      focusable="false"
+      preserveAspectRatio="none"
+    >
       <rect width="36" height="4" y="0" fill="#000000" />
       <rect width="36" height="4" y="4" fill="#FCDC04" />
       <rect width="36" height="4" y="8" fill="#D90000" />

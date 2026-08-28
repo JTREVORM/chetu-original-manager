@@ -1,39 +1,42 @@
-export type UserRole = 'Administrator' | 'Branch Manager' | 'Loan Officer' | 'Auditor';
+export type UserRole = "Administrator" | "Branch Manager" | "Loan Officer" | "Auditor";
 
-export type ClientStatus = 'Active' | 'Inactive' | 'Blacklisted';
-export type ClientApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
-export type ApplicationStatus = 'Pending' | 'Approved' | 'Rejected' | 'Disbursed';
+export type ClientStatus = "Active" | "Inactive" | "Blacklisted";
+export type ClientApprovalStatus = "Pending" | "Approved" | "Rejected";
+export type ApplicationStatus = "Pending" | "Approved" | "Rejected" | "Disbursed";
 export type LoanStatus =
-  | 'Pending'
-  | 'Active'
-  | 'Partially Paid'
-  | 'Fully Paid'
-  | 'Overdue'
-  | 'Defaulted'
-  | 'Settled'
-  | 'Written Off';
+  | "Pending"
+  | "Active"
+  | "Partially Paid"
+  | "Fully Paid"
+  | "Overdue"
+  | "Defaulted"
+  | "Settled"
+  | "Written Off";
 
 /** Terminal states — a loan in one of these is closed and cannot take collections. */
-export const CLOSED_LOAN_STATUSES: LoanStatus[] = ['Fully Paid', 'Settled', 'Written Off'];
+export const CLOSED_LOAN_STATUSES: LoanStatus[] = ["Fully Paid", "Settled", "Written Off"];
 
-export type LoanReversalType = 'Disbursement' | 'Repayment' | 'Settlement' | 'Write Off';
-export type RepaymentStatus = 'Pending' | 'Paid' | 'Partially Paid' | 'Overdue';
-export type InterestType = 'Flat Rate' | 'Reducing Balance';
+export type LoanReversalType = "Disbursement" | "Repayment" | "Settlement" | "Write Off";
+export type RepaymentStatus = "Pending" | "Paid" | "Partially Paid" | "Overdue";
+export type InterestType = "Flat Rate" | "Reducing Balance";
 
 export type ExpenseCategory =
-  | 'Salaries'
-  | 'Rent'
-  | 'Fuel'
-  | 'Utilities'
-  | 'Internet'
-  | 'Maintenance'
-  | 'Transport'
-  | 'Office Supplies'
-  | 'Other';
+  | "Salaries"
+  | "Rent"
+  | "Fuel"
+  | "Utilities"
+  | "Internet"
+  | "Maintenance"
+  | "Transport"
+  | "Office Supplies"
+  | "Other";
 
-export type PaymentMethod = 'Cash' | 'Bank Transfer' | 'Mobile Money';
-export type TransactionType = 'Deposit' | 'Withdrawal';
-export type SavingsTransactionType = 'Deposit' | 'Withdrawal' | 'Interest';
+export type PaymentMethod = "Cash" | "Bank Transfer" | "Mobile Money";
+export type TransactionType = "Deposit" | "Withdrawal";
+export type SavingsTransactionType = "Deposit" | "Withdrawal" | "Interest";
+
+export type BranchType = "Head Office" | "Main Branch" | "Satellite Branch" | "Field Office";
+export type BranchApprovalLevel = "Branch" | "Regional" | "Head Office";
 
 export interface Branch {
   id: string;
@@ -41,10 +44,31 @@ export interface Branch {
   branch_code: string;
   location?: string;
   phone?: string;
+  /** Mirrored from the manager's profile by trigger; read it, never write it. */
   manager_name?: string;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
   created_at: string;
   updated_at?: string;
+  branch_type: BranchType;
+  region?: string | null;
+  district?: string | null;
+  town?: string | null;
+  physical_address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  alt_phone?: string | null;
+  email?: string | null;
+  manager_id?: string | null;
+  assistant_manager_id?: string | null;
+  opening_time?: string | null;
+  closing_time?: string | null;
+  working_days?: string[] | null;
+  currency?: string | null;
+  max_cash_holding?: number | null;
+  approval_level?: BranchApprovalLevel | null;
+  deactivated_at?: string | null;
+  deactivated_by?: string | null;
+  deactivation_reason?: string | null;
 }
 
 export interface Profile {
@@ -57,10 +81,31 @@ export interface Profile {
   avatar_url?: string;
   /** Branches this staff member is attached to. Empty/undefined for Administrators and Auditors (institution-wide). */
   branch_ids?: string[];
-  status: 'Active' | 'Inactive' | 'Suspended';
+  status: StaffStatus;
   created_at: string;
   updated_at?: string;
+
+  /** Allocated by a database trigger on insert — never built client-side. */
+  staff_code?: string | null;
+  date_joined?: string | null;
+  /** The branch this person reports to, drawn from `branch_ids`. */
+  primary_branch_id?: string | null;
+  last_login_at?: string | null;
+  last_password_change_at?: string | null;
+  failed_login_attempts?: number;
+  must_change_password?: boolean;
+  two_factor_enabled?: boolean;
+  /** Why the account is Suspended or Inactive, and when it was put there. */
+  status_reason?: string | null;
+  status_changed_at?: string | null;
+  status_changed_by?: string | null;
 }
+
+/**
+ * `Pending` is an account that has been created but never signed into. It
+ * becomes `Active` by itself at the holder's first successful sign-in.
+ */
+export type StaffStatus = "Active" | "Pending" | "Inactive" | "Suspended";
 
 export interface LoanOfficer {
   id: string;
@@ -68,7 +113,7 @@ export interface LoanOfficer {
   officer_code: string;
   branch: string;
   phone: string;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
   registered_clients_count: number;
   active_loans_count: number;
   created_at: string;
@@ -83,7 +128,7 @@ export interface Client {
   national_id_front?: string;
   national_id_back?: string;
   nin: string;
-  gender: 'Male' | 'Female' | 'Other';
+  gender: "Male" | "Female" | "Other";
   date_of_birth: string;
   occupation: string;
   employer?: string;
@@ -130,7 +175,7 @@ export interface GroupMember {
   id: string;
   group_id: string;
   client_id: string;
-  role_in_group: 'Chairperson' | 'Secretary' | 'Treasurer' | 'Member';
+  role_in_group: "Chairperson" | "Secretary" | "Treasurer" | "Member";
   joined_date: string;
   created_at?: string;
   client?: Client;
@@ -155,8 +200,8 @@ export interface ClientGroup {
   loan_officer_id?: string;
   loan_officer_name?: string;
   member_count: number;
-  status: 'Active' | 'Inactive' | 'Suspended';
-  approval_status: 'Pending' | 'Approved' | 'Rejected';
+  status: "Active" | "Inactive" | "Suspended";
+  approval_status: "Pending" | "Approved" | "Rejected";
   rejection_reason?: string | null;
   reviewed_by?: string;
   reviewed_at?: string;
@@ -183,9 +228,9 @@ export interface SavingsAccount {
   account_number: string;
   client_id?: string;
   group_id?: string;
-  account_type: 'Individual' | 'Group';
+  account_type: "Individual" | "Group";
   balance: number;
-  status: 'Active' | 'Dormant' | 'Closed';
+  status: "Active" | "Dormant" | "Closed";
   created_at: string;
   updated_at?: string;
   client?: Client;
@@ -220,7 +265,7 @@ export interface LoanProduct {
   max_amount: number;
   min_weeks: number;
   max_weeks: number;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
   created_at: string;
 }
 
@@ -316,8 +361,8 @@ export interface Loan {
   schedule?: WeeklyScheduleRow[];
 }
 
-export type TransferType = 'Member Branch' | 'Group Interchange' | 'Group Officer';
-export type TransferStatus = 'Pending' | 'Completed' | 'Rejected';
+export type TransferType = "Member Branch" | "Group Interchange" | "Group Officer";
+export type TransferStatus = "Pending" | "Completed" | "Rejected";
 
 export interface Transfer {
   id: string;
@@ -406,7 +451,7 @@ export interface NotificationItem {
   recipient_id?: string;
   title: string;
   message: string;
-  type: 'Application' | 'Repayment' | 'Overdue' | 'Disbursement' | 'Alert' | 'System';
+  type: "Application" | "Repayment" | "Overdue" | "Disbursement" | "Alert" | "System";
   is_read: boolean;
   link_url?: string;
   created_at: string;

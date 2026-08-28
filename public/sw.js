@@ -12,16 +12,19 @@
  * locally, and it is shown only when a page navigation fails outright.
  */
 
-const OFFLINE_URL = '/offline.html';
-const CACHE = 'chetu-shell-v1';
+const OFFLINE_URL = "/offline.html";
+const CACHE = "chetu-shell-v1";
 
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL])).then(() => self.skipWaiting()),
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll([OFFLINE_URL]))
+      .then(() => self.skipWaiting()),
   );
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
@@ -30,12 +33,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
   const { request } = event;
 
   // Only page navigations get the offline fallback. Everything else — scripts,
   // styles, and every call to Supabase — is left entirely alone.
-  if (request.mode !== 'navigate') return;
+  if (request.mode !== "navigate") return;
 
   event.respondWith(
     fetch(request).catch(() => caches.match(OFFLINE_URL).then((r) => r || Response.error())),
@@ -44,15 +47,15 @@ self.addEventListener('fetch', (event) => {
 
 // Tapping an alert focuses the app on the screen where the work is done,
 // reusing an open window rather than piling up new tabs.
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/';
+  const target = (event.notification.data && event.notification.data.url) || "/";
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if ('focus' in client) {
-          if ('navigate' in client) client.navigate(target).catch(() => {});
+        if ("focus" in client) {
+          if ("navigate" in client) client.navigate(target).catch(() => {});
           return client.focus();
         }
       }

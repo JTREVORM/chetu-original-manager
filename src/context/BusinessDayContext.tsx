@@ -1,10 +1,24 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { useAuth } from './AuthContext';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { useAuth } from "./AuthContext";
 
-export type BusinessDayStatus = 'NOT_OPENED' | 'OPEN' | 'CLOSED' | 'APPROVED' | 'LOCKED';
+export type BusinessDayStatus = "NOT_OPENED" | "OPEN" | "CLOSED" | "APPROVED" | "LOCKED";
 export type OfficerDayStatus =
-  | 'LOCKED' | 'ACTIVE' | 'SUBMITTED' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SPECIAL_ACCESS';
+  | "LOCKED"
+  | "ACTIVE"
+  | "SUBMITTED"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "SPECIAL_ACCESS";
 
 export interface BusinessDayRow {
   id: string;
@@ -39,7 +53,7 @@ export interface AccessRequestRow {
   branch_id?: string | null;
   business_date: string;
   reason: string;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
+  status: "Pending" | "Approved" | "Rejected" | "Expired";
   decided_by?: string | null;
   decided_at?: string | null;
   decision_reason?: string | null;
@@ -105,15 +119,15 @@ const BusinessDayContext = createContext<BusinessDayContextType | undefined>(und
 
 const FALLBACK: WorkingState = {
   can_transact: true,
-  reason: '',
-  business_day_status: 'NOT_OPENED',
-  officer_day_status: 'LOCKED',
+  reason: "",
+  business_day_status: "NOT_OPENED",
+  officer_day_status: "LOCKED",
   is_weekend: false,
-  business_date: new Date().toISOString().split('T')[0]!,
+  business_date: new Date().toISOString().split("T")[0]!,
 };
 
 export const BusinessDayProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, isAuthResolved } = useAuth();
 
   const [state, setState] = useState<WorkingState>(FALLBACK);
   const [loading, setLoading] = useState(true);
@@ -133,27 +147,47 @@ export const BusinessDayProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [now, setNow] = useState(() => new Date());
 
   const refresh = useCallback(async () => {
-    if (!isSupabaseConfigured || !user?.id) {
+    // Same gate as DatabaseContext: these are RLS-protected control tables,
+    // and supabase-js restores its session a render later than `user` comes
+    // back from localStorage. Reading before that is an `anon` request.
+    if (!isSupabaseConfigured || !isAuthResolved || !user?.id) {
       setLoading(false);
       return;
     }
     try {
       // Sweep lapsed approvals before reading the state, so a window that has
       // run out is already reflected in what comes back.
-      await supabase.rpc('expire_access_requests').then(
+      await supabase.rpc("expire_access_requests").then(
         () => undefined,
         () => undefined,
       );
 
-      const [timeRes, stateRes, daysRes, officerRes, accessRes, auditRes, staffRes] = await Promise.all([
-        supabase.rpc('server_time'),
-        supabase.rpc('my_working_state'),
-        supabase.from('business_days').select('*').order('business_date', { ascending: false }).limit(60),
-        supabase.from('officer_days').select('*').order('business_date', { ascending: false }).limit(200),
-        supabase.from('access_requests').select('*').order('created_at', { ascending: false }).limit(100),
-        supabase.from('business_day_audit').select('*').order('created_at', { ascending: false }).limit(200),
-        supabase.from('profiles').select('id, full_name, role, branch_ids, status'),
-      ]);
+      const [timeRes, stateRes, daysRes, officerRes, accessRes, auditRes, staffRes] =
+        await Promise.all([
+          supabase.rpc("server_time"),
+          supabase.rpc("my_working_state"),
+          supabase
+            .from("business_days")
+            .select("*")
+            .order("business_date", { ascending: false })
+            .limit(60),
+          supabase
+            .from("officer_days")
+            .select("*")
+            .order("business_date", { ascending: false })
+            .limit(200),
+          supabase
+            .from("access_requests")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(100),
+          supabase
+            .from("business_day_audit")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(200),
+          supabase.from("profiles").select("id, full_name, role, branch_ids, status"),
+        ]);
 
       const t = Array.isArray(timeRes.data) ? timeRes.data[0] : timeRes.data;
       if (t?.server_now) {
@@ -174,7 +208,7 @@ export const BusinessDayProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [isAuthResolved, user?.id]);
 
   useEffect(() => {
     refresh();
@@ -189,19 +223,25 @@ export const BusinessDayProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Re-check the gate periodically and whenever the control tables change, so a
   // manager opening the day unlocks the officer's screen without a reload.
   useEffect(() => {
-    if (!user?.id || !isSupabaseConfigured) return;
+    if (!isAuthResolved || !user?.id || !isSupabaseConfigured) return;
     const channel = supabase
-      .channel('business-day-control')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'business_days' }, () => refresh())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'officer_days' }, () => refresh())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'access_requests' }, () => refresh())
+      .channel("business-day-control")
+      .on("postgres_changes", { event: "*", schema: "public", table: "business_days" }, () =>
+        refresh(),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "officer_days" }, () =>
+        refresh(),
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "access_requests" }, () =>
+        refresh(),
+      )
       .subscribe();
     const poll = window.setInterval(refresh, 60000);
     return () => {
       supabase.removeChannel(channel);
       window.clearInterval(poll);
     };
-  }, [user?.id, refresh]);
+  }, [isAuthResolved, user?.id, refresh]);
 
   const value = useMemo<BusinessDayContextType>(
     () => ({
@@ -229,6 +269,6 @@ export const BusinessDayProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
 export const useBusinessDayControl = () => {
   const ctx = useContext(BusinessDayContext);
-  if (!ctx) throw new Error('useBusinessDayControl must be used within BusinessDayProvider');
+  if (!ctx) throw new Error("useBusinessDayControl must be used within BusinessDayProvider");
   return ctx;
 };

@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useDatabase } from '../../context/DatabaseContext';
-import { useMisScope } from '../../components/mis/MisKit';
-import type { Client, ClientGroup, Loan, LoanProduct, WeeklyScheduleRow } from '../../types/database.types';
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useDatabase } from "../../context/DatabaseContext";
+import { useMisScope } from "../../components/mis/MisKit";
+import type {
+  Client,
+  ClientGroup,
+  Loan,
+  LoanProduct,
+  WeeklyScheduleRow,
+} from "../../types/database.types";
 
 export interface ScheduleRow extends WeeklyScheduleRow {
   loan_id: string;
@@ -18,9 +24,11 @@ export function useSchedules() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
-        .from('loan_repayment_schedule')
-        .select('id, loan_id, week_number, due_date, installment_amount, principal_portion, interest_portion, paid_amount, remaining_balance, status, paid_at')
-        .order('week_number');
+        .from("loan_repayment_schedule")
+        .select(
+          "id, loan_id, week_number, due_date, installment_amount, principal_portion, interest_portion, paid_amount, remaining_balance, status, paid_at",
+        )
+        .order("week_number");
       if (!cancelled) {
         setRows((data || []) as unknown as ScheduleRow[]);
         setLoading(false);
@@ -77,22 +85,22 @@ export function useLoanRows(scope: ReturnType<typeof useMisScope>) {
         if (!client) return null;
         const group = client.group_id ? groupById.get(client.group_id) : undefined;
         const product = productById.get(loan.product_id);
-        const officerId = client.loan_officer_id || group?.loan_officer_id || '';
-        const branchId = client.branch_id || group?.branch_id || '';
+        const officerId = client.loan_officer_id || group?.loan_officer_id || "";
+        const branchId = client.branch_id || group?.branch_id || "";
         return {
           loan,
           client,
           group,
           product,
-          group_id: group?.id || '',
-          group_name: group?.group_name || '—',
-          group_code: group?.group_code || '—',
-          meeting_day: group?.meeting_day || '—',
+          group_id: group?.id || "",
+          group_name: group?.group_name || "—",
+          group_code: group?.group_code || "—",
+          meeting_day: group?.meeting_day || "—",
           branch_id: branchId,
           branch_name: scope.branchName(branchId),
           officer_id: officerId,
           officer_name: group?.loan_officer_name || scope.officerName(officerId),
-          product_name: product?.product_name || '—',
+          product_name: product?.product_name || "—",
           schedule: byLoan.get(loan.id) || [],
         };
       })
@@ -113,9 +121,10 @@ export function matchScope(
   if (applied.branchId && row.branch_id !== applied.branchId) return false;
   if (applied.officerId && row.officer_id !== applied.officerId) return false;
   if (applied.groupId && row.group_id !== applied.groupId) return false;
-  const q = (applied.search || '').trim().toLowerCase();
+  const q = (applied.search || "").trim().toLowerCase();
   if (q) {
-    const hay = `${row.group_name} ${row.group_code} ${row.client.full_name} ${row.client.client_number} ${row.loan.loan_number}`.toLowerCase();
+    const hay =
+      `${row.group_name} ${row.group_code} ${row.client.full_name} ${row.client.client_number} ${row.loan.loan_number}`.toLowerCase();
     if (!hay.includes(q)) return false;
   }
   return true;
@@ -146,9 +155,11 @@ export function useLoanReversals() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
-        .from('loan_reversals')
-        .select('id, loan_id, reversal_type, reference_number, amount, reason, reversed_by, created_at')
-        .order('created_at', { ascending: false });
+        .from("loan_reversals")
+        .select(
+          "id, loan_id, reversal_type, reference_number, amount, reason, reversed_by, created_at",
+        )
+        .order("created_at", { ascending: false });
       if (!cancelled) {
         setRows((data || []) as unknown as ReversalRow[]);
         setLoading(false);
@@ -173,9 +184,11 @@ export function useStaffNames() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name, role');
+      const { data } = await supabase.from("profiles").select("id, full_name, role");
       if (!cancelled) {
-        setNames(new Map((data || []).map((p: { id: string; full_name: string }) => [p.id, p.full_name])));
+        setNames(
+          new Map((data || []).map((p: { id: string; full_name: string }) => [p.id, p.full_name])),
+        );
       }
     })();
     return () => {
@@ -183,7 +196,7 @@ export function useStaffNames() {
     };
   }, [dataVersion]);
 
-  return (id?: string | null) => (id ? names.get(id) || '—' : '—');
+  return (id?: string | null) => (id ? names.get(id) || "—" : "—");
 }
 
 export interface MemberFeeRow {
@@ -210,9 +223,11 @@ export function useMemberFees() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase
-        .from('member_fees')
-        .select('id, client_id, admission_fee, passbook_fee, crb_fee, total_amount, payment_method, receipt_number, branch_id, collected_by, created_at')
-        .order('created_at', { ascending: false });
+        .from("member_fees")
+        .select(
+          "id, client_id, admission_fee, passbook_fee, crb_fee, total_amount, payment_method, receipt_number, branch_id, collected_by, created_at",
+        )
+        .order("created_at", { ascending: false });
       if (!cancelled) {
         setRows((data || []) as unknown as MemberFeeRow[]);
         setLoading(false);
@@ -232,20 +247,26 @@ export const paidTotal = (schedule: ScheduleRow[]) =>
 /** Days past due of the oldest unpaid instalment as at `asOn`; 0 if current. */
 export function daysPastDue(schedule: ScheduleRow[], asOn: string) {
   const unpaid = schedule
-    .filter((r) => r.due_date <= asOn && Number(r.installment_amount || 0) - Number(r.paid_amount || 0) > 0)
+    .filter(
+      (r) =>
+        r.due_date <= asOn && Number(r.installment_amount || 0) - Number(r.paid_amount || 0) > 0,
+    )
     .sort((a, b) => (a.due_date < b.due_date ? -1 : 1));
   const oldest = unpaid[0];
   if (!oldest) return 0;
-  return Math.max(0, Math.floor((new Date(asOn).getTime() - new Date(oldest.due_date).getTime()) / 86400000));
+  return Math.max(
+    0,
+    Math.floor((new Date(asOn).getTime() - new Date(oldest.due_date).getTime()) / 86400000),
+  );
 }
 
 /** Standard microfinance arrears buckets. */
 export const PAR_BUCKETS = [
-  { key: 'current', label: 'Current', min: 0, max: 0 },
-  { key: 'par1', label: 'PAR 1-30', min: 1, max: 30 },
-  { key: 'par31', label: 'PAR 31-60', min: 31, max: 60 },
-  { key: 'par61', label: 'PAR 61-90', min: 61, max: 90 },
-  { key: 'par90', label: 'PAR 90+', min: 91, max: Number.MAX_SAFE_INTEGER },
+  { key: "current", label: "Current", min: 0, max: 0 },
+  { key: "par1", label: "PAR 1-30", min: 1, max: 30 },
+  { key: "par31", label: "PAR 31-60", min: 31, max: 60 },
+  { key: "par61", label: "PAR 61-90", min: 61, max: 90 },
+  { key: "par90", label: "PAR 90+", min: 91, max: Number.MAX_SAFE_INTEGER },
 ] as const;
 
 export const bucketFor = (days: number) =>
@@ -255,12 +276,18 @@ export const bucketFor = (days: number) =>
 export function overdueAsOf(schedule: ScheduleRow[], asOn: string) {
   return schedule
     .filter((r) => r.due_date <= asOn)
-    .reduce((s, r) => s + Math.max(0, Number(r.installment_amount || 0) - Number(r.paid_amount || 0)), 0);
+    .reduce(
+      (s, r) => s + Math.max(0, Number(r.installment_amount || 0) - Number(r.paid_amount || 0)),
+      0,
+    );
 }
 
 /** Instalments falling exactly on `asOn` that are still unpaid — today's realizable. */
 export function realizableOn(schedule: ScheduleRow[], asOn: string) {
   return schedule
     .filter((r) => r.due_date === asOn)
-    .reduce((s, r) => s + Math.max(0, Number(r.installment_amount || 0) - Number(r.paid_amount || 0)), 0);
+    .reduce(
+      (s, r) => s + Math.max(0, Number(r.installment_amount || 0) - Number(r.paid_amount || 0)),
+      0,
+    );
 }

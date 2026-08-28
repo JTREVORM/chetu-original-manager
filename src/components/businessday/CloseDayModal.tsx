@@ -1,15 +1,28 @@
-import React, { useState } from 'react';
-import { AlertTriangle, ArrowLeft, Loader2, Lock, X } from 'lucide-react';
-import { formatUGX } from '../../lib/loanCalculations';
-import type { DayStats } from '../../lib/businessDayStats';
+import React, { useState } from "react";
+import { AlertTriangle, ArrowLeft, Loader2, Lock, X } from "lucide-react";
+import { formatUGX } from "../../lib/loanCalculations";
+import type { DayStats } from "../../lib/businessDayStats";
 
 const longDate = (v: string) =>
-  new Date(v).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  new Date(v).toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
-const Stat: React.FC<{ label: string; value: React.ReactNode; tone?: 'amber' | 'plain' }> = ({ label, value, tone = 'plain' }) => (
+const Stat: React.FC<{ label: string; value: React.ReactNode; tone?: "amber" | "plain" }> = ({
+  label,
+  value,
+  tone = "plain",
+}) => (
   <div className="bg-white px-3 py-2">
     <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-    <p className={`mt-0.5 text-[13px] font-black ${tone === 'amber' ? 'text-amber-700' : 'text-slate-900'}`}>{value}</p>
+    <p
+      className={`mt-0.5 text-[13px] font-black ${tone === "amber" ? "text-amber-700" : "text-slate-900"}`}
+    >
+      {value}
+    </p>
   </div>
 );
 
@@ -27,14 +40,14 @@ export const CloseDayModal: React.FC<{
   onCancel: () => void;
   onConfirm: () => void;
 }> = ({ open, branchName, businessDate, stats, busy, onCancel, onConfirm }) => {
-  const [step, setStep] = useState<'review' | 'confirm'>('review');
+  const [step, setStep] = useState<"review" | "confirm">("review");
   const [acknowledged, setAcknowledged] = useState(false);
 
   if (!open) return null;
 
   const hasOutstanding = stats.outstanding.length > 0;
   const cancel = () => {
-    setStep('review');
+    setStep("review");
     setAcknowledged(false);
     onCancel();
   };
@@ -49,23 +62,32 @@ export const CloseDayModal: React.FC<{
               {branchName} · {longDate(businessDate)}
             </p>
           </div>
-          <button type="button" onClick={cancel} aria-label="Cancel"
-            className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+          <button
+            type="button"
+            onClick={cancel}
+            aria-label="Cancel"
+            className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
             <X className="h-4 w-4" />
           </button>
         </header>
 
-        {step === 'review' ? (
+        {step === "review" ? (
           <>
             <div className="space-y-4 overflow-y-auto p-5">
               <div>
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Today's operations</p>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                  Today's operations
+                </p>
                 <div className="grid grid-cols-2 gap-px overflow-hidden rounded border border-slate-200 bg-slate-200 sm:grid-cols-3">
                   <Stat label="Loan officers" value={stats.officersTotal} />
                   <Stat label="Active" value={stats.officersActive} />
                   <Stat label="Days submitted" value={stats.officersSubmitted} />
-                  <Stat label="Awaiting approval" value={stats.officersPendingApproval}
-                    tone={stats.officersPendingApproval ? 'amber' : 'plain'} />
+                  <Stat
+                    label="Awaiting approval"
+                    value={stats.officersPendingApproval}
+                    tone={stats.officersPendingApproval ? "amber" : "plain"}
+                  />
                   <Stat label="Loans disbursed" value={stats.loansDisbursed} />
                   <Stat label="Total disbursed" value={formatUGX(stats.totalDisbursed)} />
                   <Stat label="Repayments" value={stats.repaymentCount} />
@@ -83,7 +105,9 @@ export const CloseDayModal: React.FC<{
                     Attention required
                   </p>
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] text-amber-900">
-                    {stats.outstanding.map((o) => <li key={o}>{o}</li>)}
+                    {stats.outstanding.map((o) => (
+                      <li key={o}>{o}</li>
+                    ))}
                   </ul>
                   <label className="mt-3 flex cursor-pointer items-start gap-2 border-t border-amber-200 pt-2.5 text-[12px] font-semibold text-amber-900">
                     <input
@@ -92,7 +116,10 @@ export const CloseDayModal: React.FC<{
                       onChange={(e) => setAcknowledged(e.target.checked)}
                       className="mt-0.5 shrink-0 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
                     />
-                    <span>I have reviewed these outstanding items and still want to close the business day.</span>
+                    <span>
+                      I have reviewed these outstanding items and still want to close the business
+                      day.
+                    </span>
                   </label>
                 </div>
               )}
@@ -103,15 +130,22 @@ export const CloseDayModal: React.FC<{
             </div>
 
             <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-5 py-3.5">
-              <button type="button" onClick={cancel}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-200">
+              <button
+                type="button"
+                onClick={cancel}
+                className="rounded-lg bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-200"
+              >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => setStep('confirm')}
+                onClick={() => setStep("confirm")}
                 disabled={hasOutstanding && !acknowledged}
-                title={hasOutstanding && !acknowledged ? 'Acknowledge the outstanding items first' : undefined}
+                title={
+                  hasOutstanding && !acknowledged
+                    ? "Acknowledge the outstanding items first"
+                    : undefined
+                }
                 className="rounded-lg bg-[#0B4394] px-4 py-2 text-[13px] font-bold text-white hover:bg-[#093672] disabled:opacity-50"
               >
                 Continue to Close
@@ -128,8 +162,9 @@ export const CloseDayModal: React.FC<{
                     Are you sure you want to close this business day?
                   </p>
                   <p className="mt-1 text-[12px] leading-relaxed text-red-900">
-                    Closing the business day will prevent further transactions for this business date. Loan Officers
-                    will no longer be able to record new activities until the next business day is opened.
+                    Closing the business day will prevent further transactions for this business
+                    date. Loan Officers will no longer be able to record new activities until the
+                    next business day is opened.
                   </p>
                 </div>
               </div>
@@ -145,21 +180,31 @@ export const CloseDayModal: React.FC<{
                 </div>
                 <div className="flex justify-between py-1.5">
                   <dt className="text-[12px] text-slate-500">Transactions locked</dt>
-                  <dd className="text-[13px] font-bold text-slate-900">{stats.totalTransactions}</dd>
+                  <dd className="text-[13px] font-bold text-slate-900">
+                    {stats.totalTransactions}
+                  </dd>
                 </div>
               </dl>
             </div>
 
             <footer className="flex shrink-0 justify-end gap-2 border-t border-slate-200 px-5 py-3.5">
-              <button type="button" onClick={() => setStep('review')} disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-60">
+              <button
+                type="button"
+                onClick={() => setStep("review")}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-4 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+              >
                 <ArrowLeft className="h-4 w-4" />
                 Go Back
               </button>
-              <button type="button" onClick={onConfirm} disabled={busy}
-                className="inline-flex items-center gap-2 rounded-lg bg-chetu-red px-4 py-2 text-[13px] font-bold text-white hover:opacity-90 disabled:opacity-60">
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-lg bg-chetu-red px-4 py-2 text-[13px] font-bold text-white hover:opacity-90 disabled:opacity-60"
+              >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-                {busy ? 'Closing…' : 'Close Business Day'}
+                {busy ? "Closing…" : "Close Business Day"}
               </button>
             </footer>
           </>

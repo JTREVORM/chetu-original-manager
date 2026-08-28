@@ -1,5 +1,5 @@
-import React from 'react';
-import { Bell } from 'lucide-react';
+import React from "react";
+import { Bell } from "lucide-react";
 
 /**
  * The notification bell, shared by the desktop and mobile header bars so the
@@ -14,28 +14,31 @@ export const NotificationBell: React.FC<{
   count: number;
   onClick: () => void;
   /** `lg` is the roomier mobile icon bar; `md` the compact desktop header. */
-  size?: 'md' | 'lg';
-}> = ({ count, onClick, size = 'md' }) => {
+  size?: "md" | "lg";
+}> = ({ count, onClick, size = "md" }) => {
   const unread = count > 0;
   // Beyond 99 the exact number stops mattering and the badge stops fitting.
-  const label = count > 99 ? '99+' : String(count);
+  const label = count > 99 ? "99+" : String(count);
 
-  const icon = size === 'lg' ? 'w-6 h-6' : 'w-5 h-5';
-  const pad = size === 'lg' ? 'p-1.5' : 'p-2';
+  const icon = size === "lg" ? "w-6 h-6" : "w-5 h-5";
+  const pad = size === "lg" ? "p-1.5" : "p-2";
 
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={unread ? `Notifications — ${count} unread` : 'Notifications'}
-      title={unread ? `${count} unread notification${count === 1 ? '' : 's'}` : 'Notifications'}
+      aria-label={unread ? `Notifications — ${count} unread` : "Notifications"}
+      title={unread ? `${count} unread notification${count === 1 ? "" : "s"}` : "Notifications"}
       className={`relative shrink-0 rounded-xl transition-colors ${pad} ${
         unread
-          ? 'bg-red-50 text-chetu-red ring-1 ring-red-200 hover:bg-red-100'
-          : 'text-slate-700 hover:bg-slate-100'
+          ? "bg-red-50 text-chetu-red ring-1 ring-red-200 hover:bg-red-100"
+          : "text-slate-700 hover:bg-slate-100"
       }`}
     >
-      <Bell className={`${icon} ${unread ? 'text-chetu-red' : ''}`} strokeWidth={unread ? 2.5 : 2} />
+      <Bell
+        className={`${icon} ${unread ? "text-chetu-red" : ""}`}
+        strokeWidth={unread ? 2.5 : 2}
+      />
 
       {unread && (
         <>

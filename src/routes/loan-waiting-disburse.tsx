@@ -8,7 +8,10 @@ export const Route = createFileRoute("/loan-waiting-disburse")({
       { title: "Waiting for Disburse | Chetu Microfinance" },
       { name: "description", content: "Approved loans whose cash has not yet been released." },
       { property: "og:title", content: "Waiting for Disburse | Chetu Microfinance" },
-      { property: "og:description", content: "Approved loans whose cash has not yet been released." },
+      {
+        property: "og:description",
+        content: "Approved loans whose cash has not yet been released.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   Field,
   MisFilters,
@@ -12,10 +12,10 @@ import {
   monthStartISO,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
-import { useDatabase } from '../../context/DatabaseContext';
-import { useSavingsRows } from '../Savings';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
+import { useDatabase } from "../../context/DatabaseContext";
+import { useSavingsRows } from "../Savings";
 
 export interface SavingsTxRow {
   id: string;
@@ -57,18 +57,29 @@ export const SavingsReport: React.FC = () => {
 
   const [from, setFrom] = useState(monthStartISO());
   const [till, setTill] = useState(todayISO());
-  const [kind, setKind] = useState('');
-  const [search, setSearch] = useState('');
+  const [kind, setKind] = useState("");
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [applied, setApplied] = useState({
-    branchId: '', officerId: '', groupId: '', search: '', from: '', till: '', kind: '',
+    branchId: "",
+    officerId: "",
+    groupId: "",
+    search: "",
+    from: "",
+    till: "",
+    kind: "",
   });
 
   const runSearch = () => {
     setHasSearched(true);
     setApplied({
-      branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId,
-      search, from, till, kind,
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+      from,
+      till,
+      kind,
     });
   };
 
@@ -82,9 +93,9 @@ export const SavingsReport: React.FC = () => {
       if (!a) continue;
       out.push({
         id: t.id,
-        date: (t.created_at || '').split('T')[0]!,
+        date: (t.created_at || "").split("T")[0]!,
         transaction_number: t.transaction_number,
-        receipt_number: t.receipt_number || '—',
+        receipt_number: t.receipt_number || "—",
         branch_id: a.branch_id,
         branch_name: a.branch_name,
         officer_id: a.officer_id,
@@ -101,7 +112,7 @@ export const SavingsReport: React.FC = () => {
         amount: Number(t.amount || 0),
         balance_after: Number(t.balance_after || 0),
         method: t.payment_method,
-        notes: t.notes || '',
+        notes: t.notes || "",
       });
     }
     return out.sort((x, y) => (x.date < y.date ? 1 : -1));
@@ -130,32 +141,68 @@ export const SavingsReport: React.FC = () => {
     let withdrawals = 0;
     const savers = new Set<string>();
     for (const r of filtered) {
-      if (r.kind === 'Withdrawal') withdrawals += r.amount;
+      if (r.kind === "Withdrawal") withdrawals += r.amount;
       else {
         deposits += r.amount;
         savers.add(r.account_id);
       }
     }
-    return { deposits, withdrawals, net: deposits - withdrawals, savers: savers.size, count: filtered.length };
+    return {
+      deposits,
+      withdrawals,
+      net: deposits - withdrawals,
+      savers: savers.size,
+      count: filtered.length,
+    };
   }, [filtered]);
 
   const columns: MisColumn<SavingsTxRow>[] = [
-    { key: 'date', label: 'Date', width: '7%', render: (r) => shortDate(r.date), text: (r) => shortDate(r.date) },
-    { key: 'txn', label: 'Txn No.', width: '10%', render: (r) => r.transaction_number, text: (r) => r.transaction_number },
-    { key: 'receipt', label: 'Receipt No.', width: '10%', render: (r) => r.receipt_number, text: (r) => r.receipt_number },
-    { key: 'branch', label: 'Branch', width: '8%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'lo', label: 'LO', width: '9%', render: (r) => r.officer_name, text: (r) => r.officer_name },
     {
-      key: 'group',
-      label: 'Group',
-      width: '10%',
+      key: "date",
+      label: "Date",
+      width: "7%",
+      render: (r) => shortDate(r.date),
+      text: (r) => shortDate(r.date),
+    },
+    {
+      key: "txn",
+      label: "Txn No.",
+      width: "10%",
+      render: (r) => r.transaction_number,
+      text: (r) => r.transaction_number,
+    },
+    {
+      key: "receipt",
+      label: "Receipt No.",
+      width: "10%",
+      render: (r) => r.receipt_number,
+      text: (r) => r.receipt_number,
+    },
+    {
+      key: "branch",
+      label: "Branch",
+      width: "8%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "lo",
+      label: "LO",
+      width: "9%",
+      render: (r) => r.officer_name,
+      text: (r) => r.officer_name,
+    },
+    {
+      key: "group",
+      label: "Group",
+      width: "10%",
       render: (r) => r.group_name,
       text: (r) => `${r.group_name} (${r.group_code})`,
     },
     {
-      key: 'holder',
-      label: 'Account Holder',
-      width: '12%',
+      key: "holder",
+      label: "Account Holder",
+      width: "12%",
       render: (r) => (
         <span className="font-semibold text-slate-900">
           {r.holder}
@@ -164,39 +211,57 @@ export const SavingsReport: React.FC = () => {
       ),
       text: (r) => r.holder,
     },
-    { key: 'acc', label: 'Account No.', width: '11%', render: (r) => r.account_number, text: (r) => r.account_number },
-    { key: 'atype', label: 'Acct Type', width: '7%', render: (r) => r.account_type, text: (r) => r.account_type },
     {
-      key: 'kind',
-      label: 'Type',
-      width: '8%',
+      key: "acc",
+      label: "Account No.",
+      width: "11%",
+      render: (r) => r.account_number,
+      text: (r) => r.account_number,
+    },
+    {
+      key: "atype",
+      label: "Acct Type",
+      width: "7%",
+      render: (r) => r.account_type,
+      text: (r) => r.account_type,
+    },
+    {
+      key: "kind",
+      label: "Type",
+      width: "8%",
       render: (r) => (
-        <span className={`font-bold ${r.kind === 'Withdrawal' ? 'text-chetu-red' : 'text-emerald-700'}`}>{r.kind}</span>
+        <span
+          className={`font-bold ${r.kind === "Withdrawal" ? "text-chetu-red" : "text-emerald-700"}`}
+        >
+          {r.kind}
+        </span>
       ),
       text: (r) => r.kind,
     },
     {
-      key: 'amount',
-      label: 'Amount',
-      width: '9%',
-      align: 'right',
+      key: "amount",
+      label: "Amount",
+      width: "9%",
+      align: "right",
       render: (r) => (
-        <span className={`font-bold ${r.kind === 'Withdrawal' ? 'text-chetu-red' : 'text-emerald-700'}`}>
-          {r.kind === 'Withdrawal' ? '-' : '+'}
+        <span
+          className={`font-bold ${r.kind === "Withdrawal" ? "text-chetu-red" : "text-emerald-700"}`}
+        >
+          {r.kind === "Withdrawal" ? "-" : "+"}
           {money(r.amount)}
         </span>
       ),
-      text: (r) => `${r.kind === 'Withdrawal' ? '-' : '+'}${money(r.amount)}`,
+      text: (r) => `${r.kind === "Withdrawal" ? "-" : "+"}${money(r.amount)}`,
     },
     {
-      key: 'balance',
-      label: 'Balance After',
-      width: '9%',
-      align: 'right',
+      key: "balance",
+      label: "Balance After",
+      width: "9%",
+      align: "right",
       render: (r) => <span className="font-bold text-[#0B4394]">{money(r.balance_after)}</span>,
       text: (r) => money(r.balance_after),
     },
-    { key: 'method', label: 'Method', width: '8%', render: (r) => r.method, text: (r) => r.method },
+    { key: "method", label: "Method", width: "8%", render: (r) => r.method, text: (r) => r.method },
   ];
 
   return (
@@ -209,11 +274,11 @@ export const SavingsReport: React.FC = () => {
             columns={columns}
             rows={filtered}
             totals={[
-              ['Deposits', money(totals.deposits)],
-              ['Withdrawals', money(totals.withdrawals)],
-              ['Net movement', money(totals.net)],
-              ['Transactions', String(totals.count)],
-              ['Members who saved', String(totals.savers)],
+              ["Deposits", money(totals.deposits)],
+              ["Withdrawals", money(totals.withdrawals)],
+              ["Net movement", money(totals.net)],
+              ["Transactions", String(totals.count)],
+              ["Members who saved", String(totals.savers)],
             ]}
           />
         }
@@ -231,10 +296,20 @@ export const SavingsReport: React.FC = () => {
       >
         <ScopeFields scope={scope} />
         <Field label="From Date">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Till Date">
-          <input type="date" value={till} onChange={(e) => setTill(e.target.value)} className="form-field" />
+          <input
+            type="date"
+            value={till}
+            onChange={(e) => setTill(e.target.value)}
+            className="form-field"
+          />
         </Field>
         <Field label="Transaction Type">
           <select value={kind} onChange={(e) => setKind(e.target.value)} className="form-field">
@@ -260,7 +335,9 @@ export const SavingsReport: React.FC = () => {
             <div className="space-y-1.5 px-4 py-3 text-xs font-bold text-slate-700">
               <div className="flex flex-wrap justify-end gap-x-6 gap-y-1">
                 <span className="font-normal text-slate-500">Transactions: {totals.count}</span>
-                <span className="font-normal text-slate-500">Members who saved: {totals.savers}</span>
+                <span className="font-normal text-slate-500">
+                  Members who saved: {totals.savers}
+                </span>
               </div>
               <div className="flex flex-wrap justify-end gap-x-6 gap-y-1 border-t border-slate-200 pt-1.5">
                 <span className="text-emerald-700">Deposits: {money(totals.deposits)}</span>

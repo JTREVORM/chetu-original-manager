@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 /**
  * The one scrollable container in the app.
@@ -17,7 +17,7 @@ export interface ScrollAreaProps {
    * Which direction may scroll. `x` is the common case for wide tables, `y`
    * for long lists and modal bodies, `both` for large data grids.
    */
-  axis?: 'x' | 'y' | 'both';
+  axis?: "x" | "y" | "both";
   /**
    * Caps the height and turns on vertical scrolling. Any CSS length, e.g.
    * `'60vh'` or `'24rem'`. Required for `axis="y"`/`"both"` to do anything
@@ -38,18 +38,18 @@ export interface ScrollAreaProps {
   ariaLabel?: string;
 }
 
-const AXIS_CLASS: Record<NonNullable<ScrollAreaProps['axis']>, string> = {
-  x: 'scroll-x',
-  y: 'scroll-y',
-  both: 'scroll-both',
+const AXIS_CLASS: Record<NonNullable<ScrollAreaProps["axis"]>, string> = {
+  x: "scroll-x",
+  y: "scroll-y",
+  both: "scroll-both",
 };
 
 export const ScrollArea: React.FC<ScrollAreaProps> = ({
-  axis = 'x',
+  axis = "x",
   maxHeight,
   arrows = false,
-  className = '',
-  wrapperClassName = '',
+  className = "",
+  wrapperClassName = "",
   children,
   ariaLabel,
 }) => {
@@ -57,7 +57,7 @@ export const ScrollArea: React.FC<ScrollAreaProps> = ({
   const [canLeft, setCanLeft] = useState(false);
   const [canRight, setCanRight] = useState(false);
 
-  const canScrollX = axis === 'x' || axis === 'both';
+  const canScrollX = axis === "x" || axis === "both";
   const decorate = arrows && canScrollX;
 
   const sync = useCallback(() => {
@@ -78,17 +78,17 @@ export const ScrollArea: React.FC<ScrollAreaProps> = ({
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
-    window.addEventListener('resize', sync);
+    window.addEventListener("resize", sync);
     return () => {
       ro.disconnect();
-      window.removeEventListener('resize', sync);
+      window.removeEventListener("resize", sync);
     };
   }, [decorate, sync, children]);
 
   const page = (dir: 1 | -1) => {
     const el = ref.current;
     if (!el) return;
-    el.scrollBy({ left: dir * el.clientWidth * 0.75, behavior: 'smooth' });
+    el.scrollBy({ left: dir * el.clientWidth * 0.75, behavior: "smooth" });
   };
 
   const scroller = (
@@ -109,8 +109,8 @@ export const ScrollArea: React.FC<ScrollAreaProps> = ({
   if (!decorate) return scroller;
 
   const paddle =
-    'absolute top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full ' +
-    'border border-slate-200 bg-white text-slate-600 shadow-md transition hover:bg-slate-50 md:flex';
+    "absolute top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full " +
+    "border border-slate-200 bg-white text-slate-600 shadow-md transition hover:bg-slate-50 md:flex";
 
   return (
     <div className={`relative ${wrapperClassName}`}>
@@ -119,12 +119,22 @@ export const ScrollArea: React.FC<ScrollAreaProps> = ({
       {/* Arrows are a pointer convenience; touch users swipe, so they are
           hidden below md where the tap target would also cover the content. */}
       {canLeft && (
-        <button type="button" onClick={() => page(-1)} aria-label="Scroll left" className={`${paddle} left-2`}>
+        <button
+          type="button"
+          onClick={() => page(-1)}
+          aria-label="Scroll left"
+          className={`${paddle} left-2`}
+        >
           <ChevronLeft className="h-5 w-5" />
         </button>
       )}
       {canRight && (
-        <button type="button" onClick={() => page(1)} aria-label="Scroll right" className={`${paddle} right-2`}>
+        <button
+          type="button"
+          onClick={() => page(1)}
+          aria-label="Scroll right"
+          className={`${paddle} right-2`}
+        >
           <ChevronRight className="h-5 w-5" />
         </button>
       )}
@@ -143,12 +153,12 @@ export const TableScroll: React.FC<{
   arrows?: boolean;
   className?: string;
   ariaLabel?: string;
-}> = ({ children, maxHeight, arrows = true, className = '', ariaLabel }) => (
+}> = ({ children, maxHeight, arrows = true, className = "", ariaLabel }) => (
   <ScrollArea
-    axis={maxHeight ? 'both' : 'x'}
+    axis={maxHeight ? "both" : "x"}
     maxHeight={maxHeight}
     arrows={arrows}
-    className={`${maxHeight ? 'table-sticky-head' : ''} ${className}`}
+    className={`${maxHeight ? "table-sticky-head" : ""} ${className}`}
     ariaLabel={ariaLabel}
   >
     {children}

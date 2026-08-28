@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
-import { UserCog } from 'lucide-react';
-import { useDatabase } from '../../context/DatabaseContext';
-import { useNotifications } from '../../context/NotificationContext';
-import { CLOSED_LOAN_STATUSES, type ClientGroup } from '../../types/database.types';
+import React, { useMemo, useState } from "react";
+import { UserCog } from "lucide-react";
+import { useDatabase } from "../../context/DatabaseContext";
+import { useNotifications } from "../../context/NotificationContext";
+import { CLOSED_LOAN_STATUSES, type ClientGroup } from "../../types/database.types";
 import {
   ActionButton,
   Field,
@@ -16,8 +16,8 @@ import {
   shortDate,
   useMisScope,
   type MisColumn,
-} from '../../components/mis/MisKit';
-import { ReportExportButtons } from '../../components/mis/ReportExport';
+} from "../../components/mis/MisKit";
+import { ReportExportButtons } from "../../components/mis/ReportExport";
 
 interface Row {
   group: ClientGroup;
@@ -43,12 +43,12 @@ export const GroupOfficerTransfer: React.FC = () => {
 
   const canTransfer = scope.isAdmin || scope.isBranchManager;
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-  const [applied, setApplied] = useState({ branchId: '', officerId: '', groupId: '', search: '' });
+  const [applied, setApplied] = useState({ branchId: "", officerId: "", groupId: "", search: "" });
   const [active, setActive] = useState<Row | null>(null);
-  const [toOfficerId, setToOfficerId] = useState('');
-  const [reason, setReason] = useState('');
+  const [toOfficerId, setToOfficerId] = useState("");
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
   const rows = useMemo<Row[]>(() => {
@@ -61,18 +61,21 @@ export const GroupOfficerTransfer: React.FC = () => {
     }
 
     return clientGroups
-      .filter((g) => g.approval_status === 'Approved')
+      .filter((g) => g.approval_status === "Approved")
       .map((g) => {
         const memberIds = new Set(membersByGroup.get(g.id) || []);
         const open = loans.filter(
-          (l) => memberIds.has(l.client_id) && !CLOSED_LOAN_STATUSES.includes(l.status) && l.status !== 'Pending',
+          (l) =>
+            memberIds.has(l.client_id) &&
+            !CLOSED_LOAN_STATUSES.includes(l.status) &&
+            l.status !== "Pending",
         );
         return {
           group: g,
           branch_name: scope.branchName(g.branch_id),
           officer_name: g.loan_officer_name || scope.officerName(g.loan_officer_id),
-          officer_id: g.loan_officer_id || '',
-          branch_id: g.branch_id || '',
+          officer_id: g.loan_officer_id || "",
+          branch_id: g.branch_id || "",
           members: memberIds.size,
           open_loans: open.length,
           outstanding: open.reduce((s, l) => s + Number(l.outstanding_balance || 0), 0),
@@ -88,14 +91,20 @@ export const GroupOfficerTransfer: React.FC = () => {
       if (applied.branchId && r.branch_id !== applied.branchId) return false;
       if (applied.officerId && r.officer_id !== applied.officerId) return false;
       if (applied.groupId && r.group.id !== applied.groupId) return false;
-      if (q && !`${r.group.group_name} ${r.group.group_code}`.toLowerCase().includes(q)) return false;
+      if (q && !`${r.group.group_name} ${r.group.group_code}`.toLowerCase().includes(q))
+        return false;
       return true;
     });
   }, [rows, applied, scope.isLoanOfficer, scope.user?.id]);
 
   const runSearch = () => {
     setHasSearched(true);
-    setApplied({ branchId: scope.branchId, officerId: scope.officerId, groupId: scope.groupId, search });
+    setApplied({
+      branchId: scope.branchId,
+      officerId: scope.officerId,
+      groupId: scope.groupId,
+      search,
+    });
   };
 
   // The database enforces this too, but filtering here keeps the list honest:
@@ -103,7 +112,8 @@ export const GroupOfficerTransfer: React.FC = () => {
   const candidates = useMemo(
     () =>
       scope.officers.filter(
-        (o) => (o.branch_ids || []).includes(active?.branch_id || '') && o.id !== active?.officer_id,
+        (o) =>
+          (o.branch_ids || []).includes(active?.branch_id || "") && o.id !== active?.officer_id,
       ),
     [scope.officers, active?.branch_id, active?.officer_id],
   );
@@ -111,7 +121,7 @@ export const GroupOfficerTransfer: React.FC = () => {
   const confirmTransfer = async () => {
     if (!active) return;
     if (!toOfficerId) {
-      addToast('warning', 'Choose an officer', 'Select the loan officer taking over this group.');
+      addToast("warning", "Choose an officer", "Select the loan officer taking over this group.");
       return;
     }
     setBusy(true);
@@ -119,49 +129,86 @@ export const GroupOfficerTransfer: React.FC = () => {
       await transferGroupOfficer(active.group.id, toOfficerId, reason.trim() || undefined);
       const to = scope.officers.find((o) => o.id === toOfficerId);
       addToast(
-        'success',
-        'Group reassigned',
-        `${active.group.group_name} and ${active.members} member(s) moved to ${to?.full_name || 'the new officer'}.`,
+        "success",
+        "Group reassigned",
+        `${active.group.group_name} and ${active.members} member(s) moved to ${to?.full_name || "the new officer"}.`,
       );
       setActive(null);
     } catch (error) {
-      addToast('error', 'Reassignment failed', error instanceof Error ? error.message : 'Please try again.');
+      addToast(
+        "error",
+        "Reassignment failed",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     } finally {
       setBusy(false);
     }
   };
 
   const columns: MisColumn<Row>[] = [
-    { key: 'branch', label: 'Branch', width: '12%', render: (r) => r.branch_name, text: (r) => r.branch_name },
-    { key: 'code', label: 'Group Code', width: '12%', render: (r) => r.group.group_code, text: (r) => r.group.group_code },
     {
-      key: 'name',
-      label: 'Group Name',
-      width: '17%',
+      key: "branch",
+      label: "Branch",
+      width: "12%",
+      render: (r) => r.branch_name,
+      text: (r) => r.branch_name,
+    },
+    {
+      key: "code",
+      label: "Group Code",
+      width: "12%",
+      render: (r) => r.group.group_code,
+      text: (r) => r.group.group_code,
+    },
+    {
+      key: "name",
+      label: "Group Name",
+      width: "17%",
       render: (r) => <span className="font-semibold text-slate-900">{r.group.group_name}</span>,
       text: (r) => r.group.group_name,
     },
-    { key: 'lo', label: 'Current LO', width: '14%', render: (r) => r.officer_name, text: (r) => r.officer_name },
-    { key: 'members', label: 'Members', width: '8%', align: 'center', render: (r) => r.members },
-    { key: 'loans', label: 'Open Loans', width: '8%', align: 'center', render: (r) => r.open_loans },
     {
-      key: 'out',
-      label: 'Outstanding',
-      width: '11%',
-      align: 'right',
-      render: (r) => (r.outstanding > 0 ? money(r.outstanding) : '—'),
+      key: "lo",
+      label: "Current LO",
+      width: "14%",
+      render: (r) => r.officer_name,
+      text: (r) => r.officer_name,
+    },
+    { key: "members", label: "Members", width: "8%", align: "center", render: (r) => r.members },
+    {
+      key: "loans",
+      label: "Open Loans",
+      width: "8%",
+      align: "center",
+      render: (r) => r.open_loans,
+    },
+    {
+      key: "out",
+      label: "Outstanding",
+      width: "11%",
+      align: "right",
+      render: (r) => (r.outstanding > 0 ? money(r.outstanding) : "—"),
       text: (r) => money(r.outstanding),
     },
-    { key: 'formed', label: 'Formed', width: '9%', render: (r) => shortDate(r.group.formation_date) },
     {
-      key: 'act',
-      label: 'Action',
-      width: '6%',
-      align: 'center',
+      key: "formed",
+      label: "Formed",
+      width: "9%",
+      render: (r) => shortDate(r.group.formation_date),
+    },
+    {
+      key: "act",
+      label: "Action",
+      width: "6%",
+      align: "center",
       render: (r) =>
         canTransfer ? (
           <ActionButton
-            onClick={() => { setActive(r); setToOfficerId(''); setReason(''); }}
+            onClick={() => {
+              setActive(r);
+              setToOfficerId("");
+              setReason("");
+            }}
             title="Reassign to another loan officer"
             tone="navy"
           >
@@ -175,11 +222,16 @@ export const GroupOfficerTransfer: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-16">
-      <MisPageTitle right={<ReportExportButtons title="Group LO Transfer" columns={columns} rows={filtered} />}>Group LO Transfer</MisPageTitle>
+      <MisPageTitle
+        right={<ReportExportButtons title="Group LO Transfer" columns={columns} rows={filtered} />}
+      >
+        Group LO Transfer
+      </MisPageTitle>
 
       {!canTransfer && (
         <p className="rounded border border-slate-200 bg-slate-50 p-2.5 text-[11px] text-slate-500">
-          Reassigning a group is done by a Branch Manager or an Administrator. You can review group assignments here.
+          Reassigning a group is done by a Branch Manager or an Administrator. You can review group
+          assignments here.
         </p>
       )}
 
@@ -206,7 +258,12 @@ export const GroupOfficerTransfer: React.FC = () => {
         mobileSubtitle={(r) => `${r.group.group_code} • ${r.officer_name}`}
       />
 
-      <MisModal open={!!active} onClose={() => setActive(null)} title="Reassign Group to Another Officer" width="max-w-md">
+      <MisModal
+        open={!!active}
+        onClose={() => setActive(null)}
+        title="Reassign Group to Another Officer"
+        width="max-w-md"
+      >
         {active && (
           <div className="space-y-4 text-xs">
             <div className="rounded border border-slate-200 bg-slate-50 p-3">
@@ -215,13 +272,22 @@ export const GroupOfficerTransfer: React.FC = () => {
                 {active.group.group_code} • {active.branch_name} • currently {active.officer_name}
               </p>
               <p className="mt-1 text-slate-600">
-                {active.members} member{active.members === 1 ? '' : 's'}
-                {active.open_loans > 0 && <> • {active.open_loans} open loan(s), {money(active.outstanding)} outstanding</>}
+                {active.members} member{active.members === 1 ? "" : "s"}
+                {active.open_loans > 0 && (
+                  <>
+                    {" "}
+                    • {active.open_loans} open loan(s), {money(active.outstanding)} outstanding
+                  </>
+                )}
               </p>
             </div>
 
             <Field label="New Loan Officer *">
-              <select value={toOfficerId} onChange={(e) => setToOfficerId(e.target.value)} className="form-field">
+              <select
+                value={toOfficerId}
+                onChange={(e) => setToOfficerId(e.target.value)}
+                className="form-field"
+              >
                 <option value="">-- Select --</option>
                 {candidates.map((o) => (
                   <option key={o.id} value={o.id}>
@@ -232,8 +298,8 @@ export const GroupOfficerTransfer: React.FC = () => {
             </Field>
             {candidates.length === 0 && (
               <p className="rounded border border-amber-200 bg-amber-50 p-2.5 text-amber-800">
-                There is no other active loan officer attached to {active.branch_name}. Assign one to this branch in User
-                Management first.
+                There is no other active loan officer attached to {active.branch_name}. Assign one
+                to this branch in User Management first.
               </p>
             )}
 
@@ -248,12 +314,16 @@ export const GroupOfficerTransfer: React.FC = () => {
             </Field>
 
             <p className="rounded border border-slate-200 bg-slate-50 p-2.5 text-slate-600">
-              The group and all {active.members} member{active.members === 1 ? '' : 's'} move to the new officer
-              together, and their portfolio moves with them.
+              The group and all {active.members} member{active.members === 1 ? "" : "s"} move to the
+              new officer together, and their portfolio moves with them.
             </p>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-3 sm:flex-row sm:justify-end">
-              <button type="button" onClick={() => setActive(null)} className="rounded bg-slate-100 px-4 py-2 font-bold text-slate-700">
+              <button
+                type="button"
+                onClick={() => setActive(null)}
+                className="rounded bg-slate-100 px-4 py-2 font-bold text-slate-700"
+              >
                 Cancel
               </button>
               <button
@@ -262,7 +332,7 @@ export const GroupOfficerTransfer: React.FC = () => {
                 onClick={confirmTransfer}
                 className="rounded bg-[#0B4394] px-5 py-2 font-bold text-white hover:bg-[#093672] disabled:opacity-50"
               >
-                {busy ? 'Reassigning…' : 'Reassign Group'}
+                {busy ? "Reassigning…" : "Reassign Group"}
               </button>
             </div>
           </div>

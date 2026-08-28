@@ -8,7 +8,10 @@ export const Route = createFileRoute("/reports/master-roll")({
       { title: "Master Roll | Chetu Microfinance" },
       { name: "description", content: "Master roll report for branch loan and member records." },
       { property: "og:title", content: "Master Roll | Chetu Microfinance" },
-      { property: "og:description", content: "Master roll report for branch loan and member records." },
+      {
+        property: "og:description",
+        content: "Master roll report for branch loan and member records.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

@@ -6,3 +6,6 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+# Regenerated from the live database (Management API /types/typescript), so
+# formatting it is undone by the next schema change — same reason as above.
+src/integrations/supabase/types.ts

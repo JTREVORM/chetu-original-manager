@@ -8,7 +8,10 @@ export const Route = createFileRoute("/savings")({
       { title: "Savings Dashboard | Chetu Microfinance" },
       { name: "description", content: "Weekly savings monitoring across branches and groups." },
       { property: "og:title", content: "Savings Dashboard | Chetu Microfinance" },
-      { property: "og:description", content: "Weekly savings monitoring across branches and groups." },
+      {
+        property: "og:description",
+        content: "Weekly savings monitoring across branches and groups.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

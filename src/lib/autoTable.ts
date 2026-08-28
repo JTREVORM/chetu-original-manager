@@ -1,6 +1,6 @@
-import jsPDFCtor from 'jspdf';
-import type jsPDF from 'jspdf';
-import { applyPlugin } from 'jspdf-autotable';
+import jsPDFCtor from "jspdf";
+import type jsPDF from "jspdf";
+import { applyPlugin } from "jspdf-autotable";
 
 // jspdf-autotable ships as a UMD bundle whose default export is not reliably
 // callable through Vite's CJS interop. Registering the plugin on the jsPDF

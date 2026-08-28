@@ -6,9 +6,15 @@ export const Route = createFileRoute("/groups/waiting-approval")({
   head: () => ({
     meta: [
       { title: "Waiting for Approval Group | Chetu Microfinance" },
-      { name: "description", content: "Groups awaiting Branch Manager approval before they can operate." },
+      {
+        name: "description",
+        content: "Groups awaiting Branch Manager approval before they can operate.",
+      },
       { property: "og:title", content: "Waiting for Approval Group | Chetu Microfinance" },
-      { property: "og:description", content: "Groups awaiting Branch Manager approval before they can operate." },
+      {
+        property: "og:description",
+        content: "Groups awaiting Branch Manager approval before they can operate.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

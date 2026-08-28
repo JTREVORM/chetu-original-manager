@@ -6,9 +6,15 @@ export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings | Chetu Microfinance" },
-      { name: "description", content: "Settings workspace in the Chetu microfinance management system." },
+      {
+        name: "description",
+        content: "Settings workspace in the Chetu microfinance management system.",
+      },
       { property: "og:title", content: "Settings | Chetu Microfinance" },
-      { property: "og:description", content: "Settings workspace in the Chetu microfinance management system." },
+      {
+        property: "og:description",
+        content: "Settings workspace in the Chetu microfinance management system.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

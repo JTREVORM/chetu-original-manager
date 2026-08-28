@@ -1,21 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ProtectedLayout } from "@/components/layout/ProtectedLayout";
-import { Branches } from "@/pages/Branches";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
+// Layout only. The network list lives in branches.index.tsx and the per-branch
+// dashboard in branches.$branchId.tsx — the same split reports.tsx uses.
 export const Route = createFileRoute("/branches")({
-  head: () => ({
-    meta: [
-      { title: "Branch Network | Chetu Microfinance" },
-      { name: "description", content: "Create and manage branch offices and their staff coverage in the Chetu microfinance system." },
-      { property: "og:title", content: "Branch Network | Chetu Microfinance" },
-      { property: "og:description", content: "Create and manage branch offices and their staff coverage in the Chetu microfinance system." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: () => (
-    <ProtectedLayout adminOnly>
-      <Branches />
-    </ProtectedLayout>
-  ),
+  component: () => <Outlet />,
 });

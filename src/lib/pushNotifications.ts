@@ -12,18 +12,18 @@
  * vendors' push services — that is a backend change, not a client one.
  */
 
-const ASKED_KEY = 'chetu_push_prompt_answered';
+const ASKED_KEY = "chetu_push_prompt_answered";
 
 export const pushSupported = (): boolean =>
-  typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator;
+  typeof window !== "undefined" && "Notification" in window && "serviceWorker" in navigator;
 
-export const pushPermission = (): NotificationPermission | 'unsupported' =>
-  pushSupported() ? Notification.permission : 'unsupported';
+export const pushPermission = (): NotificationPermission | "unsupported" =>
+  pushSupported() ? Notification.permission : "unsupported";
 
 /** Whether we have already put the question to this person on this device. */
 export const pushPromptAnswered = (): boolean => {
   try {
-    return window.localStorage.getItem(ASKED_KEY) === 'yes';
+    return window.localStorage.getItem(ASKED_KEY) === "yes";
   } catch {
     return false;
   }
@@ -31,7 +31,7 @@ export const pushPromptAnswered = (): boolean => {
 
 export const markPushPromptAnswered = (): void => {
   try {
-    window.localStorage.setItem(ASKED_KEY, 'yes');
+    window.localStorage.setItem(ASKED_KEY, "yes");
   } catch {
     /* private mode — we simply ask again next time */
   }
@@ -41,8 +41,8 @@ export const markPushPromptAnswered = (): void => {
  * Ask the browser for permission. Must be called from a user gesture: Chrome
  * and Safari both ignore a request that is not tied to a click.
  */
-export const requestPushPermission = async (): Promise<NotificationPermission | 'unsupported'> => {
-  if (!pushSupported()) return 'unsupported';
+export const requestPushPermission = async (): Promise<NotificationPermission | "unsupported"> => {
+  if (!pushSupported()) return "unsupported";
   markPushPromptAnswered();
   try {
     return await Notification.requestPermission();
@@ -62,17 +62,17 @@ export interface DeviceAlert {
 
 /** Show one alert on the device. Never throws — an alert must not break a flow. */
 export const showDeviceNotification = async (alert: DeviceAlert): Promise<void> => {
-  if (!pushSupported() || Notification.permission !== 'granted') return;
+  if (!pushSupported() || Notification.permission !== "granted") return;
   try {
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification(alert.title, {
       body: alert.message,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
       tag: alert.tag,
       // The phone should buzz: staff are in the field, not watching a screen.
       vibrate: [120, 60, 120],
-      data: { url: alert.link_url || '/' },
+      data: { url: alert.link_url || "/" },
     } as NotificationOptions);
   } catch {
     /* a failed alert must never interrupt the app */

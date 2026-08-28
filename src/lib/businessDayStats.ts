@@ -1,4 +1,9 @@
-import type { AuditRow, BusinessDayRow, OfficerDayRow, StaffRow } from '../context/BusinessDayContext';
+import type {
+  AuditRow,
+  BusinessDayRow,
+  OfficerDayRow,
+  StaffRow,
+} from "../context/BusinessDayContext";
 
 /**
  * Everything the open/close workflow needs to state about one branch-day, in
@@ -23,14 +28,20 @@ export interface DayStats {
   outstanding: string[];
 }
 
-const onDate = (value: string | null | undefined, date: string) => (value || '').split('T')[0] === date;
+const onDate = (value: string | null | undefined, date: string) =>
+  (value || "").split("T")[0] === date;
 
 export interface DayStatsInput {
   branchId: string;
   date: string;
   officerDays: OfficerDayRow[];
   staff: StaffRow[];
-  loans: { disbursed_at?: string | null; principal_amount?: number; status?: string; approved_by?: string | null }[];
+  loans: {
+    disbursed_at?: string | null;
+    principal_amount?: number;
+    status?: string;
+    approved_by?: string | null;
+  }[];
   repayments: { payment_date?: string | null; created_at?: string | null; amount_paid?: number }[];
   savings: { created_at?: string | null; amount?: number; transaction_type?: string }[];
   clients: { date_registered?: string | null; approval_status?: string }[];
@@ -41,53 +52,62 @@ export function computeDayStats(input: DayStatsInput): DayStats {
 
   const days = officerDays.filter((d) => d.business_date === date && d.branch_id === branchId);
   const officersTotal = staff.filter(
-    (p) => p.role === 'Loan Officer' && p.status === 'Active' && (p.branch_ids || []).includes(branchId),
+    (p) =>
+      p.role === "Loan Officer" && p.status === "Active" && (p.branch_ids || []).includes(branchId),
   ).length;
 
   const countBy = (...statuses: string[]) => days.filter((d) => statuses.includes(d.status)).length;
-  const officersActive = countBy('ACTIVE', 'SPECIAL_ACCESS', 'REJECTED');
-  const officersSubmitted = countBy('SUBMITTED', 'PENDING_APPROVAL', 'APPROVED');
-  const officersPendingApproval = countBy('SUBMITTED', 'PENDING_APPROVAL');
-  const officersApproved = countBy('APPROVED');
+  const officersActive = countBy("ACTIVE", "SPECIAL_ACCESS", "REJECTED");
+  const officersSubmitted = countBy("SUBMITTED", "PENDING_APPROVAL", "APPROVED");
+  const officersPendingApproval = countBy("SUBMITTED", "PENDING_APPROVAL");
+  const officersApproved = countBy("APPROVED");
   const officersNotStarted = Math.max(0, officersTotal - days.length);
 
   const disbursedToday = loans.filter((l) => onDate(l.disbursed_at, date));
-  const paidToday = repayments.filter((r) => onDate(r.payment_date, date) || onDate(r.created_at, date));
+  const paidToday = repayments.filter(
+    (r) => onDate(r.payment_date, date) || onDate(r.created_at, date),
+  );
   const savedToday = savings.filter((t) => onDate(t.created_at, date));
 
   const deposits = savedToday
-    .filter((t) => t.transaction_type !== 'Withdrawal')
+    .filter((t) => t.transaction_type !== "Withdrawal")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
   const withdrawals = savedToday
-    .filter((t) => t.transaction_type === 'Withdrawal')
+    .filter((t) => t.transaction_type === "Withdrawal")
     .reduce((s, t) => s + Number(t.amount || 0), 0);
 
   // What a manager should resolve, or at least see, before locking the date.
   const outstanding: string[] = [];
-  const notSubmitted = officersNotStarted + countBy('ACTIVE', 'SPECIAL_ACCESS');
+  const notSubmitted = officersNotStarted + countBy("ACTIVE", "SPECIAL_ACCESS");
   if (notSubmitted > 0) {
     outstanding.push(
-      `${notSubmitted} Loan Officer${notSubmitted === 1 ? ' has' : 's have'} not submitted their day.`,
+      `${notSubmitted} Loan Officer${notSubmitted === 1 ? " has" : "s have"} not submitted their day.`,
     );
   }
   if (officersPendingApproval > 0) {
     outstanding.push(
-      `${officersPendingApproval} submitted day${officersPendingApproval === 1 ? '' : 's'} still awaiting your approval.`,
+      `${officersPendingApproval} submitted day${officersPendingApproval === 1 ? "" : "s"} still awaiting your approval.`,
     );
   }
-  const rejected = countBy('REJECTED');
+  const rejected = countBy("REJECTED");
   if (rejected > 0) {
-    outstanding.push(`${rejected} day${rejected === 1 ? '' : 's'} sent back for corrections and not yet resubmitted.`);
+    outstanding.push(
+      `${rejected} day${rejected === 1 ? "" : "s"} sent back for corrections and not yet resubmitted.`,
+    );
   }
   const pendingAdmissions = clients.filter(
-    (c) => onDate(c.date_registered, date) && c.approval_status === 'Pending',
+    (c) => onDate(c.date_registered, date) && c.approval_status === "Pending",
   ).length;
   if (pendingAdmissions > 0) {
-    outstanding.push(`${pendingAdmissions} member admission${pendingAdmissions === 1 ? '' : 's'} awaiting approval.`);
+    outstanding.push(
+      `${pendingAdmissions} member admission${pendingAdmissions === 1 ? "" : "s"} awaiting approval.`,
+    );
   }
-  const undisbursed = loans.filter((l) => l.status === 'Pending' && !!l.approved_by).length;
+  const undisbursed = loans.filter((l) => l.status === "Pending" && !!l.approved_by).length;
   if (undisbursed > 0) {
-    outstanding.push(`${undisbursed} approved loan${undisbursed === 1 ? '' : 's'} not yet disbursed.`);
+    outstanding.push(
+      `${undisbursed} approved loan${undisbursed === 1 ? "" : "s"} not yet disbursed.`,
+    );
   }
 
   return {
@@ -110,7 +130,7 @@ export function computeDayStats(input: DayStatsInput): DayStats {
 
 /** "3h 42m" — how long the day has been open, or ran for once closed. */
 export function formatDuration(from?: string | null, to?: Date | string | null): string {
-  if (!from) return '—';
+  if (!from) return "—";
   const start = new Date(from).getTime();
   const end = to ? new Date(to).getTime() : Date.now();
   const mins = Math.max(0, Math.floor((end - start) / 60000));
@@ -123,7 +143,7 @@ export interface TimelineEvent {
   at: string;
   label: string;
   detail?: string;
-  tone: 'green' | 'amber' | 'red' | 'slate';
+  tone: "green" | "amber" | "red" | "slate";
 }
 
 /**
@@ -143,9 +163,9 @@ export function buildTimeline(
   if (day.opened_at) {
     events.push({
       at: day.opened_at,
-      label: 'Business Day Opened',
-      detail: `Opened by ${staffNames[day.opened_by || ''] || 'a manager'}`,
-      tone: 'green',
+      label: "Business Day Opened",
+      detail: `Opened by ${staffNames[day.opened_by || ""] || "a manager"}`,
+      tone: "green",
     });
   }
 
@@ -156,48 +176,55 @@ export function buildTimeline(
   if (firstStart) {
     events.push({
       at: firstStart,
-      label: 'Loan Officers Started Working',
+      label: "Loan Officers Started Working",
       detail: `${mine.filter((d) => d.started_at).length} started`,
-      tone: 'green',
+      tone: "green",
     });
   }
 
-  const submitted = mine.filter((d) => d.submitted_at).sort((a, b) => (a.submitted_at! < b.submitted_at! ? -1 : 1));
+  const submitted = mine
+    .filter((d) => d.submitted_at)
+    .sort((a, b) => (a.submitted_at! < b.submitted_at! ? -1 : 1));
   const lastSubmitted = submitted[submitted.length - 1];
   if (lastSubmitted?.submitted_at) {
     const total = mine.length || submitted.length;
     events.push({
       at: lastSubmitted.submitted_at,
-      label: 'Loan Officer Submissions',
+      label: "Loan Officer Submissions",
       detail: `${submitted.length} of ${total} submitted`,
-      tone: submitted.length === total ? 'green' : 'amber',
+      tone: submitted.length === total ? "green" : "amber",
     });
   }
 
-  const approved = mine.filter((d) => d.approved_at).sort((a, b) => (a.approved_at! < b.approved_at! ? -1 : 1));
+  const approved = mine
+    .filter((d) => d.approved_at)
+    .sort((a, b) => (a.approved_at! < b.approved_at! ? -1 : 1));
   if (approved.length && approved.length === mine.length) {
     events.push({
       at: approved[approved.length - 1]!.approved_at!,
-      label: 'All Days Approved',
+      label: "All Days Approved",
       detail: `${approved.length} approved`,
-      tone: 'green',
+      tone: "green",
     });
   } else if (approved.length) {
     events.push({
       at: approved[approved.length - 1]!.approved_at!,
-      label: 'Days Approved',
+      label: "Days Approved",
       detail: `${approved.length} of ${mine.length} approved`,
-      tone: 'amber',
+      tone: "amber",
     });
   }
 
   for (const a of audit) {
-    if (a.action?.toLowerCase().includes('special access') && a.business_date === day.business_date) {
+    if (
+      a.action?.toLowerCase().includes("special access") &&
+      a.business_date === day.business_date
+    ) {
       events.push({
         at: a.created_at,
         label: a.action,
         detail: a.actor_name ? `by ${a.actor_name}` : undefined,
-        tone: a.new_status === 'Approved' ? 'amber' : 'slate',
+        tone: a.new_status === "Approved" ? "amber" : "slate",
       });
     }
   }
@@ -205,9 +232,9 @@ export function buildTimeline(
   if (day.closed_at) {
     events.push({
       at: day.closed_at,
-      label: 'Business Day Closed',
-      detail: 'Transaction entry locked for this date',
-      tone: 'red',
+      label: "Business Day Closed",
+      detail: "Transaction entry locked for this date",
+      tone: "red",
     });
   }
 

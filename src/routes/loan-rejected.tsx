@@ -6,9 +6,17 @@ export const Route = createFileRoute("/loan-rejected")({
   head: () => ({
     meta: [
       { title: "Loan Rejected List | Chetu Microfinance" },
-      { name: "description", content: "Loan applications that were rejected, with resubmission for the submitting officer." },
+      {
+        name: "description",
+        content:
+          "Loan applications that were rejected, with resubmission for the submitting officer.",
+      },
       { property: "og:title", content: "Loan Rejected List | Chetu Microfinance" },
-      { property: "og:description", content: "Loan applications that were rejected, with resubmission for the submitting officer." },
+      {
+        property: "og:description",
+        content:
+          "Loan applications that were rejected, with resubmission for the submitting officer.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

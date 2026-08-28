@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from '../../lib/router-compat';
-import { useDatabase } from '../../context/DatabaseContext';
-import { Search, X, Users, Receipt, Briefcase, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "../../lib/router-compat";
+import { useDatabase } from "../../context/DatabaseContext";
+import { Search, X, Users, Receipt, Briefcase, ChevronRight } from "lucide-react";
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -9,22 +9,22 @@ interface GlobalSearchModalProps {
 }
 
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, onClose }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const { performGlobalSearch } = useDatabase();
   const navigate = useNavigate();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
-        isOpen ? onClose() : null;
+        if (isOpen) onClose();
       }
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === "Escape" && isOpen) {
         onClose();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -34,7 +34,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
   const handleSelect = (link: string) => {
     navigate(link);
     onClose();
-    setQuery('');
+    setQuery("");
   };
 
   return (
@@ -65,12 +65,18 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
             <div className="p-8 text-center text-slate-400">
               <Search className="w-8 h-8 mx-auto mb-2 opacity-40 text-chetu-blue" />
               <p className="text-xs font-medium">Type anything to search system records</p>
-              <p className="text-[11px] text-slate-400 mt-1">Press <kbd className="px-1.5 py-0.5 bg-slate-100 border rounded text-[10px]">Esc</kbd> to exit</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Press{" "}
+                <kbd className="px-1.5 py-0.5 bg-slate-100 border rounded text-[10px]">Esc</kbd> to
+                exit
+              </p>
             </div>
           ) : results.length === 0 ? (
             <div className="p-8 text-center text-slate-500">
               <p className="text-xs font-semibold">No records found matching "{query}"</p>
-              <p className="text-[11px] text-slate-400 mt-1">Check spelling or search by NIN/Phone Number</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Check spelling or search by NIN/Phone Number
+              </p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -84,14 +90,18 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({ isOpen, on
                   className="w-full text-left p-3 rounded-xl hover:bg-slate-50 flex items-center justify-between transition-colors group"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2 rounded-lg ${
-                      item.type === 'Client' ? 'bg-blue-100 text-blue-700' :
-                      item.type === 'Loan' ? 'bg-emerald-100 text-emerald-700' :
-                      'bg-purple-100 text-purple-700'
-                    }`}>
-                      {item.type === 'Client' && <Users className="w-4 h-4" />}
-                      {item.type === 'Loan' && <Receipt className="w-4 h-4" />}
-                      {item.type === 'Product' && <Briefcase className="w-4 h-4" />}
+                    <div
+                      className={`p-2 rounded-lg ${
+                        item.type === "Client"
+                          ? "bg-blue-100 text-blue-700"
+                          : item.type === "Loan"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-purple-100 text-purple-700"
+                      }`}
+                    >
+                      {item.type === "Client" && <Users className="w-4 h-4" />}
+                      {item.type === "Loan" && <Receipt className="w-4 h-4" />}
+                      {item.type === "Product" && <Briefcase className="w-4 h-4" />}
                     </div>
                     <div className="min-w-0">
                       <h4 className="text-xs font-bold text-slate-900 truncate group-hover:text-chetu-blue">
