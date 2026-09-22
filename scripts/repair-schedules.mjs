@@ -9,9 +9,16 @@
  * WHAT THIS MAY CHANGE, and only in `loan_repayment_schedule`:
  *   · insert an instalment row that should exist and does not
  *   · move the due date of an instalment that carries NO payment
+ *   · move the due date — and ONLY the due date — of a PAID instalment, under
+ *     the narrow guard in `planForLoan` step 2: a receipt on that loan is
+ *     dated exactly on the corrected day, and the corrected day is earlier
+ *     than the stored one. This pulls a due date back onto the meeting the
+ *     member actually paid at; it can never push one forward, and it writes
+ *     nothing but `due_date`. Approved case by case, not a general licence.
  *   · rewrite paid_amount / remaining_balance / status from the receipts that
  *     already exist
  *   · set loan_repayments.schedule_id, a nullable link column
+ *   · write one `audit_logs` row recording the run
  *
  * WHAT THIS NEVER CHANGES — enforced below, not merely intended:
  *   · no INSERT, UPDATE or DELETE of a receipt's money, date, method, receipt
@@ -20,7 +27,8 @@
  *   · no bank, cash or ledger transaction
  *   · no row is ever deleted, in any table
  *   · no instalment is marked paid without a receipt to account for it
- *   · no due date that a payment is attached to is moved
+ *   · no paid instalment's amount, status, paid_amount or paid_at is touched,
+ *     whether or not its due date moves
  *
  * A loan the audit flagged AMBIGUOUS is skipped, always. Ambiguity is resolved
  * by a person, not by this script.
@@ -231,16 +239,63 @@ export function planForLoan({ loan, client, group, rows, receipts, product = nul
     });
   }
 
-  // 2. Weekday drift on instalments that carry no payment.
+  // 2. Weekday drift.
+  //
+  // An unpaid instalment is re-dated freely. A paid one is not — except under
+  // the narrow guard below, which exists for one documented situation: the
+  // drifted date is wrong, the member paid on the date the rule says is right,
+  // and the only thing out of step is the schedule. Moving the due date onto
+  // the day the money actually arrived records what happened; leaving it
+  // records a payment made a day early against an instalment that was never
+  // due then.
+  //
+  // Every condition must hold, and each is checked against the rows in hand:
+  //   a. the row carries a payment (otherwise the ordinary path applies)
+  //   b. a receipt exists on this loan
+  //   c. that receipt's payment_date equals the corrected due date exactly
+  //   d. the corrected date is EARLIER than the stored one — this only ever
+  //      pulls a due date back onto a meeting that already happened, and can
+  //      never push an instalment into the future
+  //   e. only due_date is written; amount, status, paid_amount and paid_at are
+  //      untouched, and the receipt itself is never written at all
+  //
+  // A paid row failing any of these is skipped and reported, exactly as before.
   for (const row of ordered) {
     const shouldBe = addDays(firstDue, (row.week_number - 1) * 7);
     if (row.due_date === shouldBe) continue;
+
     if (Number(row.paid_amount || 0) > 0) {
+      const matching = receipts.filter((r) => String(r.payment_date).slice(0, 10) === shouldBe);
+      const earlier = shouldBe < row.due_date;
+
+      if (matching.length > 0 && earlier) {
+        plan.actions.push({
+          kind: "redate_paid_installment",
+          id: row.id,
+          week: row.week_number,
+          from: row.due_date,
+          due: shouldBe,
+          // Carried for the write-time re-check and for the report.
+          paidAmount: Number(row.paid_amount || 0),
+          receiptNumbers: matching.map((r) => r.receipt_number),
+          why:
+            `paid instalment is a ${WEEKDAYS[parseLocal(row.due_date).getDay()]}, group meets ` +
+            `${WEEKDAYS[meetingIndex]}; receipt ${matching.map((r) => r.receipt_number).join(", ")} ` +
+            `is dated ${shouldBe}, the corrected date`,
+        });
+        continue;
+      }
+
       plan.skips.push(
-        `week ${row.week_number} is on ${row.due_date} instead of ${shouldBe} but carries a payment — left as it is`,
+        `week ${row.week_number} is on ${row.due_date} instead of ${shouldBe} but carries a payment — ` +
+          (matching.length === 0
+            ? "no receipt is dated on the corrected day"
+            : "the corrected date is not earlier than the stored one") +
+          " — left as it is",
       );
       continue;
     }
+
     plan.actions.push({
       kind: "redate_installment",
       id: row.id,
@@ -263,7 +318,11 @@ export function planForLoan({ loan, client, group, rows, receipts, product = nul
         .map((a) => ({ ...a.row, id: null })),
     );
   for (const row of projected) {
-    const action = plan.actions.find((a) => a.kind === "redate_installment" && a.id === row.id);
+    const action = plan.actions.find(
+      (a) =>
+        (a.kind === "redate_installment" || a.kind === "redate_paid_installment") &&
+        a.id === row.id,
+    );
     if (action) row.due_date = action.due;
   }
   projected.sort((a, b) =>
@@ -437,6 +496,7 @@ async function main() {
   const tally = {
     insert_installment: 0,
     redate_installment: 0,
+    redate_paid_installment: 0,
     reconcile_installment: 0,
     link_receipt: 0,
   };
@@ -458,6 +518,14 @@ async function main() {
         );
       } else if (a.kind === "redate_installment") {
         console.log(`  ~ REDATE  week ${a.week} ${a.from} → ${a.due} — ${a.why}`);
+      } else if (a.kind === "redate_paid_installment") {
+        console.log(
+          `  ! REDATE* week ${a.week} ${a.from} → ${a.due} — PAID ROW, narrow guard — ${a.why}`,
+        );
+        console.log(
+          `            only due_date is written; paid ${money(a.paidAmount)} and receipt ` +
+            `${a.receiptNumbers.join(", ")} are not touched`,
+        );
       } else if (a.kind === "reconcile_installment") {
         console.log(
           `  ~ RECONC  week ${a.week} paid ${money(a.from.paid)}→${money(a.to.paid)} ` +
@@ -476,6 +544,7 @@ async function main() {
   console.log(`  loans skipped for review     ${skippedLoans}`);
   console.log(`  instalments to insert        ${tally.insert_installment}`);
   console.log(`  instalments to re-date       ${tally.redate_installment}`);
+  console.log(`  paid week-1 rows to re-date  ${tally.redate_paid_installment}  (narrow guard)`);
   console.log(`  instalments to reconcile     ${tally.reconcile_installment}`);
   console.log(`  receipts to link             ${tally.link_receipt}`);
   console.log(`  receipts to create/modify    0  (this script cannot)`);
@@ -511,6 +580,44 @@ async function main() {
             console.log(`  ! SKIP    week ${a.week} now carries a payment — not re-dated`);
             continue;
           }
+          const { error } = await db
+            .from("loan_repayment_schedule")
+            .update({ due_date: a.due })
+            .eq("id", a.id);
+          if (error) throw new Error(error.message);
+        } else if (a.kind === "redate_paid_installment") {
+          // The narrow guard, re-asserted against live rows at write time. The
+          // plan may be minutes old; a receipt could have been edited or the
+          // row part-paid since. Every condition is checked again here, and a
+          // failure skips the row rather than writing it.
+          const { data: live, error: readError } = await db
+            .from("loan_repayment_schedule")
+            .select("paid_amount, due_date")
+            .eq("id", a.id)
+            .single();
+          if (readError) throw new Error(readError.message);
+
+          const { data: liveReceipts, error: receiptError } = await db
+            .from("loan_repayments")
+            .select("receipt_number, payment_date")
+            .eq("loan_id", plan.loan.id);
+          if (receiptError) throw new Error(receiptError.message);
+
+          const stillPaid = Number(live?.paid_amount || 0) > 0;
+          const stillMatches = (liveReceipts || []).some(
+            (r) => String(r.payment_date).slice(0, 10) === a.due,
+          );
+          const stillEarlier = a.due < String(live?.due_date || "").slice(0, 10);
+
+          if (!stillPaid || !stillMatches || !stillEarlier) {
+            console.log(
+              `  ! SKIP    week ${a.week} no longer satisfies the narrow guard — not re-dated`,
+            );
+            continue;
+          }
+
+          // Only due_date. The receipt is not written, and neither is
+          // paid_amount, status or paid_at on this row.
           const { error } = await db
             .from("loan_repayment_schedule")
             .update({ due_date: a.due })
@@ -558,6 +665,56 @@ async function main() {
   console.log(`  receipt total before / after ${money(beforeTotal)} / ${money(afterTotal)}`);
   console.log(`  financial ledger unchanged   ${ledgerIntact ? "YES" : "NO — INVESTIGATE"}`);
   console.log("");
+
+  // ------------------------------------------------------------ audit record
+  //
+  // The repair writes through PostgREST with the service role, so none of the
+  // application's own `logAudit` calls fire and the change would otherwise
+  // leave no trace an Auditor can see in the app. One row records the whole
+  // run: what was touched, how much, and — stated explicitly, because it is
+  // the question anyone reading this entry will have — that no repayment,
+  // receipt or balance was modified.
+  //
+  // `audit_logs` carries no business-day trigger, and the service role is not
+  // an authenticated user, so `user_id` is left null and the actor is named in
+  // `user_name` instead.
+  const affected = plans
+    .filter((p) => p.actions.length)
+    .map((p) => p.loan.loan_number)
+    .sort();
+  const auditDetails =
+    `Schedule-integrity repair (scripts/repair-schedules.mjs). ` +
+    `${applied} change(s) written across ${affected.length} loan(s), ${failed} failed. ` +
+    `Instalments re-dated onto the group meeting day: ${tally.redate_installment} unpaid, ` +
+    `${tally.redate_paid_installment} paid (due_date only, under the narrow guard: a receipt ` +
+    `dated on the corrected day, and the corrected day earlier than the stored one). ` +
+    `Per-instalment remaining_balance reconciled on ${tally.reconcile_installment} row(s). ` +
+    `schedule_id backfilled on ${tally.link_receipt} receipt(s). ` +
+    `${tally.insert_installment} instalment row(s) inserted. ` +
+    `NO repayment transaction was modified: amounts, payment dates, receipt numbers, ` +
+    `payment methods, collectors and notes are unchanged, as are loan outstanding balances ` +
+    `and all cash, bank and ledger records. Receipts before/after ${repayments.length}/` +
+    `${after.length}, total ${money(beforeTotal)}/${money(afterTotal)}, ledger fingerprint ` +
+    `${ledgerIntact ? "unchanged" : "CHANGED — INVESTIGATE"}. ` +
+    `Loans: ${affected.join(", ")}.`;
+
+  const { error: auditError } = await db.from("audit_logs").insert({
+    user_id: null,
+    user_name: "repair-schedules.mjs (service role)",
+    user_role: "Administrator",
+    action: "Schedule Integrity Repair",
+    module: "Loan Repayment Schedule",
+    details: auditDetails,
+    device_info: "server script",
+  });
+  if (auditError) {
+    // The repair itself succeeded; failing to record it is worth shouting
+    // about but must not be reported as a failed repair.
+    console.error(`  ! audit_logs entry FAILED to write: ${auditError.message}`);
+    console.error("    The repair was applied. Record it manually.\n");
+  } else {
+    console.log("  audit_logs entry written     YES\n");
+  }
 
   if (!ledgerIntact) process.exit(1);
 }

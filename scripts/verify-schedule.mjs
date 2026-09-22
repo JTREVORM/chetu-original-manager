@@ -787,12 +787,85 @@ console.log("Repair planner (scripts/repair-schedules.mjs)");
     ],
   });
   assert(
-    "planner: a paid instalment is never re-dated",
-    !driftedPaid.actions.some((a) => a.kind === "redate_installment" && a.week === 2),
+    "planner: a paid instalment is never re-dated by the ordinary path",
+    !driftedPaid.actions.some(
+      (a) =>
+        (a.kind === "redate_installment" || a.kind === "redate_paid_installment") && a.week === 2,
+    ),
   );
   assert(
     "planner: refusing to re-date a paid row is reported",
     driftedPaid.skips.some((s) => s.includes("carries a payment")),
+  );
+
+  // The narrow guard for paid rows. It fires only when the member paid on the
+  // date the rule says the instalment was due, and that date is earlier than
+  // the one stored — the situation every drifted production week 1 is in.
+  const guardFires = planForLoan({
+    loan: { ...baseLoan, disbursed_at: "2026-09-11T10:00:00Z" },
+    client,
+    group: { ...group, meeting_day: "Thursday" },
+    rows: [
+      // Stored Friday 18th; the rule says Thursday 17th, which is when the
+      // member paid.
+      row(1, "2026-09-18", 50_000, "Paid"),
+      row(2, "2026-09-25"),
+      row(3, "2026-10-02"),
+      row(4, "2026-10-09"),
+    ],
+    receipts: [{ id: "r1", receipt_number: "R1", amount_paid: 50_000, payment_date: "2026-09-17" }],
+  });
+  const guarded = guardFires.actions.find((a) => a.kind === "redate_paid_installment");
+  assert("guard: fires when the receipt is dated on the corrected day", Boolean(guarded));
+  check("guard: moves week 1 onto the paid date", guarded?.due, "2026-09-17");
+  check("guard: moves it from the stored date", guarded?.from, "2026-09-18");
+  assert(
+    "guard: names the receipt it relied on",
+    guarded?.receiptNumbers?.includes("R1"),
+    JSON.stringify(guarded?.receiptNumbers),
+  );
+  assert(
+    "guard: writes no amount, status or paid_at — only the date",
+    guarded !== undefined &&
+      !("amount" in guarded) &&
+      !("status" in guarded) &&
+      !("paid_amount" in guarded),
+  );
+  assert(
+    "guard: touches no receipt",
+    !guardFires.actions.some(
+      (a) => a.kind !== "link_receipt" && String(a.kind).includes("receipt"),
+    ),
+  );
+
+  // Refuses when no receipt falls on the corrected day.
+  const guardNoReceipt = planForLoan({
+    loan: { ...baseLoan, disbursed_at: "2026-09-11T10:00:00Z" },
+    client,
+    group: { ...group, meeting_day: "Thursday" },
+    rows: [row(1, "2026-09-18", 50_000, "Paid"), row(2, "2026-09-25")],
+    receipts: [{ id: "r1", receipt_number: "R1", amount_paid: 50_000, payment_date: "2026-09-20" }],
+  });
+  assert(
+    "guard: refuses when no receipt is dated on the corrected day",
+    !guardNoReceipt.actions.some((a) => a.kind === "redate_paid_installment"),
+  );
+  assert(
+    "guard: says why it refused",
+    guardNoReceipt.skips.some((s) => s.includes("no receipt is dated on the corrected day")),
+  );
+
+  // Refuses to push a paid instalment LATER, whatever the receipts say.
+  const guardLater = planForLoan({
+    loan: { ...baseLoan, disbursed_at: "2026-09-22T10:00:00Z" },
+    client,
+    group: { ...group, meeting_day: "Tuesday" },
+    rows: [row(1, "2026-09-24", 50_000, "Paid"), row(2, "2026-10-06")],
+    receipts: [{ id: "r1", receipt_number: "R1", amount_paid: 50_000, payment_date: "2026-09-29" }],
+  });
+  assert(
+    "guard: never pushes a paid instalment into the future",
+    !guardLater.actions.some((a) => a.kind === "redate_paid_installment"),
   );
 
   // Reconciliation never invents money.
