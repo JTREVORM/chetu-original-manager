@@ -1,4 +1,5 @@
 import { addDays, format } from "date-fns";
+import { parseLocalDate, toISODate, weeklyDueDates } from "./meetingDay";
 import { InterestType, WeeklyScheduleRow } from "../types/database.types";
 
 /**
@@ -54,14 +55,32 @@ export function calculateLoanSchedule(
   loanPeriodWeeks: number,
   processingFeePercentage: number = 2.0,
   startDateInput?: string | Date,
+  /**
+   * The date the first instalment falls due, when the caller has already
+   * resolved it from the group's meeting day. Every later instalment is seven
+   * days after the one before, so the whole schedule keeps that weekday across
+   * month and year boundaries.
+   *
+   * Omitted — by the loan calculator, which has no member and so no group —
+   * the schedule falls back to one week after `startDateInput`. That fallback
+   * keeps its seven days on purpose: with no group there is no meeting day to
+   * bring the first instalment forward to, and the calculator is an indicative
+   * quote, not a loan.
+   */
+  firstDueDateInput?: string | Date,
 ): LoanCalculationSummary {
   const principal = Math.max(0, principalAmount);
   const weeks = Math.max(1, loanPeriodWeeks);
   const feePct = Math.max(0, processingFeePercentage);
   const processingFeeAmount = Math.round((principal * feePct) / 100);
 
-  const startDate = startDateInput ? new Date(startDateInput) : new Date();
-  const firstRepaymentDateObj = addDays(startDate, 7);
+  const startDate = parseLocalDate(startDateInput ?? new Date());
+  const firstRepaymentDateObj = firstDueDateInput
+    ? parseLocalDate(firstDueDateInput)
+    : addDays(startDate, 7);
+  // Resolved once, up front: the rest of the schedule is this date plus whole
+  // weeks, never an offset recomputed from the anchor.
+  const dueDates = weeklyDueDates(firstRepaymentDateObj, weeks);
 
   let totalInterestAmount = 0;
   let totalAmountPayable = 0;
@@ -95,23 +114,22 @@ export function calculateLoanSchedule(
     // Interest is spread the same way, so each row's split is collectable too.
     const interestPortions = splitIntoSteps(totalInterestAmount, weeks);
 
-    let currentRemaining = totalAmountPayable;
-
     for (let i = 1; i <= weeks; i++) {
-      const dueDate = addDays(startDate, i * 7);
       const installment = installments[i - 1]!;
       const interestPortion = Math.min(interestPortions[i - 1]!, installment);
       const principalPortion = installment - interestPortion;
-      currentRemaining = Math.max(0, currentRemaining - installment);
 
       schedule.push({
         week_number: i,
-        due_date: format(dueDate, "yyyy-MM-dd"),
+        due_date: dueDates[i - 1],
         installment_amount: installment,
         principal_portion: principalPortion,
         interest_portion: interestPortion,
         paid_amount: 0,
-        remaining_balance: currentRemaining,
+        // What is still owed on THIS instalment. Nothing is paid at approval,
+        // so that is the whole instalment. See WeeklyScheduleRow for why this
+        // is not the running loan balance it used to be.
+        remaining_balance: installment,
         status: "Pending",
       });
     }
@@ -135,7 +153,6 @@ export function calculateLoanSchedule(
     let accumulatedPayable = 0;
 
     for (let i = 1; i <= weeks; i++) {
-      const dueDate = addDays(startDate, i * 7);
       const interestPortion = Math.round(remainingPrincipal * weeklyRate);
       let principalPortion = weeklyInstallment - interestPortion;
       let installment = weeklyInstallment;
@@ -154,25 +171,18 @@ export function calculateLoanSchedule(
 
       schedule.push({
         week_number: i,
-        due_date: format(dueDate, "yyyy-MM-dd"),
+        due_date: dueDates[i - 1],
         installment_amount: installment,
         principal_portion: principalPortion,
         interest_portion: interestPortion,
         paid_amount: 0,
-        remaining_balance: 0, // Will update total remaining after loop
+        remaining_balance: installment,
         status: "Pending",
       });
     }
 
     totalInterestAmount = accumulatedInterest;
     totalAmountPayable = accumulatedPayable;
-
-    // Update remaining total payable balance per row
-    let currentTotalRemaining = totalAmountPayable;
-    for (let i = 0; i < schedule.length; i++) {
-      currentTotalRemaining = Math.max(0, currentTotalRemaining - schedule[i].installment_amount);
-      schedule[i].remaining_balance = currentTotalRemaining;
-    }
   }
 
   const finalDueDate =
@@ -190,7 +200,7 @@ export function calculateLoanSchedule(
     totalAmountPayable,
     weeklyInstallment,
     processingFeeAmount,
-    firstRepaymentDate: format(firstRepaymentDateObj, "yyyy-MM-dd"),
+    firstRepaymentDate: toISODate(firstRepaymentDateObj),
     finalDueDate,
     schedule,
   };

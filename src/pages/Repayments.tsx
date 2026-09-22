@@ -5,7 +5,7 @@ import { useDatabase } from "../context/DatabaseContext";
 import { useNotifications } from "../context/NotificationContext";
 import { generateRepaymentReceiptPDF, generateLoanStatementPDF } from "../lib/pdfGenerator";
 import { formatUGX } from "../lib/loanCalculations";
-import { Loan, PaymentMethod } from "../types/database.types";
+import { Loan, OPEN_LOAN_STATUSES, PaymentMethod } from "../types/database.types";
 import {
   Receipt,
   Search,
@@ -40,9 +40,10 @@ export const Repayments: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
   const [notes, setNotes] = useState("");
 
-  const activeLoans = loans.filter(
-    (l) => l.status === "Active" || l.status === "Partially Paid" || l.status === "Overdue",
-  );
+  // The shared open-loan set, rather than another hand-written list. This
+  // screen happened to include `Partially Paid`; the collection screens did
+  // not, and that divergence is what hid paying members from their group list.
+  const activeLoans = loans.filter((l) => OPEN_LOAN_STATUSES.includes(l.status));
 
   const filteredLoans = activeLoans.filter((l) => {
     const clientName = l.client?.full_name || "";

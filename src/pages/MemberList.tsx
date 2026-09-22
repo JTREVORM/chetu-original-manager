@@ -19,6 +19,7 @@ import {
   type MisColumn,
 } from "../components/mis/MisKit";
 import { ScrollArea } from "../components/common/ScrollArea";
+import { LoanHistory } from "../components/mis/LoanHistory";
 
 export interface MemberRow {
   client: Client;
@@ -356,36 +357,41 @@ export const LoanHistoryModal: React.FC<{
   loans: Loan[];
   onClose: () => void;
 }> = ({ row, loans, onClose }) => {
+  const { repayments, loanProducts, loanApplications } = useDatabase();
+  const scope = useMisScope();
+
+  // Receipts for this member only. `visibleLoans`/`repayments` are already
+  // role-scoped once in DatabaseContext, so nothing here widens what the
+  // signed-in officer can see.
+  const memberRepayments = useMemo(
+    () => (row ? repayments.filter((r) => r.client_id === row.client.id) : []),
+    [repayments, row],
+  );
+  const productNameById = useMemo(
+    () => new Map(loanProducts.map((p) => [p.id, p.product_name])),
+    [loanProducts],
+  );
+  const applicationDateById = useMemo(
+    () => new Map(loanApplications.map((a) => [a.id, a.created_at])),
+    [loanApplications],
+  );
+
   if (!row) return null;
   return (
     <MisModal
       open
       onClose={onClose}
       title={`Loan History — ${row.client.full_name}`}
-      width="max-w-2xl"
+      width="max-w-5xl"
     >
-      <ul className="space-y-2">
-        {loans.length === 0 && (
-          <li className="py-6 text-center text-xs text-slate-400">No loan history.</li>
-        )}
-        {loans.map((l) => (
-          <li key={l.id} className="rounded border border-slate-200 p-3 text-[11px]">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-bold text-slate-900">{l.loan_number}</span>
-              <span className="rounded bg-slate-100 px-2 py-0.5 font-bold text-slate-600">
-                {l.status}
-              </span>
-            </div>
-            <p className="mt-1 text-slate-600">
-              Principal {money(l.principal_amount)} · Payable {money(l.total_amount_payable)} ·
-              Outstanding {money(l.outstanding_balance)} · Cycle {l.cycle_number || 1}
-            </p>
-            <p className="mt-0.5 text-slate-500">
-              Disbursed {shortDate(l.disbursed_at)} · Final due {shortDate(l.final_due_date)}
-            </p>
-          </li>
-        ))}
-      </ul>
+      <LoanHistory
+        memberName={row.client.full_name}
+        loans={loans}
+        repayments={memberRepayments}
+        productName={(id) => productNameById.get(id) || "—"}
+        applicationDate={(id) => (id ? applicationDateById.get(id) : undefined)}
+        officerName={(id) => scope.officerName(id)}
+      />
     </MisModal>
   );
 };

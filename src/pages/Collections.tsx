@@ -3,10 +3,12 @@ import { useDatabase } from "../context/DatabaseContext";
 import { useNotifications } from "../context/NotificationContext";
 import {
   CLOSED_LOAN_STATUSES,
+  isCollectibleLoan,
   type Client,
   type Loan,
   type PaymentMethod,
 } from "../types/database.types";
+import { summariseSchedule, todayISODate } from "../lib/scheduleView";
 import {
   Field,
   MisFilters,
@@ -35,16 +37,12 @@ interface CollectRow {
   overdue_amount: number;
 }
 
-const weeksBetween = (from?: string | null) => {
-  if (!from) return 0;
-  const ms = Date.now() - new Date(from).getTime();
-  return Math.max(0, Math.floor(ms / (7 * 24 * 60 * 60 * 1000)));
-};
-
 /** Builds the collectable loan rows visible to the current user, scoped by filters. */
 function useCollectRows(kind: "Regular" | "Overdue" | "Advance" | "BadDebt") {
   const scope = useMisScope();
-  const { loans, clients, clientGroups, repayments } = useDatabase();
+  const { loans, clients, clientGroups } = useDatabase();
+
+  const today = todayISODate();
 
   return useMemo(() => {
     const clientById = new Map(clients.map((c) => [c.id, c]));
@@ -56,9 +54,12 @@ function useCollectRows(kind: "Regular" | "Overdue" | "Advance" | "BadDebt") {
         // on them, so they drop out of every collection screen.
         if (CLOSED_LOAN_STATUSES.includes(l.status)) return false;
         if (kind === "BadDebt") return l.is_bad_debt || l.status === "Defaulted";
-        return (
-          ["Active", "Overdue", "Defaulted"].includes(l.status) && Number(l.outstanding_balance) > 0
-        );
+        // Every open status, `Partially Paid` included. This filter used to be
+        // a literal ["Active", "Overdue", "Defaulted"], and `recordRepayment`
+        // moves a loan to `Partially Paid` the moment its first instalment is
+        // collected — so a member disappeared from their group's list the week
+        // after they first paid, and never came back, while still owing.
+        return isCollectibleLoan(l);
       })
       .map<CollectRow | null>((l) => {
         const client = clientById.get(l.client_id);
@@ -66,17 +67,19 @@ function useCollectRows(kind: "Regular" | "Overdue" | "Advance" | "BadDebt") {
         const group = client.group_id ? groupById.get(client.group_id) : undefined;
         const officerId = client.loan_officer_id || group?.loan_officer_id || "";
 
-        const paid = repayments
-          .filter((r) => r.loan_id === l.id)
-          .reduce((s, r) => s + Number(r.amount_paid || 0), 0);
-        const weeksElapsed = Math.min(
-          l.loan_period_weeks || 0,
-          weeksBetween(l.first_repayment_date) + 1,
-        );
-        const expected = weeksElapsed * Number(l.weekly_installment || 0);
-        const arrears = Math.max(0, expected - paid);
-        const overdueWeeks =
-          Number(l.weekly_installment) > 0 ? Math.floor(arrears / Number(l.weekly_installment)) : 0;
+        // Arrears come from the schedule rows, not from elapsed weeks.
+        //
+        // This used to infer what was owed as
+        // `weeksBetween(first_repayment_date) + 1` × the weekly instalment,
+        // which assumes the schedule runs on a clean weekly cadence from that
+        // anchor. Once due dates had drifted off the group's meeting day — or
+        // an instalment was missing — the inference and the stored schedule
+        // disagreed, and the figure the officer collected against was wrong.
+        // It also floor-divided arrears by the instalment, so a week that was
+        // part-paid reported nought weeks overdue.
+        const summary = summariseSchedule(l.schedule, today);
+        const arrears = summary.arrearsAmount;
+        const overdueWeeks = summary.arrearsCount;
 
         return {
           loan: l,
@@ -94,7 +97,7 @@ function useCollectRows(kind: "Regular" | "Overdue" | "Advance" | "BadDebt") {
       .filter((r): r is CollectRow => r !== null)
       .filter((r) => (kind === "Overdue" ? r.overdue_amount > 0 : true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loans, clients, clientGroups, repayments, kind, scope.officers, scope.activeBranches]);
+  }, [loans, clients, clientGroups, kind, today, scope.officers, scope.activeBranches]);
 }
 
 const CollectionBase: React.FC<{

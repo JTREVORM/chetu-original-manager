@@ -26,6 +26,9 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { sendNotification } from "../lib/notify";
 import { defaultSettings } from "../lib/defaults";
 import { calculateLoanSchedule } from "../lib/loanCalculations";
+import { graceDaysFor, resolveFirstRepaymentDate, weeklyDueDates } from "../lib/meetingDay";
+import { allocatePayment } from "../lib/scheduleView";
+import { fetchAllRows } from "../lib/fetchAll";
 import { FEES, loanFees } from "../lib/fees";
 import { useAuth } from "./AuthContext";
 
@@ -228,6 +231,30 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // the router redirects to /login, which discards their rows anyway.
   };
 
+  /**
+   * Days between the schedule's anchor event and the first instalment.
+   *
+   * The approved rule: instalment #1 falls on the first group meeting
+   * *strictly after* disbursement. No extra week — a Thursday group whose loan
+   * goes out on Friday repays at the following Thursday's meeting, six days
+   * later, not thirteen.
+   *
+   * This replaces a flat seven days, which was a historical implementation
+   * mistake rather than a policy: `calculateLoanSchedule` hardcoded
+   * `addDays(startDate, 7)` from before meeting days were read at all, and the
+   * constant survived the move to meeting-day scheduling. The two rules agree
+   * only when disbursement lands on the group's own meeting day, which is why
+   * it went unnoticed. Chetu's own receipts settle it — of the eleven
+   * collected before the audit, ten fell on the first meeting after
+   * disbursement and none on the seven-day date.
+   *
+   * `loan_products.grace_period_weeks` now drives this, via `graceDaysFor`:
+   * 0 (the live product's value) means no additional week, and each further
+   * week adds seven days. It was previously read by no calculation anywhere.
+   */
+  const graceDaysForProduct = (product?: { grace_period_weeks?: number | null }) =>
+    graceDaysFor(product?.grace_period_weeks);
+
   const refetch = async (options?: { silent?: boolean }) => {
     if (!isSupabaseConfigured) return;
 
@@ -263,22 +290,73 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       branchesRes,
       transfersRes,
     ] = await Promise.all([
-      supabase.from("clients").select("*"),
-      supabase.from("client_groups").select("*"),
+      // Every table that grows with the portfolio is paged. The row cap is
+      // silent — a truncated response carries no error — so a table left
+      // unpaged here just loses its tail as the branch takes on members.
+      fetchAllRows<Client>(() => supabase.from("clients").select("*").order("id"), "clients"),
+      fetchAllRows<ClientGroup>(
+        () => supabase.from("client_groups").select("*").order("id"),
+        "client_groups",
+      ),
+      // Loan products and settings are small, bounded reference tables.
       supabase.from("loan_products").select("*"),
-      supabase.from("loan_applications").select("*"),
-      supabase.from("loans").select("*"),
-      supabase.from("loan_repayment_schedule").select("*").order("week_number"),
-      supabase.from("loan_repayments").select("*").order("payment_date", { ascending: false }),
-      supabase.from("savings_accounts").select("*"),
-      supabase.from("savings_transactions").select("*").order("created_at", { ascending: false }),
-      supabase.from("group_attendance").select("*"),
-      supabase.from("expenses").select("*"),
-      supabase.from("bank_transactions").select("*"),
+      fetchAllRows<LoanApplication>(
+        () => supabase.from("loan_applications").select("*").order("id"),
+        "loan_applications",
+      ),
+      fetchAllRows<Loan>(() => supabase.from("loans").select("*").order("id"), "loans"),
+      // The biggest table in the system: one row per loan per week. It breaches
+      // the cap long before any other, and it did so ordered by `week_number`,
+      // which cost every loan its later weeks at once.
+      fetchAllRows<WeeklyScheduleRow>(
+        () => supabase.from("loan_repayment_schedule").select("*").order("week_number").order("id"),
+        "loan_repayment_schedule",
+      ),
+      fetchAllRows<LoanRepayment>(
+        () =>
+          supabase
+            .from("loan_repayments")
+            .select("*")
+            .order("payment_date", { ascending: false })
+            .order("id"),
+        "loan_repayments",
+      ),
+      fetchAllRows<SavingsAccount>(
+        () => supabase.from("savings_accounts").select("*").order("id"),
+        "savings_accounts",
+      ),
+      fetchAllRows<SavingsTransaction>(
+        () =>
+          supabase
+            .from("savings_transactions")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .order("id"),
+        "savings_transactions",
+      ),
+      fetchAllRows<GroupAttendance>(
+        () => supabase.from("group_attendance").select("*").order("id"),
+        "group_attendance",
+      ),
+      fetchAllRows<Expense>(() => supabase.from("expenses").select("*").order("id"), "expenses"),
+      fetchAllRows<BankTransaction>(
+        () => supabase.from("bank_transactions").select("*").order("id"),
+        "bank_transactions",
+      ),
+      // Audit logs grow without bound and nothing reads past the recent ones,
+      // so this stays a single capped page on purpose.
       supabase.from("audit_logs").select("*").order("created_at", { ascending: false }),
       supabase.from("settings").select("*").eq("id", 1).maybeSingle(),
       supabase.from("branches").select("*").order("branch_name"),
-      supabase.from("transfers").select("*").order("requested_at", { ascending: false }),
+      fetchAllRows<Transfer>(
+        () =>
+          supabase
+            .from("transfers")
+            .select("*")
+            .order("requested_at", { ascending: false })
+            .order("id"),
+        "transfers",
+      ),
     ]);
 
     // The Data API returns flat rows; the UI reads nested relations
@@ -1293,6 +1371,36 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       prev.map((a) => (a.id === appId ? { ...a, status: "Approved", reviewed_by: user?.id } : a)),
     );
 
+    // Where the weekly schedule lands.
+    //
+    // The member's group sets the weekday: a Tuesday group repays on Tuesdays,
+    // a Friday group on Fridays, and every instalment is seven days after the
+    // one before, so the run keeps its weekday across month and year ends.
+    //
+    // This used to be `new Date()` — the moment Approve was clicked — and
+    // `client_groups.meeting_day` was read nowhere in the loan path at all, so
+    // a Tuesday group approved on a Thursday repaid on Thursdays for its whole
+    // cycle. The anchor is still the approval date here because the loan has
+    // not been disbursed yet; `disburseLoan` rebases the schedule onto the real
+    // disbursement date once cash actually goes out, while every row is still
+    // unpaid.
+    const group = client?.group_id ? clientGroups.find((g) => g.id === client.group_id) : undefined;
+    const firstRepayment = resolveFirstRepaymentDate(
+      new Date(),
+      group?.meeting_day,
+      graceDaysForProduct(product),
+    );
+    if (firstRepayment.usedFallback && group) {
+      // The group has no usable meeting day, so the schedule falls back to the
+      // approval weekday. Surfaced rather than swallowed: it means this loan
+      // will not line up with the group's collection meeting.
+      console.warn(
+        `Group ${group.group_code} has no recognisable meeting_day (${JSON.stringify(
+          group.meeting_day,
+        )}); loan schedule falls back to the ${firstRepayment.weekday} anchor weekday.`,
+      );
+    }
+
     const calc = calculateLoanSchedule(
       app.requested_amount,
       product.interest_rate,
@@ -1300,6 +1408,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       app.requested_weeks,
       FEES.processingFeePct,
       new Date(),
+      firstRepayment.firstDueDate,
     );
 
     const approvalFees = loanFees(app.requested_amount);
@@ -1479,17 +1588,93 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!targetLoan) return;
 
     const now = new Date().toISOString();
+
+    // Re-date the schedule onto the disbursement.
+    //
+    // The schedule was written at approval, against the approval date, because
+    // the disbursement queue needs something to show. Cash can leave days
+    // later, so the stored dates can be a week adrift of the repayment the
+    // member was actually told about. Re-anchoring here puts the first
+    // instalment on the group's first meeting after the money went out.
+    //
+    // Guarded hard: this only runs while the schedule is untouched. If any row
+    // carries a payment, the dates stay exactly as they are — re-dating an
+    // instalment a member has already paid against would rewrite history, and
+    // a loan cannot be disbursed twice anyway.
+    const existingSchedule = targetLoan.schedule || [];
+    const scheduleUntouched =
+      existingSchedule.length > 0 &&
+      existingSchedule.every((row) => Number(row.paid_amount || 0) === 0);
+    const disbursementClient = clients.find((c) => c.id === targetLoan.client_id);
+    const disbursementGroup = disbursementClient?.group_id
+      ? clientGroups.find((g) => g.id === disbursementClient.group_id)
+      : undefined;
+
+    let rebasedSchedule: WeeklyScheduleRow[] | null = null;
+    let rebasedLoanDates: { first_repayment_date: string; final_due_date: string } | null = null;
+
+    if (scheduleUntouched) {
+      const resolved = resolveFirstRepaymentDate(
+        now,
+        disbursementGroup?.meeting_day,
+        graceDaysForProduct(loanProducts.find((p) => p.id === targetLoan.product_id)),
+      );
+      const dueDates = weeklyDueDates(resolved.firstDueDate, existingSchedule.length);
+      const ordered = [...existingSchedule].sort((a, b) => a.week_number - b.week_number);
+      // Only the dates move. Amounts, portions and week numbers are untouched:
+      // this is not a recalculation of what is owed.
+      const candidate = ordered.map((row, i) => ({ ...row, due_date: dueDates[i] }));
+
+      if (candidate.some((row, i) => row.due_date !== ordered[i].due_date)) {
+        rebasedSchedule = candidate;
+        rebasedLoanDates = {
+          first_repayment_date: dueDates[0],
+          final_due_date: dueDates[dueDates.length - 1],
+        };
+      }
+    }
+
     const { error: loanError } = await supabase
       .from("loans")
-      .update({ status: "Active", disbursed_by: user?.id, disbursed_at: now, updated_at: now })
+      .update({
+        status: "Active",
+        disbursed_by: user?.id,
+        disbursed_at: now,
+        ...(rebasedLoanDates || {}),
+        updated_at: now,
+      })
       .eq("id", loanId);
     if (!loanError) {
       setLoans((prev) =>
         prev.map((l) =>
           l.id === loanId
-            ? { ...l, status: "Active", disbursed_by: user?.id, disbursed_at: now }
+            ? {
+                ...l,
+                status: "Active",
+                disbursed_by: user?.id,
+                disbursed_at: now,
+                ...(rebasedLoanDates || {}),
+                ...(rebasedSchedule ? { schedule: rebasedSchedule } : {}),
+              }
             : l,
         ),
+      );
+    }
+
+    if (!loanError && rebasedSchedule) {
+      for (const row of rebasedSchedule) {
+        if (!row.id) continue;
+        const { error } = await supabase
+          .from("loan_repayment_schedule")
+          .update({ due_date: row.due_date })
+          .eq("id", row.id);
+        if (error) console.error("Failed to re-date instalment on disbursement", error);
+      }
+      await logAudit(
+        "Re-dated Repayment Schedule",
+        "Loan Disbursement",
+        `Schedule for loan ${targetLoan.loan_number} re-anchored to disbursement; first repayment ${rebasedLoanDates?.first_repayment_date} (${disbursementGroup?.meeting_day || "no group meeting day"})`,
+        targetLoan.loan_number,
       );
     }
 
@@ -1569,32 +1754,37 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const today = new Date().toISOString().split("T")[0];
 
-    let remainingPayment = amount;
+    // Spread the payment over the outstanding instalments, oldest first — the
+    // rule this screen has always applied, now stated once in `allocatePayment`
+    // so that recording a receipt, linking it to an instalment and auditing an
+    // existing loan cannot drift apart.
+    //
+    // Ordering by due date rather than by array position matters: a repaired
+    // schedule can hold a back-dated instalment inserted after the later weeks,
+    // and a missed week must be settled before the current one.
+    const { allocations } = allocatePayment(targetLoan.schedule || [], amount);
+    const allocationByScheduleId = new Map(
+      allocations.filter((a) => a.scheduleId).map((a) => [a.scheduleId as string, a]),
+    );
+
     const updatedSchedule = (targetLoan.schedule || []).map((row) => {
-      if (remainingPayment <= 0 || row.status === "Paid") return row;
-      const dueAmount = row.installment_amount - row.paid_amount;
-      if (remainingPayment >= dueAmount) {
-        remainingPayment -= dueAmount;
-        return {
-          ...row,
-          paid_amount: row.installment_amount,
-          remaining_balance: 0,
-          status: "Paid" as RepaymentStatus,
-          paid_at: today,
-        };
-      } else {
-        const newlyPaid = row.paid_amount + remainingPayment;
-        const remBal = row.installment_amount - newlyPaid;
-        remainingPayment = 0;
-        return {
-          ...row,
-          paid_amount: newlyPaid,
-          remaining_balance: remBal,
-          status: "Partially Paid" as RepaymentStatus,
-          paid_at: today,
-        };
-      }
+      const allocation = row.id ? allocationByScheduleId.get(row.id) : undefined;
+      if (!allocation) return row;
+      return {
+        ...row,
+        paid_amount: allocation.paidAmount,
+        remaining_balance: allocation.balance,
+        status: allocation.status,
+        paid_at: today,
+      };
     });
+
+    // Which instalment this receipt is against. The oldest one it touched: a
+    // payment that clears three weeks of arrears belongs to the earliest of
+    // them, which is what the collection screens and the loan history read it
+    // as. `loan_repayments.schedule_id` has existed since the first migration
+    // and was never populated, so no receipt could be traced to a week.
+    const primaryScheduleId = allocations[0]?.scheduleId ?? null;
 
     const newOutstanding = Math.max(0, targetLoan.outstanding_balance - amount);
     const completionPct = Math.min(
@@ -1637,6 +1827,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // security means each of them only ever sees their own.
     const repInsertPayload = {
       loan_id: loanId,
+      schedule_id: primaryScheduleId,
       client_id: targetLoan.client_id,
       amount_paid: amount,
       payment_date: today,
