@@ -1156,6 +1156,14 @@ console.log("Approval persistence (src/lib/approvalPersistence.ts)");
     const loanRow = { id: "loan-1", loan_number: "CM-LN-TEST" };
     const ok = () => Promise.resolve({ error: null });
     const fail = (message) => () => Promise.resolve({ error: { message } });
+    /** A delete that removed the row: PostgREST returns it when `.select()` is chained. */
+    const deletedOne = () => Promise.resolve({ data: [loanRow], error: null });
+    /**
+     * A delete that matched nothing and still succeeded — what RLS does to a
+     * Branch Manager, whose role fails the `loans` DELETE policy
+     * `USING (private.is_admin())`. No error, no rows, orphan intact.
+     */
+    const deletedNone = () => Promise.resolve({ data: [], error: null });
 
     const spy = () => {
       const calls = [];
@@ -1183,7 +1191,8 @@ console.log("Approval persistence (src/lib/approvalPersistence.ts)");
     }
 
     // 2-4. A schedule failure fails the approval, removes the orphan loan and
-    //      restores the application.
+    //      restores the application. This is the Administrator path: the delete
+    //      returns the row it removed.
     {
       const del = spy();
       const restore = spy();
@@ -1192,7 +1201,7 @@ console.log("Approval persistence (src/lib/approvalPersistence.ts)");
         await persistApprovedLoan({
           insertLoan: () => Promise.resolve({ data: loanRow, error: null }),
           insertSchedule: fail("schedule insert exploded"),
-          deleteLoan: del.fn(ok),
+          deleteLoan: del.fn(deletedOne),
           restoreApplication: restore.fn(ok),
         });
       } catch (error) {
@@ -1254,7 +1263,7 @@ console.log("Approval persistence (src/lib/approvalPersistence.ts)");
         await persistApprovedLoan({
           insertLoan: () => Promise.resolve({ data: loanRow, error: null }),
           insertSchedule: fail("boom"),
-          deleteLoan: ok,
+          deleteLoan: deletedOne,
           restoreApplication: fail("restore refused"),
         });
       } catch (error) {
@@ -1273,6 +1282,199 @@ console.log("Approval persistence (src/lib/approvalPersistence.ts)");
         "approval: partial compensation keeps the application flag",
         thrown?.applicationStillApproved,
         true,
+      );
+    }
+
+    // BLOCKER-1. A delete that succeeds but removes nothing is a FAILED
+    // compensation, not a clean rollback.
+    //
+    // This is the Branch Manager case: `loans` DELETE is
+    // `USING (private.is_admin())` while approval admits Branch Managers, so
+    // RLS filters the row out and PostgREST answers `{ data: [], error: null }`
+    // — no error at all. Read as success, it told the approver the rollback had
+    // worked while the scheduleless orphan sat in the disbursement queue.
+    {
+      const restore = spy();
+      let thrown = null;
+      try {
+        await persistApprovedLoan(
+          {
+            insertLoan: () => Promise.resolve({ data: loanRow, error: null }),
+            insertSchedule: fail("schedule insert exploded"),
+            deleteLoan: deletedNone,
+            restoreApplication: restore.fn(ok),
+          },
+          "CM-LA-TEST",
+        );
+      } catch (error) {
+        thrown = error;
+      }
+      assert(
+        "rls-delete: a zero-row delete is a compensation failure",
+        thrown instanceof ApprovalCompensationError,
+        `threw: ${thrown?.name}: ${thrown?.message}`,
+      );
+      check("rls-delete: the orphan is reported as remaining", thrown?.orphanLoanRemains, true);
+      check(
+        "rls-delete: the application restore is still recognised",
+        thrown?.applicationStillApproved,
+        false,
+      );
+      check("rls-delete: the surviving loan id is carried", thrown?.orphanLoanId, "loan-1");
+      assert(
+        "rls-delete: the error names the surviving loan id",
+        String(thrown?.message).includes("loan-1"),
+        String(thrown?.message),
+      );
+      assert(
+        "rls-delete: the approver is NOT told the rollback succeeded",
+        !String(thrown?.message).includes("has been rolled back"),
+        String(thrown?.message),
+      );
+      assert(
+        "rls-delete: the approver is told not to disburse it",
+        String(thrown?.message).includes("must not be disbursed"),
+      );
+    }
+
+    // A delete returning the row IS a successful compensation — the
+    // Administrator path, kept beside the failing one so the two are compared.
+    {
+      let thrown = null;
+      try {
+        await persistApprovedLoan({
+          insertLoan: () => Promise.resolve({ data: loanRow, error: null }),
+          insertSchedule: fail("boom"),
+          deleteLoan: deletedOne,
+          restoreApplication: ok,
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      assert(
+        "rls-delete: a row-returning delete is a clean rollback",
+        !(thrown instanceof ApprovalCompensationError),
+        `threw: ${thrown?.name}`,
+      );
+      assert(
+        "rls-delete: a clean rollback says so",
+        String(thrown?.message).includes("has been rolled back"),
+        String(thrown?.message),
+      );
+    }
+
+    // A delete that errors outright is also a failure — unchanged behaviour,
+    // asserted here so the new data check did not replace the error check.
+    {
+      let thrown = null;
+      try {
+        await persistApprovedLoan({
+          insertLoan: () => Promise.resolve({ data: loanRow, error: null }),
+          insertSchedule: fail("boom"),
+          deleteLoan: fail("delete refused"),
+          restoreApplication: ok,
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      check(
+        "rls-delete: an errored delete still reports the orphan",
+        thrown?.orphanLoanRemains,
+        true,
+      );
+    }
+
+    // HIGH-1. A loan-insert failure checks the restore result instead of
+    // ignoring it.
+    {
+      // Restore succeeds → the original loan-insert error is preserved intact.
+      let thrown = null;
+      try {
+        await persistApprovedLoan({
+          insertLoan: () => Promise.resolve({ data: null, error: { message: "loan insert died" } }),
+          insertSchedule: ok,
+          deleteLoan: deletedOne,
+          restoreApplication: ok,
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      check(
+        "restore-check: the original loan error is preserved",
+        thrown?.message,
+        "loan insert died",
+      );
+      assert(
+        "restore-check: a successful restore adds no scare text",
+        !String(thrown?.message).includes("could not be put back"),
+        String(thrown?.message),
+      );
+    }
+    {
+      // Restore fails → both facts are reported, and the message never implies
+      // the application was put back.
+      let thrown = null;
+      try {
+        await persistApprovedLoan({
+          insertLoan: () => Promise.resolve({ data: null, error: { message: "loan insert died" } }),
+          insertSchedule: ok,
+          deleteLoan: deletedOne,
+          restoreApplication: fail("restore refused"),
+        });
+      } catch (error) {
+        thrown = error;
+      }
+      assert(
+        "restore-check: the original loan error survives a failed restore",
+        String(thrown?.message).includes("loan insert died"),
+        String(thrown?.message),
+      );
+      assert(
+        "restore-check: a failed restore is stated explicitly",
+        String(thrown?.message).includes("restore refused") &&
+          String(thrown?.message).includes("could not be put back"),
+        String(thrown?.message),
+      );
+      assert(
+        "restore-check: it says the application is still Approved",
+        String(thrown?.message).includes("still marked Approved"),
+        String(thrown?.message),
+      );
+    }
+
+    // The compensation delete as the application actually builds it.
+    //
+    // `persistApprovedLoan` is injected, so the stubs above prove how a result
+    // is interpreted but not what query produced it. The guarantee depends on
+    // both: `.select()` for the returned row, `.eq("id", …)` for the loan just
+    // created, `.eq("status", "Pending")` so a loan whose state moved on is
+    // never removed. Asserted against the source, which is the only place this
+    // is visible without a database.
+    {
+      const { readFileSync } = await import("node:fs");
+      const path = await import("node:path");
+      const source = readFileSync(
+        path.join(path.resolve(import.meta.dirname, ".."), "src/context/DatabaseContext.tsx"),
+        "utf8",
+      );
+      const deleteCall = source.slice(
+        source.indexOf("deleteLoan:"),
+        source.indexOf("restoreApplication:"),
+      );
+      assert(
+        "delete query: targets the newly created loan by id",
+        /\.eq\(\s*"id",\s*loan\.id\s*\)/.test(deleteCall),
+        deleteCall.trim(),
+      );
+      assert(
+        "delete query: requires the loan to still be Pending",
+        /\.eq\(\s*"status",\s*"Pending"\s*\)/.test(deleteCall),
+        deleteCall.trim(),
+      );
+      assert(
+        "delete query: returns the deleted row via .select()",
+        /\.select\(\)/.test(deleteCall),
+        deleteCall.trim(),
       );
     }
 

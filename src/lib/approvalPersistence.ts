@@ -41,8 +41,18 @@ export interface ApprovalPersistenceDeps<TLoan> {
   insertLoan: () => PromiseLike<WriteResult<TLoan>>;
   /** Writes every schedule row for the new loan. One request, so it is all-or-nothing. */
   insertSchedule: (loan: TLoan) => PromiseLike<WriteResult>;
-  /** Compensation: removes the loan created moments ago. */
-  deleteLoan: (loan: TLoan) => PromiseLike<WriteResult>;
+  /**
+   * Compensation: removes the loan created moments ago.
+   *
+   * MUST return the deleted rows — `.select()` on the delete — because a
+   * delete that matches nothing succeeds silently. The `loans` DELETE policy is
+   * `USING (private.is_admin())`, while approval admits Branch Managers too, so
+   * for a Branch Manager RLS filters the row out and PostgREST answers
+   * `{ data: [], error: null }`. Without the returned rows that is
+   * indistinguishable from a real delete, and the orphan loan would survive
+   * while the caller was told the approval had been rolled back.
+   */
+  deleteLoan: (loan: TLoan) => PromiseLike<WriteResult<unknown[]>>;
   /** Compensation: puts the application back to the status it held before approval. */
   restoreApplication: () => PromiseLike<WriteResult>;
 }
@@ -56,14 +66,20 @@ export class ApprovalCompensationError extends Error {
   readonly applicationStillApproved: boolean;
   readonly originalError: string;
 
+  /** The surviving loan's id, so an operator can find the row to remove. */
+  readonly orphanLoanId: string | null;
+
   constructor(args: {
     originalError: string;
     orphanLoanRemains: boolean;
     applicationStillApproved: boolean;
     loanLabel: string;
+    orphanLoanId: string | null;
   }) {
     const leftovers = [
-      args.orphanLoanRemains ? `the loan row (${args.loanLabel}) was NOT removed` : null,
+      args.orphanLoanRemains
+        ? `the loan row (${args.loanLabel}, id ${args.orphanLoanId ?? "unknown"}) was NOT removed`
+        : null,
       args.applicationStillApproved ? "the application is still marked Approved" : null,
     ].filter(Boolean);
 
@@ -77,6 +93,7 @@ export class ApprovalCompensationError extends Error {
     this.originalError = args.originalError;
     this.orphanLoanRemains = args.orphanLoanRemains;
     this.applicationStillApproved = args.applicationStillApproved;
+    this.orphanLoanId = args.orphanLoanId;
   }
 }
 
@@ -93,16 +110,29 @@ export async function persistApprovedLoan<TLoan extends { id: string }>(
 ): Promise<TLoan> {
   const loanResult = await deps.insertLoan();
   if (loanResult.error || !loanResult.data) {
-    // Nothing was created, so there is nothing to compensate beyond putting the
-    // application back. A failure here is swallowed deliberately: the caller
-    // needs the original reason the loan could not be created, not a secondary
-    // error from the attempt to tidy up.
+    const originalError = loanResult.error?.message || "Failed to create loan";
+
+    // Nothing was created, so the only compensation is putting the application
+    // back. Its outcome is checked rather than swallowed: PostgREST reports a
+    // refused write by returning `{ error }`, not by throwing, so ignoring the
+    // result would silently leave the application Approved with no loan behind
+    // it while the caller was told only that the loan could not be created.
+    let restoreFailed: string | null = null;
     try {
-      await deps.restoreApplication();
-    } catch {
-      // reported through the original error below
+      const restored = await deps.restoreApplication();
+      if (restored.error) restoreFailed = restored.error.message;
+    } catch (error) {
+      restoreFailed = error instanceof Error ? error.message : String(error);
     }
-    throw new Error(loanResult.error?.message || "Failed to create loan");
+
+    if (restoreFailed) {
+      throw new Error(
+        `${originalError}. The application could not be put back either ` +
+          `(${restoreFailed}), so it is still marked Approved with no loan ` +
+          `against it — an Administrator needs to reset it.`,
+      );
+    }
+    throw new Error(originalError);
   }
   const loan = loanResult.data;
 
@@ -118,7 +148,14 @@ export async function persistApprovedLoan<TLoan extends { id: string }>(
 
   try {
     const deleted = await deps.deleteLoan(loan);
-    if (!deleted.error) orphanLoanRemains = false;
+    // A delete is successful only when it returns the row it removed. An empty
+    // array means the statement matched nothing — RLS filtered it out, or the
+    // loan was no longer Pending — and the orphan is still there. Treating
+    // `{ data: [], error: null }` as success is what let a Branch Manager be
+    // told the approval had been rolled back when it had not.
+    if (!deleted.error && Array.isArray(deleted.data) && deleted.data.length > 0) {
+      orphanLoanRemains = false;
+    }
   } catch {
     orphanLoanRemains = true;
   }
@@ -136,6 +173,7 @@ export async function persistApprovedLoan<TLoan extends { id: string }>(
       orphanLoanRemains,
       applicationStillApproved,
       loanLabel,
+      orphanLoanId: orphanLoanRemains ? loan.id : null,
     });
   }
 

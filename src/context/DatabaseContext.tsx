@@ -1478,7 +1478,14 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 paid_at: row.paid_at || null,
               })),
             ),
-          deleteLoan: (loan) => supabase.from("loans").delete().eq("id", loan.id),
+          // `.select()` so the deleted row comes back: a delete that matches
+          // nothing succeeds silently, and the `loans` DELETE policy is
+          // `USING (private.is_admin())` while approval admits Branch Managers
+          // too — for them RLS filters the row out and PostgREST answers
+          // `{ data: [], error: null }`. The status guard keeps the
+          // compensation from removing a loan whose state has moved on.
+          deleteLoan: (loan) =>
+            supabase.from("loans").delete().eq("id", loan.id).eq("status", "Pending").select(),
           restoreApplication: () =>
             supabase
               .from("loan_applications")
