@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDatabase } from "../../context/DatabaseContext";
 import { useMisScope } from "../../components/mis/MisKit";
+import { fetchAllRows } from "../../lib/fetchAll";
 import type {
   Client,
   ClientGroup,
@@ -23,12 +24,20 @@ export function useSchedules() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from("loan_repayment_schedule")
-        .select(
-          "id, loan_id, week_number, due_date, installment_amount, principal_portion, interest_portion, paid_amount, remaining_balance, status, paid_at",
-        )
-        .order("week_number");
+      // Paged: this is the same table, and the same silent row cap, that cost
+      // every loan its later weeks on the collection screens. A report reading
+      // a truncated schedule understates arrears without saying so.
+      const { data } = await fetchAllRows<ScheduleRow>(
+        () =>
+          supabase
+            .from("loan_repayment_schedule")
+            .select(
+              "id, loan_id, week_number, due_date, installment_amount, principal_portion, interest_portion, paid_amount, remaining_balance, status, paid_at",
+            )
+            .order("week_number")
+            .order("id"),
+        "loan_repayment_schedule",
+      );
       if (!cancelled) {
         setRows((data || []) as unknown as ScheduleRow[]);
         setLoading(false);

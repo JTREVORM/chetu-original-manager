@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { TableScroll } from "../components/common/ScrollArea";
 import { useAuth } from "../context/AuthContext";
 import { useDatabase } from "../context/DatabaseContext";
+import { OPEN_LOAN_STATUSES } from "../types/database.types";
 import { formatUGX } from "../lib/loanCalculations";
 import jsPDF from "jspdf";
 import { autoTable } from "../lib/autoTable";
@@ -223,7 +224,12 @@ export const AuditDashboard: React.FC = () => {
   }
 
   // ── Aggregations ──────────────────────────────────────────────────────────────
-  const activeLoans = loans.filter((l) => l.status === "Active");
+  // Every loan still carrying a receivable, not just those literally stamped
+  // `Active`. A loan moves to `Partially Paid` on its first collection, so
+  // filtering on `Active` alone dropped every loan that had ever been paid
+  // into — which also understated `outstandingBal` below by their whole
+  // remaining balance.
+  const activeLoans = loans.filter((l) => OPEN_LOAN_STATUSES.includes(l.status));
   const paidLoans = loans.filter((l) => l.status === "Fully Paid");
   const overdueLoans = loans.filter((l) => l.status === "Overdue");
   const defaultedLoans = loans.filter((l) => l.status === "Defaulted");

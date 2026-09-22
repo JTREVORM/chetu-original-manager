@@ -50,6 +50,29 @@ const made = {
 };
 
 const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().split("T")[0];
+
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+/**
+ * Moves a date onto the group's meeting weekday, forwards.
+ *
+ * Demo loans previously took whatever weekday `day(-48)` happened to land on,
+ * so the seeded schedules did not sit on their group's meeting day and could
+ * not show the scheduling rule working. Snapping here means the demo portfolio
+ * exercises Monday, Tuesday, Thursday, Friday and Saturday groups.
+ */
+const snapToMeetingDay = (iso, meetingDay) => {
+  const target = WEEKDAYS.indexOf(meetingDay);
+  if (target < 0) return iso;
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + ((target - date.getDay() + 7) % 7));
+  return [
+    String(date.getFullYear()).padStart(4, "0"),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+};
 const stamp = (offset) => new Date(Date.now() + offset * 86400000).toISOString();
 const must = (label, { data, error }) => {
   if (error) throw new Error(`${label}: ${error.message}`);
@@ -195,8 +218,19 @@ const auditor = await makeStaff(
 );
 
 // ------------------------------------------------------------------ groups --
-const makeGroup = async (name, code, branch, officerId, officerName, approval, extra = {}) =>
-  must(
+const makeGroup = async (
+  name,
+  code,
+  branch,
+  officerId,
+  officerName,
+  approval,
+  extra = {},
+  // Groups deliberately meet on different days, so the demo portfolio shows
+  // each one's schedule holding its own weekday.
+  meetingDay = "Tuesday",
+) => {
+  const group = must(
     `group ${name}`,
     await svc
       .from("client_groups")
@@ -208,7 +242,7 @@ const makeGroup = async (name, code, branch, officerId, officerName, approval, e
         loan_officer_id: officerId,
         loan_officer_name: officerName,
         village: "Nakalama",
-        meeting_day: "Tuesday",
+        meeting_day: meetingDay,
         meeting_time: "10:00 AM",
         meeting_location: "Nakalama Trading Centre",
         meeting_frequency: "Weekly",
@@ -221,6 +255,12 @@ const makeGroup = async (name, code, branch, officerId, officerName, approval, e
       .select()
       .single(),
   );
+  meetingDayByGroupId.set(group.id, extra.meeting_day || meetingDay);
+  return group;
+};
+
+/** group id -> meeting day, so a loan can be scheduled on its group's day. */
+const meetingDayByGroupId = new Map();
 
 const gDembe = await makeGroup(
   "Dembe Womens Group",
@@ -230,6 +270,7 @@ const gDembe = await makeGroup(
   "Nakabugo Marjorie",
   "Approved",
   { reviewed_by: manager, reviewed_at: stamp(-235) },
+  "Tuesday",
 );
 const gTwezike = await makeGroup(
   "Twezike Traders",
@@ -239,6 +280,7 @@ const gTwezike = await makeGroup(
   "Nakabugo Marjorie",
   "Approved",
   { reviewed_by: manager, reviewed_at: stamp(-180) },
+  "Thursday",
 );
 const gKilimo = await makeGroup(
   "Kilimo Farmers",
@@ -248,6 +290,7 @@ const gKilimo = await makeGroup(
   "Okello Brian",
   "Approved",
   { reviewed_by: manager, reviewed_at: stamp(-150) },
+  "Friday",
 );
 const gPending = await makeGroup(
   "Bugiri Youth Group",
@@ -256,6 +299,8 @@ const gPending = await makeGroup(
   officer1,
   "Nakabugo Marjorie",
   "Pending",
+  {},
+  "Monday",
 );
 const gRejected = await makeGroup(
   "Nsinze Savers",
@@ -269,6 +314,7 @@ const gRejected = await makeGroup(
     reviewed_by: manager,
     reviewed_at: stamp(-20),
   },
+  "Saturday",
 );
 made.groups.push(gDembe.id, gTwezike.id, gKilimo.id, gPending.id, gRejected.id);
 
@@ -467,6 +513,7 @@ must("member fees", await svc.from("member_fees").insert(feeRows).select());
 
 // ------------------------------------------------------------------- loans --
 const FEES = { proc: 0.04, crb: 0.01, sec: 0.15, gm: 2000 };
+/** Weekly rows from `firstDue`, seven days apart, so they all share a weekday. */
 const buildSchedule = (loanId, weeks, weekly, firstDue, paidWeeks) => {
   const rows = [];
   let d = new Date(firstDue);
@@ -492,6 +539,12 @@ const buildSchedule = (loanId, weeks, weekly, firstDue, paidWeeks) => {
 };
 
 const makeLoan = async (client, product, principal, weeks, opts) => {
+  // The schedule follows the member's group meeting day, the rule the
+  // application now applies at approval and disbursement.
+  if (opts.firstDue && client.group_id) {
+    const meetingDay = meetingDayByGroupId.get(client.group_id);
+    if (meetingDay) opts.firstDue = snapToMeetingDay(opts.firstDue, meetingDay);
+  }
   const interest = Math.round(principal * (product.interest_rate / 100));
   const total = principal + interest;
   const weekly = Math.round(total / weeks);

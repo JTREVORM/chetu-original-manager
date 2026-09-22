@@ -16,6 +16,36 @@ export type LoanStatus =
 /** Terminal states — a loan in one of these is closed and cannot take collections. */
 export const CLOSED_LOAN_STATUSES: LoanStatus[] = ["Fully Paid", "Settled", "Written Off"];
 
+/**
+ * Every state in which a disbursed loan is still carrying a receivable.
+ *
+ * `Partially Paid` is the one that matters: `recordRepayment` moves a loan
+ * there the moment its first instalment is collected. Collection screens used
+ * to filter on a hand-written `["Active", "Overdue", "Defaulted"]`, so a member
+ * vanished from their group's list the week after they first paid and never
+ * came back — the loan was still owed, still in arrears, and invisible.
+ *
+ * Define the set once and read it everywhere. A literal status array in a
+ * screen is how that bug happened.
+ */
+export const OPEN_LOAN_STATUSES: LoanStatus[] = [
+  "Active",
+  "Partially Paid",
+  "Overdue",
+  "Defaulted",
+];
+
+/**
+ * True when a loan should appear on a collection screen: still open, and still
+ * owing money. `Pending` is excluded — it has not been disbursed, so there is
+ * no cash out and nothing to collect.
+ */
+export const isCollectibleLoan = (loan: {
+  status: LoanStatus;
+  outstanding_balance: number | string;
+}): boolean =>
+  OPEN_LOAN_STATUSES.includes(loan.status) && Number(loan.outstanding_balance || 0) > 0;
+
 export type LoanReversalType = "Disbursement" | "Repayment" | "Settlement" | "Write Off";
 export type RepaymentStatus = "Pending" | "Paid" | "Partially Paid" | "Overdue";
 export type InterestType = "Flat Rate" | "Reducing Balance";
@@ -309,6 +339,23 @@ export interface WeeklyScheduleRow {
   principal_portion: number;
   interest_portion: number;
   paid_amount: number;
+  /**
+   * What is still owed on **this instalment alone**: `installment_amount -
+   * paid_amount`, never negative.
+   *
+   * The column used to carry two different meanings. `calculateLoanSchedule`
+   * wrote the running balance of the whole loan after each week, while
+   * `recordRepayment` overwrote the same field with the shortfall on that one
+   * row — so a loan read one way before its first payment and the other way
+   * after. Every consumer wants the per-instalment reading: the schedule tables
+   * and CSV exports put it in a column headed "Balance" beside "Paid", and the
+   * Audit Dashboard *sums* it across unpaid rows, which is meaningless against a
+   * descending running total.
+   *
+   * Treat it as derived. `summariseSchedule` recomputes it from the amounts
+   * rather than trusting the stored figure, so a legacy row written under the
+   * old meaning still displays correctly before any repair runs.
+   */
   remaining_balance: number;
   status: RepaymentStatus;
   paid_at?: string;

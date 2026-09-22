@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDatabase } from "../context/DatabaseContext";
 import { useNotifications } from "../context/NotificationContext";
-import type { Client, Loan } from "../types/database.types";
+import { isCollectibleLoan, type Client, type Loan } from "../types/database.types";
 import {
   Field,
   MisFilters,
@@ -73,12 +73,12 @@ export const BadLoansList: React.FC = () => {
     const groupById = new Map(clientGroups.map((g) => [g.id, g]));
     const asOnMs = new Date(asOn).getTime();
 
+    // Same defect as the collection screens: the literal status array left out
+    // `Partially Paid`, so a loan dropped off the bad-debt candidate list as
+    // soon as any instalment was collected — exactly the loans that go on to
+    // default after one token payment.
     return loans
-      .filter(
-        (l) =>
-          ["Active", "Overdue", "Defaulted"].includes(l.status) &&
-          Number(l.outstanding_balance) > 0,
-      )
+      .filter(isCollectibleLoan)
       .map<BadRow | null>((l) => {
         const client = clientById.get(l.client_id);
         if (!client) return null;
