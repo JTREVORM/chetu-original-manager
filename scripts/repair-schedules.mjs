@@ -32,6 +32,10 @@
  *
  * A loan the audit flagged AMBIGUOUS is skipped, always. Ambiguity is resolved
  * by a person, not by this script.
+ *
+ * A CLOSED loan — Settled, Fully Paid or Written Off — is skipped before any
+ * action is generated. Its schedule is the record of how the loan ended, not a
+ * schedule this script maintains.
  */
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -136,6 +140,13 @@ const graceDaysFor = (graceWeeks) => {
   const weeks = Math.floor(Number(graceWeeks ?? 0));
   return Math.max(GRACE_DAYS, (Number.isFinite(weeks) ? Math.max(0, weeks) : 0) * 7);
 };
+
+/**
+ * Terminal loan states. Mirrors `CLOSED_LOAN_STATUSES` in
+ * `src/types/database.types.ts`; restated here because this script must not
+ * import application code (see the date helpers above).
+ */
+const CLOSED_LOAN_STATUSES = ["Fully Paid", "Settled", "Written Off"];
 const money = (n) => Number(n || 0).toLocaleString("en-UG", { maximumFractionDigits: 0 });
 
 // ------------------------------------------------------------------- fetching
@@ -168,6 +179,27 @@ export function planForLoan({ loan, client, group, rows, receipts, product = nul
 
   if (loan.status === "Pending") {
     skip("loan is not disbursed");
+    return plan;
+  }
+
+  // A closed loan's schedule is settled history, not a schedule to maintain.
+  //
+  // `settleLoan` closes every remaining instalment by writing the full
+  // instalment amount onto each row, while the receipt it raises carries only
+  // the settlement amount — normally less, because early settlement forgives
+  // unaccrued interest. The schedule therefore records more paid than the
+  // receipts do, entirely legitimately.
+  //
+  // Step 3 below re-applies the receipts across the schedule. On an open loan
+  // that reconciles bookkeeping with money received. On a settled one it would
+  // read the same divergence as an error and REOPEN instalments the settlement
+  // closed, flipping Paid back to Pending. Written-off and fully-paid loans are
+  // closed for the same reason: their rows are a record of how the loan ended.
+  //
+  // So the guard is here, before any action is generated, rather than inside
+  // the reconciliation: nothing about a closed loan is this script's to repair.
+  if (CLOSED_LOAN_STATUSES.includes(loan.status)) {
+    skip(`loan is ${loan.status} — closed loans are never repaired`);
     return plan;
   }
 

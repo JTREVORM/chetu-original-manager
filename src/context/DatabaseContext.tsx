@@ -27,6 +27,7 @@ import { sendNotification } from "../lib/notify";
 import { defaultSettings } from "../lib/defaults";
 import { calculateLoanSchedule } from "../lib/loanCalculations";
 import { graceDaysFor, resolveFirstRepaymentDate, weeklyDueDates } from "../lib/meetingDay";
+import { persistApprovedLoan } from "../lib/approvalPersistence";
 import { allocatePayment } from "../lib/scheduleView";
 import { fetchAllRows } from "../lib/fetchAll";
 import { FEES, loanFees } from "../lib/fees";
@@ -1362,6 +1363,11 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
     const client = clients.find((c) => c.id === app.client_id);
 
+    // Held so the approval can be put back if the loan or its schedule cannot
+    // be written. Read before the update, not after.
+    const previousApplicationStatus = app.status;
+    const previousReviewedBy = app.reviewed_by;
+
     const { error: appError } = await supabase
       .from("loan_applications")
       .update({ status: "Approved", reviewed_by: user?.id, updated_at: new Date().toISOString() })
@@ -1440,32 +1446,66 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       status: "Pending" as const,
       approved_by: user?.id,
     };
-    const { data: loanData, error: loanError } = await supabase
-      .from("loans")
-      .insert([newLoanRow])
-      .select()
-      .single();
-    if (loanError || !loanData) throw new Error(loanError?.message || "Failed to create loan");
-    const loan_number = loanData.loan_number;
+    // The loan and its schedule are written together, or neither survives.
+    //
+    // The schedule insert used to log its error and let the approval report
+    // success, which left an Approved application beside a loan with no
+    // schedule: it disburses without the meeting-day rebase, reads as zero
+    // arrears forever, and still accepts collections. `persistApprovedLoan`
+    // fails the approval instead and undoes what it can — see that module for
+    // why a delete is the strongest compensation available here.
+    type NewLoanRow = typeof newLoanRow & { id: string; loan_number: string };
 
-    const scheduleRows = calc.schedule.map((row) => ({
-      loan_id: loanData.id,
-      week_number: row.week_number,
-      due_date: row.due_date,
-      installment_amount: row.installment_amount,
-      principal_portion: row.principal_portion,
-      interest_portion: row.interest_portion,
-      paid_amount: row.paid_amount,
-      remaining_balance: row.remaining_balance,
-      status: row.status as RepaymentStatus,
-      paid_at: row.paid_at || null,
-    }));
-    const { error: schedError } = await supabase
-      .from("loan_repayment_schedule")
-      .insert(scheduleRows);
-    if (schedError) {
-      console.error("Failed to insert schedule rows", schedError);
+    let loanData: NewLoanRow;
+    try {
+      loanData = await persistApprovedLoan<NewLoanRow>(
+        {
+          insertLoan: () => supabase.from("loans").insert([newLoanRow]).select().single(),
+          insertSchedule: (loan) =>
+            supabase.from("loan_repayment_schedule").insert(
+              // Schedule generation is unchanged: these are `calc.schedule`
+              // rows exactly as before, keyed to the loan just created.
+              calc.schedule.map((row) => ({
+                loan_id: loan.id,
+                week_number: row.week_number,
+                due_date: row.due_date,
+                installment_amount: row.installment_amount,
+                principal_portion: row.principal_portion,
+                interest_portion: row.interest_portion,
+                paid_amount: row.paid_amount,
+                remaining_balance: row.remaining_balance,
+                status: row.status as RepaymentStatus,
+                paid_at: row.paid_at || null,
+              })),
+            ),
+          deleteLoan: (loan) => supabase.from("loans").delete().eq("id", loan.id),
+          restoreApplication: () =>
+            supabase
+              .from("loan_applications")
+              .update({
+                status: previousApplicationStatus,
+                reviewed_by: previousReviewedBy ?? null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", appId),
+        },
+        app.application_number,
+      );
+    } catch (error) {
+      // The optimistic update above put the application in Approved locally.
+      // The database has been put back (or the error says it has not), so the
+      // screen must not keep showing an approval that did not happen.
+      setLoanApplications((prev) =>
+        prev.map((a) =>
+          a.id === appId
+            ? { ...a, status: previousApplicationStatus, reviewed_by: previousReviewedBy }
+            : a,
+        ),
+      );
+      throw error;
     }
+
+    const loan_number = loanData.loan_number;
 
     const newLoan: Loan = {
       ...loanData,
