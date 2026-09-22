@@ -59,11 +59,17 @@ const addDays = (iso, days) => {
 
 const weekdayOf = (iso) => WEEKDAYS[parseLocal(iso).getDay()];
 
-/** The first `weekday` at least `minDaysAhead` days after `from`. */
-const nextMeetingDay = (from, weekday, minDaysAhead = 7) => {
+/**
+ * The first `weekday` at least `minDaysAhead` days after `from`.
+ *
+ * The default is one day, not seven: instalment #1 is the first group meeting
+ * strictly after disbursement. A same-day first instalment stays impossible
+ * because the count starts the day after the money went out.
+ */
+const nextMeetingDay = (from, weekday, minDaysAhead = 1) => {
   const target = WEEKDAYS.indexOf(weekday);
   if (target < 0) throw new Error(`Not a weekday: ${weekday}`);
-  const earliest = parseLocal(addDays(from, minDaysAhead));
+  const earliest = parseLocal(addDays(from, Math.max(1, minDaysAhead)));
   const shift = (target - earliest.getDay() + 7) % 7;
   return addDays(toISO(earliest), shift);
 };
@@ -119,9 +125,20 @@ for (const weekday of WEEKDAYS) {
     run.every((d) => weekdayOf(d) === weekday),
     run.filter((d) => weekdayOf(d) !== weekday).join(", "),
   );
+  // Strictly after the disbursement, and never more than a full week out:
+  // the first meeting of that weekday, whichever day it falls on. Tuesday —
+  // the anchor's own weekday — is the one that goes the full seven days,
+  // because a same-day first instalment is not allowed.
+  const daysOut = (parseLocal(first) - parseLocal("2026-09-22")) / 86400000;
   assert(
-    `${weekday}: first instalment is at least a week out`,
-    (parseLocal(first) - parseLocal("2026-09-22")) / 86400000 >= 7,
+    `${weekday}: first instalment is strictly after disbursement`,
+    daysOut >= 1,
+    `was ${daysOut} days`,
+  );
+  assert(
+    `${weekday}: first instalment is the next such meeting, within a week`,
+    daysOut <= 7,
+    `was ${daysOut} days`,
   );
 }
 
@@ -195,20 +212,38 @@ console.log("Month and year transitions");
 // 6. Disbursement on a day other than the meeting day.
 console.log("Disbursement away from the meeting day");
 {
-  // Tuesday group, cash out on Thursday 24 September 2026. A week's grace puts
-  // the first instalment on the Tuesday after next, not two days later.
+  // Tuesday group, cash out on Thursday 24 September 2026. The approved rule
+  // takes the *next* Tuesday — five days later — not the Tuesday after next.
+  // Chetu's own receipts settle this: of the eleven collected before the
+  // audit, ten fell on the first meeting after disbursement and none a week
+  // later.
   const first = nextMeetingDay("2026-09-24", "Tuesday");
-  check("Thursday disbursement, Tuesday group", first, "2026-10-06");
+  check("Thursday disbursement, Tuesday group", first, "2026-09-29");
   assert(
-    "never less than a week after the money",
-    (parseLocal(first) - parseLocal("2026-09-24")) / 86400000 >= 7,
+    "strictly after the money, never the same day",
+    (parseLocal(first) - parseLocal("2026-09-24")) / 86400000 >= 1,
   );
 
-  // Disbursed the day before the meeting: still skips to the following week.
+  // Disbursed the day before the meeting: the very next day's meeting counts.
   check(
     "Monday disbursement, Tuesday group",
     nextMeetingDay("2026-09-21", "Tuesday"),
+    "2026-09-22",
+  );
+
+  // Disbursed ON the meeting day: the only case where the old seven-day rule
+  // and the approved rule agree, and the reason the error went unnoticed.
+  check(
+    "Tuesday disbursement, Tuesday group, skips to the following week",
+    nextMeetingDay("2026-09-22", "Tuesday"),
     "2026-09-29",
+  );
+
+  // A full week of grace is still expressible, for a product that sets one.
+  check(
+    "grace_period_weeks = 1 restores the old date",
+    nextMeetingDay("2026-09-24", "Tuesday", 7),
+    "2026-10-06",
   );
 }
 
@@ -887,6 +922,49 @@ console.log("Repair planner (scripts/repair-schedules.mjs)");
     friday.actions.every((a) => weekdayOf(a.due) === "Friday"),
     true,
   );
+
+  // Disbursement away from the meeting day — the case the two rules disagree
+  // about, and the one every drifted production loan is in. A Thursday group
+  // paid out on Friday 11 September 2026 starts at the next Thursday, the
+  // 17th: the date its members actually paid on. The old seven-day rule said
+  // the 24th. The checks above cannot see the difference because both their
+  // loans are disbursed on their own meeting day, where the rules agree.
+  const offMeetingDay = planForLoan({
+    loan: { ...baseLoan, disbursed_at: "2026-09-11T10:00:00Z" },
+    client,
+    group: { ...group, meeting_day: "Thursday" },
+    rows: [],
+    receipts: [],
+  });
+  check(
+    "planner: off-meeting-day rebuild takes the next meeting",
+    offMeetingDay.actions[0].due,
+    "2026-09-17",
+  );
+  assert(
+    "planner: off-meeting-day rebuild does not add a spare week",
+    offMeetingDay.actions[0].due !== "2026-09-24",
+  );
+
+  // grace_period_weeks is honoured when a product sets one, and 0 adds nothing.
+  const withGrace = planForLoan({
+    loan: { ...baseLoan, disbursed_at: "2026-09-11T10:00:00Z" },
+    client,
+    group: { ...group, meeting_day: "Thursday" },
+    rows: [],
+    receipts: [],
+    product: { grace_period_weeks: 1 },
+  });
+  check("planner: grace_period_weeks = 1 adds a week", withGrace.actions[0].due, "2026-09-24");
+  const zeroGrace = planForLoan({
+    loan: { ...baseLoan, disbursed_at: "2026-09-11T10:00:00Z" },
+    client,
+    group: { ...group, meeting_day: "Thursday" },
+    rows: [],
+    receipts: [],
+    product: { grace_period_weeks: 0 },
+  });
+  check("planner: grace_period_weeks = 0 adds nothing", zeroGrace.actions[0].due, "2026-09-17");
 
   // No plan, for any input above, may delete anything.
   const everyPlan = [

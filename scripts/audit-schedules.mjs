@@ -91,13 +91,27 @@ const parseMeetingDay = (value) => {
   return prefixed.length === 1 ? WEEKDAYS.indexOf(prefixed[0]) : null;
 };
 
-const nextMeetingDay = (from, weekdayIndex, minDaysAhead = 7) => {
-  const earliest = parseLocal(addDays(from, minDaysAhead));
+const nextMeetingDay = (from, weekdayIndex, minDaysAhead = 1) => {
+  // Floored at one day: instalment #1 never falls on the disbursement date.
+  const earliest = parseLocal(addDays(from, Math.max(1, minDaysAhead)));
   return addDays(toISO(earliest), (weekdayIndex - earliest.getDay() + 7) % 7);
 };
 
-/** Matches `GRACE_DAYS` in DatabaseContext. */
-const GRACE_DAYS = 7;
+/**
+ * Days from disbursement to instalment #1, under the approved rule: the first
+ * group meeting *strictly after* the money went out, with no extra week.
+ *
+ * Mirrors `graceDaysFor` in `src/lib/meetingDay.ts`. Restated here rather than
+ * imported because the audit must not depend on the code it is auditing — if
+ * the two ever disagree, `verify-schedule.mjs` section 11 fails, which is the
+ * point. `loan_products.grace_period_weeks` supplies the weeks: 0, the live
+ * product's value, means none.
+ */
+const GRACE_DAYS = 1;
+const graceDaysFor = (graceWeeks) => {
+  const weeks = Math.floor(Number(graceWeeks ?? 0));
+  return Math.max(GRACE_DAYS, (Number.isFinite(weeks) ? Math.max(0, weeks) : 0) * 7);
+};
 
 // -------------------------------------------------------------------- fetching
 
@@ -126,7 +140,10 @@ async function main() {
   console.log("\nChetu repayment schedule audit — READ ONLY, no data is modified\n");
   console.log(`Project : ${url}`);
   console.log(`Run at  : ${new Date().toISOString()}`);
-  console.log(`Grace   : ${GRACE_DAYS} days between disbursement and first repayment\n`);
+  console.log(
+    "Rule    : instalment #1 = first group meeting strictly after disbursement" +
+      " (grace_period_weeks adds whole weeks)\n",
+  );
 
   const [loans, clients, groups, products, schedule, repayments] = await Promise.all([
     fetchAll("loans"),
@@ -279,7 +296,11 @@ async function main() {
       // What the schedule would have been, anchored on the disbursement.
       const anchor = loan.disbursed_at ? String(loan.disbursed_at).slice(0, 10) : null;
       if (anchor) {
-        const first = nextMeetingDay(anchor, meetingIndex, GRACE_DAYS);
+        const first = nextMeetingDay(
+          anchor,
+          meetingIndex,
+          graceDaysFor(product?.grace_period_weeks),
+        );
         expectedSchedule = Array.from({ length: rows.length }, (_, i) => addDays(first, i * 7));
       } else if (loan.status !== "Pending") {
         ambiguities.push("Loan is not Pending but has no disbursed_at — cannot anchor a schedule");

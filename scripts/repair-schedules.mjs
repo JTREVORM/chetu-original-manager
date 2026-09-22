@@ -110,11 +110,24 @@ const parseMeetingDay = (value) => {
   const prefixed = WEEKDAYS.filter((d) => d.toLowerCase().startsWith(cleaned));
   return prefixed.length === 1 ? WEEKDAYS.indexOf(prefixed[0]) : null;
 };
-const nextMeetingDay = (from, weekdayIndex, minDaysAhead = 7) => {
-  const earliest = parseLocal(addDays(from, minDaysAhead));
+const nextMeetingDay = (from, weekdayIndex, minDaysAhead = 1) => {
+  // Floored at one day: instalment #1 never falls on the disbursement date.
+  const earliest = parseLocal(addDays(from, Math.max(1, minDaysAhead)));
   return addDays(toISO(earliest), (weekdayIndex - earliest.getDay() + 7) % 7);
 };
-const GRACE_DAYS = 7;
+
+/**
+ * The approved rule: instalment #1 is the first group meeting *strictly after*
+ * disbursement, with no extra week. Mirrors `graceDaysFor` in
+ * `src/lib/meetingDay.ts` and in `audit-schedules.mjs`; the repair must propose
+ * exactly the dates the audit reported, or the report a person approved is not
+ * the change that lands.
+ */
+const GRACE_DAYS = 1;
+const graceDaysFor = (graceWeeks) => {
+  const weeks = Math.floor(Number(graceWeeks ?? 0));
+  return Math.max(GRACE_DAYS, (Number.isFinite(weeks) ? Math.max(0, weeks) : 0) * 7);
+};
 const money = (n) => Number(n || 0).toLocaleString("en-UG", { maximumFractionDigits: 0 });
 
 // ------------------------------------------------------------------- fetching
@@ -141,7 +154,7 @@ async function fetchAll(table, columns = "*", order = "id") {
  * Every intended change, as data. Nothing is executed while the plan is built,
  * so the dry run and the apply run decide identically.
  */
-export function planForLoan({ loan, client, group, rows, receipts }) {
+export function planForLoan({ loan, client, group, rows, receipts, product = null }) {
   const plan = { loan, client, group, actions: [], skips: [] };
   const skip = (why) => plan.skips.push(why);
 
@@ -185,7 +198,7 @@ export function planForLoan({ loan, client, group, rows, receipts }) {
   }
 
   const anchor = String(loan.disbursed_at).slice(0, 10);
-  const firstDue = nextMeetingDay(anchor, meetingIndex, GRACE_DAYS);
+  const firstDue = nextMeetingDay(anchor, meetingIndex, graceDaysFor(product?.grace_period_weeks));
   const expectedWeeks = Number(loan.loan_period_weeks || 0);
 
   // 1. Missing instalment rows, created unpaid at their historical due date.
@@ -363,10 +376,11 @@ async function main() {
   console.log(`\nProject : ${url}`);
   console.log(`Run at  : ${new Date().toISOString()}\n`);
 
-  const [loans, clients, groups, schedule, repayments] = await Promise.all([
+  const [loans, clients, groups, products, schedule, repayments] = await Promise.all([
     fetchAll("loans"),
     fetchAll("clients", "id, client_number, full_name, group_id"),
     fetchAll("client_groups", "id, group_code, group_name, meeting_day, meeting_frequency"),
+    fetchAll("loan_products", "id, product_name, grace_period_weeks"),
     fetchAll("loan_repayment_schedule"),
     fetchAll("loan_repayments"),
   ]);
@@ -391,6 +405,7 @@ async function main() {
 
   const clientById = new Map(clients.map((c) => [c.id, c]));
   const groupById = new Map(groups.map((g) => [g.id, g]));
+  const productById = new Map(products.map((p) => [p.id, p]));
   const scheduleByLoan = new Map();
   for (const row of schedule) {
     const list = scheduleByLoan.get(row.loan_id);
@@ -414,6 +429,7 @@ async function main() {
       group: client?.group_id ? groupById.get(client.group_id) : null,
       rows: scheduleByLoan.get(loan.id) || [],
       receipts: repaymentsByLoan.get(loan.id) || [],
+      product: productById.get(loan.product_id) || null,
     });
     if (plan.actions.length || plan.skips.length) plans.push(plan);
   }

@@ -26,7 +26,7 @@ import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { sendNotification } from "../lib/notify";
 import { defaultSettings } from "../lib/defaults";
 import { calculateLoanSchedule } from "../lib/loanCalculations";
-import { resolveFirstRepaymentDate, weeklyDueDates } from "../lib/meetingDay";
+import { graceDaysFor, resolveFirstRepaymentDate, weeklyDueDates } from "../lib/meetingDay";
 import { allocatePayment } from "../lib/scheduleView";
 import { fetchAllRows } from "../lib/fetchAll";
 import { FEES, loanFees } from "../lib/fees";
@@ -234,22 +234,26 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   /**
    * Days between the schedule's anchor event and the first instalment.
    *
-   * Seven — one week — is what the system has always applied:
-   * `calculateLoanSchedule` hardcoded `addDays(startDate, 7)` for the first
-   * repayment and week × 7 thereafter. Combined with the group's meeting day it
-   * reads as "the first group meeting at least a week after the money went out",
-   * which matches how Chetu describes the rule: a member disbursed at Tuesday's
-   * meeting starts repaying at the *following* Tuesday's meeting, not that day.
+   * The approved rule: instalment #1 falls on the first group meeting
+   * *strictly after* disbursement. No extra week — a Thursday group whose loan
+   * goes out on Friday repays at the following Thursday's meeting, six days
+   * later, not thirteen.
    *
-   * NOT APPLIED, DELIBERATELY: `loan_products.grace_period_weeks` (default 1, and
-   * 2 on one seeded product) is displayed on the Loan Products screen and in
-   * reports but is read by no calculation anywhere in the codebase — the seven
-   * days here have always been a constant. Honouring it would change the first
-   * repayment date of every loan on a product with a grace of 2 from +7 days to
-   * +14, which moves real money, so it is left alone until someone at Chetu
-   * confirms the intent. See the implementation report.
+   * This replaces a flat seven days, which was a historical implementation
+   * mistake rather than a policy: `calculateLoanSchedule` hardcoded
+   * `addDays(startDate, 7)` from before meeting days were read at all, and the
+   * constant survived the move to meeting-day scheduling. The two rules agree
+   * only when disbursement lands on the group's own meeting day, which is why
+   * it went unnoticed. Chetu's own receipts settle it — of the eleven
+   * collected before the audit, ten fell on the first meeting after
+   * disbursement and none on the seven-day date.
+   *
+   * `loan_products.grace_period_weeks` now drives this, via `graceDaysFor`:
+   * 0 (the live product's value) means no additional week, and each further
+   * week adds seven days. It was previously read by no calculation anywhere.
    */
-  const GRACE_DAYS = 7;
+  const graceDaysForProduct = (product?: { grace_period_weeks?: number | null }) =>
+    graceDaysFor(product?.grace_period_weeks);
 
   const refetch = async (options?: { silent?: boolean }) => {
     if (!isSupabaseConfigured) return;
@@ -1381,7 +1385,11 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // disbursement date once cash actually goes out, while every row is still
     // unpaid.
     const group = client?.group_id ? clientGroups.find((g) => g.id === client.group_id) : undefined;
-    const firstRepayment = resolveFirstRepaymentDate(new Date(), group?.meeting_day, GRACE_DAYS);
+    const firstRepayment = resolveFirstRepaymentDate(
+      new Date(),
+      group?.meeting_day,
+      graceDaysForProduct(product),
+    );
     if (firstRepayment.usedFallback && group) {
       // The group has no usable meeting day, so the schedule falls back to the
       // approval weekday. Surfaced rather than swallowed: it means this loan
@@ -1587,7 +1595,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // the disbursement queue needs something to show. Cash can leave days
     // later, so the stored dates can be a week adrift of the repayment the
     // member was actually told about. Re-anchoring here puts the first
-    // instalment on the group's first meeting a week after the money.
+    // instalment on the group's first meeting after the money went out.
     //
     // Guarded hard: this only runs while the schedule is untouched. If any row
     // carries a payment, the dates stay exactly as they are — re-dating an
@@ -1606,7 +1614,11 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     let rebasedLoanDates: { first_repayment_date: string; final_due_date: string } | null = null;
 
     if (scheduleUntouched) {
-      const resolved = resolveFirstRepaymentDate(now, disbursementGroup?.meeting_day, GRACE_DAYS);
+      const resolved = resolveFirstRepaymentDate(
+        now,
+        disbursementGroup?.meeting_day,
+        graceDaysForProduct(loanProducts.find((p) => p.id === targetLoan.product_id)),
+      );
       const dueDates = weeklyDueDates(resolved.firstDueDate, existingSchedule.length);
       const ordered = [...existingSchedule].sort((a, b) => a.week_number - b.week_number);
       // Only the dates move. Amounts, portions and week numbers are untouched:

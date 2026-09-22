@@ -62,7 +62,10 @@ export function calculateLoanSchedule(
    * month and year boundaries.
    *
    * Omitted — by the loan calculator, which has no member and so no group —
-   * the schedule falls back to one week after `startDateInput`.
+   * the schedule falls back to one week after `startDateInput`. That fallback
+   * keeps its seven days on purpose: with no group there is no meeting day to
+   * bring the first instalment forward to, and the calculator is an indicative
+   * quote, not a loan.
    */
   firstDueDateInput?: string | Date,
 ): LoanCalculationSummary {

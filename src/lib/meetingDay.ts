@@ -86,21 +86,52 @@ export const toISODate = (input: string | Date): string =>
   format(parseLocalDate(input), "yyyy-MM-dd");
 
 /**
+ * Minimum days between disbursement and instalment #1 under the approved rule:
+ * the first group meeting *strictly after* the money went out.
+ *
+ * One, not seven. A same-day instalment is never the first one — `nextMeetingDay`
+ * starts counting from the day after disbursement — but no extra full week is
+ * inserted either.
+ */
+export const DEFAULT_GRACE_DAYS = 1;
+
+/**
+ * How many days a given `grace_period_weeks` holds repayment back.
+ *
+ * `loan_products.grace_period_weeks` is the number of *extra* whole weeks
+ * before collection starts. Zero — the value Chetu's live product carries —
+ * means none: repayment begins at the next meeting. Each further week adds
+ * seven days, and the floor of one keeps a same-day first instalment
+ * impossible at any setting.
+ *
+ * This is the single place the column is turned into days. Before this the
+ * column was read by no calculation at all and a flat seven days was assumed
+ * everywhere, which pushed every off-meeting-day loan a week past the meeting
+ * its members were already paying at.
+ */
+export function graceDaysFor(graceWeeks: number | null | undefined): number {
+  const weeks = Math.floor(Number(graceWeeks ?? 0));
+  return Math.max(DEFAULT_GRACE_DAYS, (Number.isFinite(weeks) ? Math.max(0, weeks) : 0) * 7);
+}
+
+/**
  * The first occurrence of `weekdayIndex` that is at least `minDaysAhead` days
  * after `from`.
  *
- * With `minDaysAhead = 7` (one week's grace, the rule the system has always
- * applied) a Tuesday group disbursed on Tuesday 22 September 2026 gets Tuesday
- * the 29th — never the same day, and never a first instalment only two days
- * after the cash was handed over.
+ * With the default `minDaysAhead = 1` a Thursday group disbursed on Friday
+ * 11 September 2026 gets Thursday the 17th — the next meeting, which is where
+ * its members actually paid — and a Tuesday group disbursed on Tuesday the
+ * 22nd gets Tuesday the 29th, never the same day.
  */
 export function nextMeetingDay(
   from: string | Date,
   weekdayIndex: number,
-  minDaysAhead: number = 7,
+  minDaysAhead: number = DEFAULT_GRACE_DAYS,
 ): Date {
   const start = parseLocalDate(from);
-  const earliest = addDays(start, Math.max(0, minDaysAhead));
+  // Floored at one day, not zero: instalment #1 can never fall on the
+  // disbursement date itself, whatever a caller passes.
+  const earliest = addDays(start, Math.max(DEFAULT_GRACE_DAYS, minDaysAhead));
   // How many days from `earliest` forward to the wanted weekday, 0 if it
   // already is that weekday. Adding 7 before the modulo keeps it non-negative.
   const shift = (weekdayIndex - earliest.getDay() + 7) % 7;
@@ -126,10 +157,16 @@ export function weeklyDueDates(firstDueDate: string | Date, count: number): stri
  * disbursement queue.
  *
  * When the group has a usable meeting day the first repayment is the first such
- * meeting at least `graceDays` away. When it does not, the schedule falls back
- * to the anchor's own weekday, which is the behaviour the system had before
- * meeting days were honoured at all; `usedFallback` says which of the two
- * happened so callers can report it instead of quietly accepting it.
+ * meeting at least `graceDays` away — by default the very next one. When it
+ * does not, the schedule falls back to the anchor's own weekday a full week
+ * out, which is the behaviour the system had before meeting days were honoured
+ * at all; `usedFallback` says which of the two happened so callers can report
+ * it instead of quietly accepting it.
+ *
+ * The fallback deliberately keeps its seven days. With no meeting day there is
+ * no meeting to bring the date forward to, and putting instalment #1 one day
+ * after disbursement because the group's day is unreadable would be worse than
+ * the week the system has always given.
  */
 export interface FirstRepaymentResolution {
   firstDueDate: string;
@@ -141,18 +178,27 @@ export interface FirstRepaymentResolution {
 export function resolveFirstRepaymentDate(
   anchorDate: string | Date,
   meetingDay: string | null | undefined,
-  graceDays: number = 7,
+  graceDays: number = DEFAULT_GRACE_DAYS,
 ): FirstRepaymentResolution {
   const anchor = parseLocalDate(anchorDate);
   const parsed = parseMeetingDay(meetingDay);
-  const weekdayIndex = parsed ?? addDays(anchor, graceDays).getDay();
-  const due = nextMeetingDay(anchor, weekdayIndex, graceDays);
 
+  if (parsed === null) {
+    const due = addDays(anchor, 7);
+    return {
+      firstDueDate: toISODate(due),
+      weekdayIndex: due.getDay(),
+      weekday: WEEKDAY_NAMES[due.getDay()],
+      usedFallback: true,
+    };
+  }
+
+  const due = nextMeetingDay(anchor, parsed, graceDays);
   return {
     firstDueDate: toISODate(due),
-    weekdayIndex,
-    weekday: WEEKDAY_NAMES[weekdayIndex],
-    usedFallback: parsed === null,
+    weekdayIndex: parsed,
+    weekday: WEEKDAY_NAMES[parsed],
+    usedFallback: false,
   };
 }
 
