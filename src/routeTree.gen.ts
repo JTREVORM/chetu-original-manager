@@ -23,6 +23,7 @@ import { Route as CalculatorRouteImport } from './routes/calculator'
 import { Route as ClientGroupsRouteImport } from './routes/client-groups'
 import { Route as ClientsRouteImport } from './routes/clients'
 import { Route as ExpensesRouteImport } from './routes/expenses'
+import { Route as FinancialLedgerRouteImport } from './routes/financial-ledger'
 import { Route as GroupCollectionRouteImport } from './routes/group-collection'
 import { Route as GroupCreateRouteImport } from './routes/group-create'
 import { Route as LoanApplicationsRouteImport } from './routes/loan-applications'
@@ -142,6 +143,11 @@ const ClientsRoute = ClientsRouteImport.update({
 const ExpensesRoute = ExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinancialLedgerRoute = FinancialLedgerRouteImport.update({
+  id: '/financial-ledger',
+  path: '/financial-ledger',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GroupCollectionRoute = GroupCollectionRouteImport.update({
@@ -414,6 +420,7 @@ export interface FileRoutesByFullPath {
   '/client-groups': typeof ClientGroupsRoute
   '/clients': typeof ClientsRoute
   '/expenses': typeof ExpensesRoute
+  '/financial-ledger': typeof FinancialLedgerRoute
   '/group-collection': typeof GroupCollectionRoute
   '/group-create': typeof GroupCreateRoute
   '/loan-applications': typeof LoanApplicationsRoute
@@ -479,6 +486,7 @@ export interface FileRoutesByTo {
   '/client-groups': typeof ClientGroupsRoute
   '/clients': typeof ClientsRoute
   '/expenses': typeof ExpensesRoute
+  '/financial-ledger': typeof FinancialLedgerRoute
   '/group-collection': typeof GroupCollectionRoute
   '/group-create': typeof GroupCreateRoute
   '/loan-applications': typeof LoanApplicationsRoute
@@ -545,6 +553,7 @@ export interface FileRoutesById {
   '/client-groups': typeof ClientGroupsRoute
   '/clients': typeof ClientsRoute
   '/expenses': typeof ExpensesRoute
+  '/financial-ledger': typeof FinancialLedgerRoute
   '/group-collection': typeof GroupCollectionRoute
   '/group-create': typeof GroupCreateRoute
   '/loan-applications': typeof LoanApplicationsRoute
@@ -613,6 +622,7 @@ export interface FileRouteTypes {
     | '/client-groups'
     | '/clients'
     | '/expenses'
+    | '/financial-ledger'
     | '/group-collection'
     | '/group-create'
     | '/loan-applications'
@@ -678,6 +688,7 @@ export interface FileRouteTypes {
     | '/client-groups'
     | '/clients'
     | '/expenses'
+    | '/financial-ledger'
     | '/group-collection'
     | '/group-create'
     | '/loan-applications'
@@ -743,6 +754,7 @@ export interface FileRouteTypes {
     | '/client-groups'
     | '/clients'
     | '/expenses'
+    | '/financial-ledger'
     | '/group-collection'
     | '/group-create'
     | '/loan-applications'
@@ -810,6 +822,7 @@ export interface RootRouteChildren {
   ClientGroupsRoute: typeof ClientGroupsRoute
   ClientsRoute: typeof ClientsRoute
   ExpensesRoute: typeof ExpensesRoute
+  FinancialLedgerRoute: typeof FinancialLedgerRoute
   GroupCollectionRoute: typeof GroupCollectionRoute
   GroupCreateRoute: typeof GroupCreateRoute
   LoanApplicationsRoute: typeof LoanApplicationsRoute
@@ -945,6 +958,13 @@ declare module '@tanstack/react-router' {
       path: '/expenses'
       fullPath: '/expenses'
       preLoaderRoute: typeof ExpensesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financial-ledger': {
+      id: '/financial-ledger'
+      path: '/financial-ledger'
+      fullPath: '/financial-ledger'
+      preLoaderRoute: typeof FinancialLedgerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/group-collection': {
@@ -1364,6 +1384,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientGroupsRoute: ClientGroupsRoute,
   ClientsRoute: ClientsRoute,
   ExpensesRoute: ExpensesRoute,
+  FinancialLedgerRoute: FinancialLedgerRoute,
   GroupCollectionRoute: GroupCollectionRoute,
   GroupCreateRoute: GroupCreateRoute,
   LoanApplicationsRoute: LoanApplicationsRoute,

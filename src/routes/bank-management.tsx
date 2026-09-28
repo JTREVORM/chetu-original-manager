@@ -5,15 +5,15 @@ import { BankManagement } from "@/pages/BankManagement";
 export const Route = createFileRoute("/bank-management")({
   head: () => ({
     meta: [
-      { title: "Bank Management | Chetu Microfinance" },
+      { title: "Legacy Bank Register | Chetu Microfinance" },
       {
         name: "description",
-        content: "Bank Management workspace in the Chetu microfinance management system.",
+        content: "The superseded single-account bank register, kept read-only for reference.",
       },
-      { property: "og:title", content: "Bank Management | Chetu Microfinance" },
+      { property: "og:title", content: "Legacy Bank Register | Chetu Microfinance" },
       {
         property: "og:description",
-        content: "Bank Management workspace in the Chetu microfinance management system.",
+        content: "The superseded single-account bank register, kept read-only for reference.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -181,10 +181,16 @@ INSERT INTO public.financial_accounts
 SELECT 'EXP-' || upper(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')),
        name || ' Expense', 'expense', 'expense', TRUE, FALSE, 700 + (ord * 10)
 FROM (VALUES
-  ('Rent', 1), ('Salaries', 2), ('Utilities', 3), ('Transport', 4), ('Fuel', 5),
-  ('Stationery', 6), ('Maintenance', 7), ('Marketing', 8), ('Communication', 9),
-  ('Professional Fees', 10), ('Bank Charges', 11), ('Training', 12),
-  ('Equipment', 13), ('Insurance', 14), ('Other', 15)
+  -- The nine in the application's ExpenseCategory union come first, spelled
+  -- exactly as it spells them: post_expense derives the account code from the
+  -- category string, so a mismatch would quietly bucket real spending into
+  -- "Other".
+  ('Salaries', 1), ('Rent', 2), ('Fuel', 3), ('Utilities', 4), ('Internet', 5),
+  ('Maintenance', 6), ('Transport', 7), ('Office Supplies', 8), ('Other', 9),
+  -- Room to grow without another migration.
+  ('Stationery', 10), ('Marketing', 11), ('Communication', 12),
+  ('Professional Fees', 13), ('Bank Charges', 14), ('Training', 15),
+  ('Equipment', 16), ('Insurance', 17)
 ) AS t(name, ord)
 ON CONFLICT (account_code) DO NOTHING;
 

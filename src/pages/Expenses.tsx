@@ -7,6 +7,7 @@ import { generateExpenseVoucherPDF } from "../lib/pdfGenerator";
 import { formatUGX } from "../lib/loanCalculations";
 import { ExpenseCategory, PaymentMethod } from "../types/database.types";
 import { CreditCard, Plus, Printer, Search, X, CalendarDays, Receipt } from "lucide-react";
+import { AccountSelect } from "../components/financial/AccountSelect";
 import {
   FilterBar,
   FilterGroup,
@@ -26,6 +27,9 @@ export const Expenses: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  // The account the money leaves. `payment_method` says how it was paid; this
+  // says which of Chetu's accounts is actually lighter afterwards.
+  const [sourceAccountId, setSourceAccountId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -80,8 +84,16 @@ export const Expenses: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!sourceAccountId) {
+      addToast(
+        "warning",
+        "Choose a source account",
+        "Every expense has to say which account actually paid for it.",
+      );
+      return;
+    }
     try {
-      const created = await addExpense(formData);
+      const created = await addExpense(formData, sourceAccountId);
       addToast("success", "Expense Logged", `Expense ${created.expense_number} recorded.`);
       setIsModalOpen(false);
       setFormData({
@@ -93,8 +105,16 @@ export const Expenses: React.FC = () => {
         receipt_url: "",
         branch_id: "",
       });
-    } catch {
-      addToast("error", "Action Failed", "Could not record expense.");
+      setSourceAccountId("");
+    } catch (error) {
+      // The database writes a sentence naming the account, the branch or the
+      // permission that stopped it. Passing a generic message instead is what
+      // let a failed posting look like a success for fifteen disbursements.
+      addToast(
+        "error",
+        "Could not record expense",
+        error instanceof Error ? error.message : "Please try again.",
+      );
     }
   };
 
@@ -399,6 +419,15 @@ export const Expenses: React.FC = () => {
                   <option value="Mobile Money">Mobile Money</option>
                 </select>
               </div>
+
+              <AccountSelect
+                value={sourceAccountId}
+                onChange={setSourceAccountId}
+                branchId={formData.branch_id || undefined}
+                method={formData.payment_method}
+                direction="source"
+                label="Paid from account"
+              />
 
               <div className="flex flex-col-reverse gap-2 pt-4 border-t md:flex-row md:justify-end">
                 <button

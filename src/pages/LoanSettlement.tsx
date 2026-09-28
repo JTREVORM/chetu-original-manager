@@ -23,6 +23,7 @@ import {
   type MisColumn,
 } from "../components/mis/MisKit";
 import { ReportExportButtons } from "../components/mis/ReportExport";
+import { AccountSelect } from "../components/financial/AccountSelect";
 
 interface SettlementRow {
   loan: Loan;
@@ -59,6 +60,7 @@ export const LoanSettlement: React.FC = () => {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("Cash");
   const [notes, setNotes] = useState("");
+  const [receivingAccountId, setReceivingAccountId] = useState("");
   const [busy, setBusy] = useState(false);
 
   const rows = useMemo(() => {
@@ -151,8 +153,22 @@ export const LoanSettlement: React.FC = () => {
       return;
     }
     setBusy(true);
+    if (!receivingAccountId) {
+      addToast(
+        "warning",
+        "Choose a receiving account",
+        "Say which account the settlement is paid into.",
+      );
+      return;
+    }
     try {
-      await settleLoan(active.loan.id, value, method, notes.trim() || undefined);
+      await settleLoan(
+        active.loan.id,
+        value,
+        method,
+        receivingAccountId,
+        notes.trim() || undefined,
+      );
       addToast(
         "success",
         "Loan settled",
@@ -346,6 +362,14 @@ export const LoanSettlement: React.FC = () => {
                 </select>
               </Field>
             </div>
+
+            <AccountSelect
+              value={receivingAccountId}
+              onChange={setReceivingAccountId}
+              branchId={active.branch_id}
+              method={method}
+              label="Settlement received into"
+            />
 
             <Field label="Notes">
               <textarea

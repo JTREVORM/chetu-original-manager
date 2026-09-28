@@ -85,7 +85,9 @@ const guardTarget = async () => {
             (select count(*) from information_schema.tables
               where table_schema='public' and table_name='financial_transactions') as journals`,
   );
-  console.log(`target ${project}: ${loans} loan(s), ledger installed: ${journals > 0 ? "yes" : "no"}`);
+  console.log(
+    `target ${project}: ${loans} loan(s), ledger installed: ${journals > 0 ? "yes" : "no"}`,
+  );
   if (Number(loans) > 40 && !has("--i-know-this-is-not-production")) {
     throw new Error(
       `${loans} loans found. That looks like real data, not a scratch database. Aborting.`,
@@ -104,9 +106,11 @@ const main = async () => {
 
   if (has("--migrate")) {
     const dir = join(HERE, "../supabase/migrations");
-    const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
     const base = files.slice(0, 13);
-    const financial = files.slice(13);
+    const financial = files.slice(13); // everything after the 13 base migrations
 
     console.log("── base migrations ──");
     for (const f of base) await runFile(join(dir, f), f);
@@ -132,7 +136,9 @@ const main = async () => {
        from _verify_results group by area order by min(seq)`,
   );
   for (const r of byArea) {
-    console.log(`  ${r.area.padEnd(20)} ${String(r.passed).padStart(3)} passed  ${r.failed} failed`);
+    console.log(
+      `  ${r.area.padEnd(20)} ${String(r.passed).padStart(3)} passed  ${r.failed} failed`,
+    );
   }
 
   const failures = await sql(
@@ -151,7 +157,9 @@ const main = async () => {
   }
 
   const total = byArea.reduce((t, r) => t + Number(r.failed), 0) + health.length;
-  console.log(total === 0 ? "\nVERIFICATION PASSED" : `\nVERIFICATION FAILED — ${total} problem(s)`);
+  console.log(
+    total === 0 ? "\nVERIFICATION PASSED" : `\nVERIFICATION FAILED — ${total} problem(s)`,
+  );
   process.exit(total === 0 ? 0 : 1);
 };
 

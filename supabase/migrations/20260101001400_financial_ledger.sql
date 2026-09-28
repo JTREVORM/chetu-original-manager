@@ -98,11 +98,35 @@ CREATE INDEX IF NOT EXISTS idx_fin_tx_member_fee  ON public.financial_transactio
 CREATE INDEX IF NOT EXISTS idx_fin_tx_reversal_of ON public.financial_transactions(reversal_of_id) WHERE reversal_of_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_fin_tx_business_day ON public.financial_transactions(business_day_id);
 
--- Idempotency for the backfill and for every post_* function: one posting per
--- source record, enforced by the database rather than by a careful caller.
+-- Idempotency for the backfill and for every post_* function: one LIVE posting
+-- per source record, enforced by the database rather than by a careful caller.
+--
+-- Reversed journals are excluded on purpose. A loan disbursed in error is
+-- reversed and then disbursed again properly; if the reversed journal still
+-- held the source slot, the second attempt would be refused as a duplicate and
+-- the loan could never leave the building.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_fin_tx_source
   ON public.financial_transactions(source_table, source_id)
-  WHERE source_table IS NOT NULL AND source_id IS NOT NULL;
+  WHERE source_table IS NOT NULL AND source_id IS NOT NULL AND status <> 'reversed';
+
+-- A rollback deletes the receipt or expense it reversed (the behaviour
+-- `loan_reversals` has always existed to record). The journal must survive
+-- that: the posting is the evidence, and `source_table` / `source_id` keep the
+-- provenance even once the row they name is gone.
+ALTER TABLE public.financial_transactions
+  DROP CONSTRAINT IF EXISTS financial_transactions_repayment_id_fkey,
+  DROP CONSTRAINT IF EXISTS financial_transactions_expense_id_fkey,
+  DROP CONSTRAINT IF EXISTS financial_transactions_member_fee_id_fkey,
+  DROP CONSTRAINT IF EXISTS financial_transactions_security_return_id_fkey;
+ALTER TABLE public.financial_transactions
+  ADD CONSTRAINT financial_transactions_repayment_id_fkey
+    FOREIGN KEY (repayment_id) REFERENCES public.loan_repayments(id) ON DELETE SET NULL,
+  ADD CONSTRAINT financial_transactions_expense_id_fkey
+    FOREIGN KEY (expense_id) REFERENCES public.expenses(id) ON DELETE SET NULL,
+  ADD CONSTRAINT financial_transactions_member_fee_id_fkey
+    FOREIGN KEY (member_fee_id) REFERENCES public.member_fees(id) ON DELETE SET NULL,
+  ADD CONSTRAINT financial_transactions_security_return_id_fkey
+    FOREIGN KEY (security_return_id) REFERENCES public.loan_security_returns(id) ON DELETE SET NULL;
 
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.financial_transaction_lines (
@@ -275,9 +299,12 @@ BEGIN
      OR NEW.entry_type         IS DISTINCT FROM OLD.entry_type
      OR NEW.branch_id          IS DISTINCT FROM OLD.branch_id
      OR NEW.loan_id            IS DISTINCT FROM OLD.loan_id
-     OR NEW.repayment_id       IS DISTINCT FROM OLD.repayment_id
-     OR NEW.expense_id         IS DISTINCT FROM OLD.expense_id
-     OR NEW.member_fee_id      IS DISTINCT FROM OLD.member_fee_id
+     -- These four may only ever be cleared, never repointed: a rollback
+     -- deletes the row they name and the foreign key nulls them.
+     OR (NEW.repayment_id       IS DISTINCT FROM OLD.repayment_id       AND NEW.repayment_id IS NOT NULL)
+     OR (NEW.expense_id         IS DISTINCT FROM OLD.expense_id         AND NEW.expense_id IS NOT NULL)
+     OR (NEW.member_fee_id      IS DISTINCT FROM OLD.member_fee_id      AND NEW.member_fee_id IS NOT NULL)
+     OR (NEW.security_return_id IS DISTINCT FROM OLD.security_return_id AND NEW.security_return_id IS NOT NULL)
      OR NEW.source_table       IS DISTINCT FROM OLD.source_table
      OR NEW.source_id          IS DISTINCT FROM OLD.source_id
      OR NEW.reversal_of_id     IS DISTINCT FROM OLD.reversal_of_id

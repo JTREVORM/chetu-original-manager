@@ -852,6 +852,203 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
+-- 11b. Atomicity — the failure this whole programme exists to prevent
+--
+-- A loan must never end up disbursed with no journal behind it. The old code
+-- marked the loan Active, tried to write the ledger, had the write rejected by
+-- row level security, and carried on. `disburse_loan` welds the two together.
+-- ---------------------------------------------------------------------------
+DO $$
+DECLARE v_bank TEXT; v_closed TEXT; v_row RECORD; v_status TEXT; v_disb TIMESTAMPTZ;
+BEGIN
+  SELECT id INTO v_bank FROM financial_accounts WHERE account_code = 'BANK-MAIN';
+
+  INSERT INTO loans (id, loan_number, client_id, product_id, principal_amount, interest_rate,
+    interest_type, loan_period_weeks, total_interest_amount, total_amount_payable,
+    weekly_installment, processing_fee_amount, crb_fee_amount, group_maintenance_fee,
+    security_amount, security_balance, net_disbursed_amount, first_repayment_date,
+    final_due_date, outstanding_balance, status)
+  VALUES ('LN-TEST-ATOMIC', 'CM-LN-2026-9003', 'CLI-TEST-022', 'PRD-TEST-001', 400000, 20.00,
+    'Flat Rate', 16, 80000, 480000, 30000, 16000, 4000, 2000, 60000, 60000, 318000,
+    CURRENT_DATE + 7, CURRENT_DATE + 112, 480000, 'Pending')
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO loan_repayment_schedule (id, loan_id, week_number, due_date, installment_amount,
+    principal_portion, interest_portion, paid_amount, remaining_balance, status)
+  SELECT format('SCH-ATOMIC-%s', lpad(w::text, 2, '0')), 'LN-TEST-ATOMIC', w,
+         CURRENT_DATE + w * 7, 30000, 25000, 5000, 0, 30000, 'Pending'
+    FROM generate_series(1, 16) w
+  ON CONFLICT (id) DO NOTHING;
+
+  -- A funding account that cannot be posted to. The disbursement must fail
+  -- WHOLE: the loan stays Pending, and no journal is left behind.
+  INSERT INTO financial_accounts (account_code, account_name, account_type, account_class, status)
+  VALUES ('BANK-CLOSED', 'Closed Account', 'bank', 'asset_liquid', 'Closed')
+  ON CONFLICT (account_code) DO NOTHING;
+  SELECT id INTO v_closed FROM financial_accounts WHERE account_code = 'BANK-CLOSED';
+
+  BEGIN
+    PERFORM disburse_loan('LN-TEST-ATOMIC', v_closed);
+    PERFORM _check('atomicity', 'a bad funding account fails the disbursement', FALSE, 'it succeeded');
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM _check('atomicity', 'a bad funding account fails the disbursement', TRUE, left(SQLERRM, 70));
+  END;
+
+  SELECT status, disbursed_at INTO v_status, v_disb FROM loans WHERE id = 'LN-TEST-ATOMIC';
+  PERFORM _check('atomicity', 'a failed disbursement leaves the loan Pending',
+                 v_status = 'Pending' AND v_disb IS NULL, format('%s / %s', v_status, v_disb));
+  PERFORM _check('atomicity', 'a failed disbursement leaves no journal',
+    NOT EXISTS (SELECT 1 FROM financial_transactions WHERE loan_id = 'LN-TEST-ATOMIC'), NULL);
+  PERFORM _check('atomicity', 'a failed disbursement leaves no partial financial state',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health WHERE subject_id = 'LN-TEST-ATOMIC'), NULL);
+
+  -- Now with a good account: loan, application and journal all move together.
+  SELECT * INTO v_row FROM disburse_loan('LN-TEST-ATOMIC', v_bank);
+  PERFORM _check('atomicity', 'a good disbursement returns its journal number',
+                 v_row.transaction_number IS NOT NULL, v_row.transaction_number);
+  SELECT status, disbursed_at INTO v_status, v_disb FROM loans WHERE id = 'LN-TEST-ATOMIC';
+  PERFORM _check('atomicity', 'the loan is Active and stamped', v_status = 'Active' AND v_disb IS NOT NULL, NULL);
+  PERFORM _check('atomicity', 'the journal exists and balances',
+    (SELECT sum(signed_amount) FROM financial_transaction_lines
+      WHERE transaction_id = v_row.transaction_id) = 0, NULL);
+
+  PERFORM _check_raises('atomicity', 'the same loan cannot be disbursed twice',
+    format($q$ SELECT disburse_loan('LN-TEST-ATOMIC', %L) $q$, v_bank), 'already been disbursed');
+  -- A loan with no instalments at all: disbursing it would leave the member
+  -- owing money with nothing to collect against.
+  INSERT INTO loans (id, loan_number, client_id, product_id, principal_amount, interest_rate,
+    interest_type, loan_period_weeks, total_interest_amount, total_amount_payable,
+    weekly_installment, processing_fee_amount, crb_fee_amount, group_maintenance_fee,
+    security_amount, security_balance, net_disbursed_amount, first_repayment_date,
+    final_due_date, outstanding_balance, status)
+  VALUES ('LN-TEST-NOSCHED', 'CM-LN-2026-9004', 'CLI-TEST-023', 'PRD-TEST-001', 100000, 20.00,
+    'Flat Rate', 16, 20000, 120000, 7500, 4000, 1000, 2000, 15000, 15000, 78000,
+    CURRENT_DATE + 7, CURRENT_DATE + 112, 120000, 'Pending')
+  ON CONFLICT (id) DO NOTHING;
+  PERFORM _check_raises('atomicity', 'a loan with no schedule cannot be disbursed',
+    format($q$ SELECT disburse_loan('LN-TEST-NOSCHED', %L) $q$, v_bank), 'no repayment schedule');
+END $$;
+
+-- Collection through the atomic path, then reversed through it.
+DO $$
+DECLARE
+  v_cash TEXT; v_sched TEXT; v_row RECORD; v_rev RECORD;
+  v_out_before NUMERIC; v_out_after NUMERIC; v_cash_before NUMERIC; v_cash_after NUMERIC;
+BEGIN
+  SELECT id INTO v_cash FROM financial_accounts WHERE account_code = 'CASH-HO';
+  SELECT id INTO v_sched FROM loan_repayment_schedule
+   WHERE loan_id = 'LN-TEST-ATOMIC' ORDER BY week_number LIMIT 1;
+
+  SELECT outstanding_balance INTO v_out_before FROM loans WHERE id = 'LN-TEST-ATOMIC';
+  SELECT current_balance INTO v_cash_before FROM v_account_balances WHERE account_id = v_cash;
+
+  SELECT * INTO v_row FROM record_loan_repayment(
+    'LN-TEST-ATOMIC', 30000, 'Cash', v_cash,
+    jsonb_build_array(jsonb_build_object('schedule_id', v_sched, 'paid_amount', 30000,
+                                         'remaining_balance', 0, 'status', 'Paid')),
+    v_sched, 'Regular', 'Atomic collection test');
+
+  SELECT outstanding_balance INTO v_out_after FROM loans WHERE id = 'LN-TEST-ATOMIC';
+  SELECT current_balance INTO v_cash_after FROM v_account_balances WHERE account_id = v_cash;
+
+  PERFORM _check('atomicity', 'a collection writes receipt, schedule, loan and journal together',
+                 v_row.receipt_number IS NOT NULL AND v_row.transaction_id IS NOT NULL, v_row.receipt_number);
+  PERFORM _check('atomicity', 'the collection splits principal and interest',
+                 v_row.principal_portion = 25000 AND v_row.interest_portion = 5000,
+                 format('%s / %s', v_row.principal_portion, v_row.interest_portion));
+  PERFORM _check('atomicity', 'the loan balance falls by the amount collected',
+                 v_out_before - v_out_after = 30000, NULL);
+  PERFORM _check('atomicity', 'the receiving account rises by the amount collected',
+                 v_cash_after - v_cash_before = 30000, NULL);
+  PERFORM _check('atomicity', 'the instalment is marked paid',
+    (SELECT status FROM loan_repayment_schedule WHERE id = v_sched) = 'Paid', NULL);
+
+  -- Reversing it must put all four back.
+  SELECT * INTO v_rev FROM undo_loan_repayment(v_row.repayment_id, 'Collected against the wrong member');
+  PERFORM _check('atomicity', 'reversing a collection returns the loan balance',
+    (SELECT outstanding_balance FROM loans WHERE id = 'LN-TEST-ATOMIC') = v_out_before, NULL);
+  PERFORM _check('atomicity', 'reversing a collection returns the cash',
+    (SELECT current_balance FROM v_account_balances WHERE account_id = v_cash) = v_cash_before, NULL);
+  PERFORM _check('atomicity', 'reversing a collection re-opens the instalment',
+    (SELECT status FROM loan_repayment_schedule WHERE id = v_sched) = 'Pending', NULL);
+  PERFORM _check('atomicity', 'the reversal is recorded in the reversal register',
+    EXISTS (SELECT 1 FROM loan_reversals WHERE loan_id = 'LN-TEST-ATOMIC' AND reversal_type = 'Repayment'), NULL);
+END $$;
+
+-- Undoing a disbursement reverses the real journal, rather than inventing a
+-- deposit as the old rollback did.
+DO $$
+DECLARE v_bank TEXT; v_before NUMERIC; v_after NUMERIC; v_rev RECORD; v_recv_before NUMERIC;
+BEGIN
+  SELECT id INTO v_bank FROM financial_accounts WHERE account_code = 'BANK-MAIN';
+  SELECT current_balance INTO v_before FROM v_account_balances WHERE account_id = v_bank;
+  SELECT current_balance INTO v_recv_before FROM v_account_balances WHERE account_code = 'LOANS-RECEIVABLE';
+
+  SELECT * INTO v_rev FROM undo_loan_disbursement('LN-TEST-ATOMIC', 'Disbursed in error');
+  SELECT current_balance INTO v_after FROM v_account_balances WHERE account_id = v_bank;
+
+  PERFORM _check('atomicity', 'undoing a disbursement returns exactly the net that left',
+                 v_after - v_before = 318000, format('rose by %s', v_after - v_before));
+  PERFORM _check('atomicity', 'undoing a disbursement clears the receivable',
+    v_recv_before - (SELECT current_balance FROM v_account_balances WHERE account_code='LOANS-RECEIVABLE')
+      = 400000, NULL);
+  PERFORM _check('atomicity', 'the loan returns to Pending',
+    (SELECT status FROM loans WHERE id = 'LN-TEST-ATOMIC') = 'Pending', NULL);
+  PERFORM _check('atomicity', 'the reversal references the original journal, not a new deposit',
+    (SELECT reversal_of_id IS NOT NULL FROM financial_transactions WHERE id = v_rev.reversal_id), NULL);
+  PERFORM _check('atomicity', 'no unlinked deposit was created',
+    NOT EXISTS (SELECT 1 FROM financial_transactions
+                 WHERE loan_id = 'LN-TEST-ATOMIC' AND entry_type = 'capital_injection'), NULL);
+END $$;
+
+-- A loan reversed in error must be disbursable again. The idempotency index
+-- would otherwise hold the source slot forever and strand the member.
+DO $$
+DECLARE v_bank TEXT; v_row RECORD;
+BEGIN
+  SELECT id INTO v_bank FROM financial_accounts WHERE account_code = 'BANK-MAIN';
+  BEGIN
+    SELECT * INTO v_row FROM disburse_loan('LN-TEST-ATOMIC', v_bank);
+    PERFORM _check('atomicity', 'a reversed loan can be disbursed again',
+                   v_row.transaction_id IS NOT NULL, v_row.transaction_number);
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM _check('atomicity', 'a reversed loan can be disbursed again', FALSE, left(SQLERRM, 90));
+  END;
+  PERFORM _check('atomicity', 're-disbursing leaves exactly one live journal',
+    (SELECT count(*) FROM financial_transactions
+      WHERE loan_id = 'LN-TEST-ATOMIC' AND entry_type = 'disbursement' AND status = 'posted') = 1, NULL);
+END $$;
+
+-- An expense cannot exist without the account that paid it.
+DO $$
+DECLARE v_cash TEXT; v_row RECORD; v_before NUMERIC; v_after NUMERIC; v_count INT;
+BEGIN
+  SELECT id INTO v_cash FROM financial_accounts WHERE account_code = 'CASH-HO';
+  SELECT count(*) INTO v_count FROM expenses;
+  SELECT current_balance INTO v_before FROM v_account_balances WHERE account_id = v_cash;
+
+  SELECT * INTO v_row FROM record_expense('Internet', 'Branch internet', 80000, CURRENT_DATE,
+                                          'Cash', v_cash, 'BR-TEST-001');
+  SELECT current_balance INTO v_after FROM v_account_balances WHERE account_id = v_cash;
+
+  PERFORM _check('atomicity', 'an expense and its journal are written together',
+                 v_row.expense_id IS NOT NULL AND v_row.transaction_id IS NOT NULL, v_row.expense_number);
+  PERFORM _check('atomicity', 'the source account falls by the expense', v_before - v_after = 80000, NULL);
+  PERFORM _check('atomicity', 'Internet posts to its own account, not Other',
+    (SELECT a.account_code FROM financial_transaction_lines l JOIN financial_accounts a ON a.id = l.account_id
+      WHERE l.transaction_id = v_row.transaction_id AND l.direction = 'debit') = 'EXP-INTERNET', NULL);
+
+  BEGIN
+    PERFORM record_expense('Fuel', 'no account', 1000, CURRENT_DATE, 'Cash', NULL, 'BR-TEST-001');
+    PERFORM _check('atomicity', 'an expense with no source account is refused', FALSE, 'it succeeded');
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM _check('atomicity', 'an expense with no source account is refused', TRUE, left(SQLERRM, 70));
+  END;
+  PERFORM _check('atomicity', 'the refused expense left no row behind',
+    (SELECT count(*) FROM expenses) = v_count + 1, NULL);
+END $$;
+
+-- ---------------------------------------------------------------------------
 -- 12. Reports reconcile to the ledger  (workflows 19 and 20)
 -- ---------------------------------------------------------------------------
 DO $$

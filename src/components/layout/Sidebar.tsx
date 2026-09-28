@@ -12,6 +12,7 @@ import {
   Receipt,
   PiggyBank,
   CreditCard,
+  Wallet,
   Building2,
   BarChart3,
   Calculator,
@@ -192,8 +193,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       icon: Building2,
       managementOnly: true,
       subItems: [
+        { name: "Accounts & Cash", path: "/financial-ledger", icon: Wallet },
         { name: "Expense Management", path: "/expenses", icon: CreditCard },
-        { name: "Bank Management", path: "/bank-management", icon: Building2 },
+        // The superseded single-account register, kept readable.
+        { name: "Legacy Bank Register", path: "/bank-management", icon: Building2 },
       ],
     },
     {

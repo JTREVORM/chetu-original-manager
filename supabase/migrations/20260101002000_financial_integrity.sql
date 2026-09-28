@@ -80,9 +80,10 @@ WITH (security_invoker = on) AS
 
   UNION ALL
   SELECT 'duplicate_source_posting', t.source_id, t.source_table,
-         format('%s journals reference the same source record', count(*))
+         format('%s live journals reference the same source record', count(*))
     FROM public.financial_transactions t
    WHERE t.source_table IS NOT NULL AND t.source_id IS NOT NULL
+     AND t.status <> 'reversed'
    GROUP BY t.source_id, t.source_table
   HAVING count(*) > 1;
 

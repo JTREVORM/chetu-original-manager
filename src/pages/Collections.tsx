@@ -23,6 +23,7 @@ import {
   type MisColumn,
 } from "../components/mis/MisKit";
 import { ReportExportButtons } from "../components/mis/ReportExport";
+import { AccountSelect } from "../components/financial/AccountSelect";
 
 interface CollectRow {
   loan: Loan;
@@ -118,6 +119,10 @@ const CollectionBase: React.FC<{
   const [applied, setApplied] = useState({ branchId: "", officerId: "", groupId: "", search: "" });
   const [collectionDate, setCollectionDate] = useState(todayISO());
   const [method, setMethod] = useState<PaymentMethod>("Cash");
+  // Which account the money is actually taken into. `method` says how the
+  // member paid; this says where the cash went — the distinction the system
+  // never used to record.
+  const [receivingAccountId, setReceivingAccountId] = useState("");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -169,6 +174,14 @@ const CollectionBase: React.FC<{
       addToast("warning", "Nothing to collect", "Enter at least one collection amount.");
       return;
     }
+    if (!receivingAccountId) {
+      addToast(
+        "warning",
+        "Choose a receiving account",
+        "Say which till, bank account or wallet this money is going into.",
+      );
+      return;
+    }
     setSaving(true);
     try {
       for (const r of payable) {
@@ -176,7 +189,9 @@ const CollectionBase: React.FC<{
           r.loan.id,
           entered(r),
           method,
+          receivingAccountId,
           `${kind} collection on ${collectionDate}`,
+          kind === "Overdue" ? "Overdue" : "Regular",
         );
       }
       addToast(
@@ -326,6 +341,16 @@ const CollectionBase: React.FC<{
               <option value="Bank Transfer">Bank Transfer</option>
               <option value="Mobile Money">Mobile Money</option>
             </select>
+          </div>
+          <div className="min-w-[260px] flex-1">
+            <AccountSelect
+              value={receivingAccountId}
+              onChange={setReceivingAccountId}
+              branchId={applied.branchId || undefined}
+              method={method}
+              label="Received into"
+              showBalances={false}
+            />
           </div>
           <div className="flex items-center gap-4">
             <span className="text-xs font-bold text-slate-700">Total: {money(total)}</span>

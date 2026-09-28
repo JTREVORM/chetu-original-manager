@@ -3,6 +3,7 @@ import { Printer, Send } from "lucide-react";
 import { useDatabase } from "../context/DatabaseContext";
 import { useNotifications } from "../context/NotificationContext";
 import { formatUGX } from "../lib/loanCalculations";
+import { AccountSelect } from "../components/financial/AccountSelect";
 import { FEES, feesMatchStored, loanFees, storedLoanFees } from "../lib/fees";
 import { generateDisbursementVoucherPDF, generateLoanAgreementPDF } from "../lib/pdfGenerator";
 import type { Client, Loan } from "../types/database.types";
@@ -53,6 +54,9 @@ export const LoanWaitingDisburse: React.FC = () => {
   const [applied, setApplied] = useState({ branchId: "", officerId: "", groupId: "", search: "" });
   const [active, setActive] = useState<Row | null>(null);
   const [busy, setBusy] = useState(false);
+  // Which account the cash actually leaves. Required: a disbursement with no
+  // funding account is money out of the building with no record of where from.
+  const [fundingAccountId, setFundingAccountId] = useState("");
 
   const rows = useMemo<Row[]>(() => {
     const clientById = new Map(clients.map((c) => [c.id, c]));
@@ -113,15 +117,20 @@ export const LoanWaitingDisburse: React.FC = () => {
 
   const confirm = async () => {
     if (!active) return;
+    if (!fundingAccountId) {
+      addToast("warning", "Choose a funding account", "Say which account this loan is paid from.");
+      return;
+    }
     setBusy(true);
     try {
-      await disburseLoan(active.loan.id);
+      await disburseLoan(active.loan.id, fundingAccountId);
       addToast(
         "success",
         "Loan disbursed",
         `${formatUGX(active.net)} released on ${active.loan.loan_number}.`,
       );
       setActive(null);
+      setFundingAccountId("");
     } catch (error) {
       addToast(
         "error",
@@ -328,10 +337,29 @@ export const LoanWaitingDisburse: React.FC = () => {
                   <Printer className="h-4 w-4" /> Voucher
                 </button>
               </div>
+              {canDisburse && (
+                <div className="rounded border border-slate-200 bg-white p-3">
+                  <AccountSelect
+                    value={fundingAccountId}
+                    onChange={setFundingAccountId}
+                    branchId={active.branch_id}
+                    direction="source"
+                    label="Funded from"
+                  />
+                  <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                    {formatUGX(active.net)} leaves this account. The fees and the refundable
+                    security stay with Chetu, so the account falls by the net, not the principal.
+                  </p>
+                </div>
+              )}
+
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <button
                   type="button"
-                  onClick={() => setActive(null)}
+                  onClick={() => {
+                    setActive(null);
+                    setFundingAccountId("");
+                  }}
                   className="rounded bg-slate-100 px-4 py-2 font-bold text-slate-700"
                 >
                   Cancel
@@ -339,7 +367,7 @@ export const LoanWaitingDisburse: React.FC = () => {
                 {canDisburse && (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || !fundingAccountId}
                     onClick={confirm}
                     className="rounded bg-emerald-600 px-5 py-2 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                   >

@@ -41,7 +41,7 @@ $PSQL -d "$DB" -f "$HERE/01-seed-production-shape.sql" 2>&1 \
   | grep -vE '^(SET|INSERT|UPDATE|DO|CREATE|SELECT)$' | sed 's/^/  /'
 
 echo "── financial migrations ──"
-for f in $(ls "$MIG"/*.sql | sort | tail -8); do
+for f in $(ls "$MIG"/*.sql | sort | tail -n +14); do
   printf '  %-56s' "$(basename "$f")"
   out=$($PSQL -d "$DB" -f "$f" 2>&1) && echo "ok" || { echo "FAIL"; echo "$out" | head -25; exit 1; }
   echo "$out" | grep -E 'NOTICE' | sed 's/^/      /'
