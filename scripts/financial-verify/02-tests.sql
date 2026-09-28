@@ -558,13 +558,11 @@ BEGIN
   PERFORM _check_raises('immutability', 'a journal line cannot be altered',
     format($q$ UPDATE financial_transaction_lines SET amount = 1 WHERE transaction_id = %L $q$, v_tx),
     'cannot be altered');
-  -- The guard lets the service role through on purpose (migrations, this
-  -- harness), so this has to be attempted as a signed-in user.
-  PERFORM _as('11111111-1111-1111-1111-111111111111');
-  PERFORM _check_raises('immutability', 'the legacy bank register is closed to new rows',
-    $q$ INSERT INTO bank_transactions (transaction_number, transaction_type, category, description,
-          amount, balance_after, reference_number)
-        VALUES ('X', 'Deposit', 'test', 'test', 1, 1, 'X') $q$, 'closed legacy register');
+  -- The legacy register is closed to PostgREST callers and open to migrations
+  -- and definer functions, so the question can only be asked as a real signed-in
+  -- caller. Section 13 does that; see 'the legacy bank register is closed'.
+  PERFORM _check('immutability', 'the legacy bank register still exists to be read',
+    EXISTS (SELECT 1 FROM bank_transactions), NULL);
   PERFORM _as(NULL);
 END $$;
 
@@ -1130,6 +1128,505 @@ BEGIN
   PERFORM _check('reports', 'the ledger health view is clean overall',
     NOT EXISTS (SELECT 1 FROM v_ledger_health),
     (SELECT string_agg(DISTINCT check_name || ': ' || COALESCE(detail,''), ' | ') FROM v_ledger_health));
+END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- 13. Hardening — the tables underneath are closed too  (migration 002200)
+--
+-- Every test above proves the posting functions do the right thing. These
+-- prove that nothing else can: a signed-in caller writing the business table
+-- directly, exactly as PostgREST would, must be refused. The write is executed
+-- as `authenticated` with a real claim, which is what a browser holding the
+-- anon key actually is.
+--
+-- The attempt runs inside a plpgsql sub-block, so whether it is refused (the
+-- point) or succeeds (a failure to report), nothing it did survives.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION _direct_write_refused(_area TEXT, _name TEXT, _uid TEXT, _sql TEXT)
+RETURNS VOID LANGUAGE plpgsql AS $fn$
+DECLARE v_msg TEXT;
+BEGIN
+  BEGIN
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', _uid, 'role', 'authenticated')::text, TRUE);
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    EXECUTE _sql;
+    RAISE EXCEPTION 'CHETU_WRITE_SUCCEEDED';
+  EXCEPTION WHEN OTHERS THEN
+    v_msg := SQLERRM;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF v_msg = 'CHETU_WRITE_SUCCEEDED' THEN
+    PERFORM _check(_area, _name, FALSE, 'the direct write was allowed through');
+  ELSE
+    PERFORM _check(_area, _name,
+      position('must carry its journal' in v_msg) > 0,
+      left(v_msg, 90));
+  END IF;
+END $fn$;
+
+-- Same shape, for a write that must still be allowed: nothing here is money.
+CREATE OR REPLACE FUNCTION _direct_write_allowed(_area TEXT, _name TEXT, _uid TEXT, _sql TEXT)
+RETURNS VOID LANGUAGE plpgsql AS $fn$
+DECLARE v_msg TEXT;
+BEGIN
+  BEGIN
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', _uid, 'role', 'authenticated')::text, TRUE);
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    EXECUTE _sql;
+    RAISE EXCEPTION 'CHETU_WRITE_SUCCEEDED';
+  EXCEPTION WHEN OTHERS THEN
+    v_msg := SQLERRM;
+  END;
+  EXECUTE 'RESET ROLE';
+  PERFORM _check(_area, _name, v_msg = 'CHETU_WRITE_SUCCEEDED', left(v_msg, 90));
+END $fn$;
+
+-- A loan to attack, and one to settle, and one to write off. Created here as
+-- the owner, which is what a migration or the seed is.
+DO $$
+DECLARE v_bank TEXT; n TEXT;
+BEGIN
+  SELECT id INTO v_bank FROM financial_accounts WHERE account_code = 'BANK-MAIN';
+  FOREACH n IN ARRAY ARRAY['HARD-A', 'HARD-B', 'HARD-C'] LOOP
+    INSERT INTO loans (id, loan_number, client_id, product_id, principal_amount, interest_rate,
+      interest_type, loan_period_weeks, total_interest_amount, total_amount_payable,
+      weekly_installment, processing_fee_amount, crb_fee_amount, group_maintenance_fee,
+      security_amount, security_balance, net_disbursed_amount, first_repayment_date,
+      final_due_date, outstanding_balance, status)
+    VALUES (format('LN-%s', n), format('CM-LN-2026-9%s', right(n, 1)), 'CLI-TEST-022', 'PRD-TEST-001',
+      400000, 20.00, 'Flat Rate', 16, 80000, 480000, 30000, 16000, 4000, 2000, 60000, 60000,
+      318000, CURRENT_DATE + 7, CURRENT_DATE + 112, 480000, 'Pending')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO loan_repayment_schedule (id, loan_id, week_number, due_date, installment_amount,
+      principal_portion, interest_portion, paid_amount, remaining_balance, status)
+    SELECT format('SCH-%s-%s', n, lpad(w::text, 2, '0')), format('LN-%s', n), w,
+           CURRENT_DATE + w * 7, 30000, 25000, 5000, 0, 30000, 'Pending'
+      FROM generate_series(1, 16) w
+    ON CONFLICT (id) DO NOTHING;
+  END LOOP;
+
+  -- B and C are disbursed through the proper door, so they are real money.
+  PERFORM disburse_loan('LN-HARD-B', v_bank);
+  PERFORM disburse_loan('LN-HARD-C', v_bank);
+
+  -- A member who has never been charged: the seed charged all twenty-four of
+  -- its own, and record_member_fee is deliberately once-per-member.
+  INSERT INTO clients (id, client_number, full_name, nin, gender, date_of_birth, occupation,
+    phone_number, physical_address, village, parish, sub_county, district, group_id, branch_id,
+    loan_officer_id, registered_by, date_registered, status, approval_status)
+  VALUES ('CLI-HARD-001', 'CM-MB-2026-9001', 'Hardening Member', 'CM00000000009001', 'Female',
+    DATE '1990-01-01', 'Trader', '0700009001', 'Buyende', 'Buyende', 'Buyende', 'Buyende',
+    'Buyende', 'GRP-TEST-001', 'BR-TEST-001', '33333333-3333-3333-3333-333333333333',
+    '33333333-3333-3333-3333-333333333333', CURRENT_DATE, 'Active', 'Approved')
+  ON CONFLICT (id) DO NOTHING;
+END $$;
+
+-- --- the bypasses the pre-flight review found open ------------------------
+DO $$
+BEGIN
+  PERFORM _direct_write_refused('hardening',
+    'a Loan Officer cannot mark a loan Active by hand',
+    '33333333-3333-3333-3333-333333333333',
+    $q$UPDATE loans SET status = 'Active', disbursed_at = now() WHERE id = 'LN-HARD-A'$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'a loan cannot be created already disbursed',
+    '33333333-3333-3333-3333-333333333333',
+    $q$INSERT INTO loans (id, loan_number, client_id, product_id, principal_amount, interest_rate,
+        interest_type, loan_period_weeks, total_interest_amount, total_amount_payable,
+        weekly_installment, processing_fee_amount, crb_fee_amount, group_maintenance_fee,
+        security_amount, security_balance, net_disbursed_amount, first_repayment_date,
+        final_due_date, outstanding_balance, status, disbursed_at)
+       VALUES ('LN-SMUGGLED', 'CM-LN-2026-9999', 'CLI-TEST-022', 'PRD-TEST-001', 400000, 20.00,
+        'Flat Rate', 16, 80000, 480000, 30000, 16000, 4000, 2000, 60000, 60000, 318000,
+        CURRENT_DATE + 7, CURRENT_DATE + 112, 480000, 'Active', now())$q$);
+
+  PERFORM _direct_write_allowed('hardening',
+    'a Pending loan can still be created, which is what approval does',
+    '33333333-3333-3333-3333-333333333333',
+    $q$INSERT INTO loans (id, loan_number, client_id, product_id, principal_amount, interest_rate,
+        interest_type, loan_period_weeks, total_interest_amount, total_amount_payable,
+        weekly_installment, processing_fee_amount, crb_fee_amount, group_maintenance_fee,
+        security_amount, security_balance, net_disbursed_amount, first_repayment_date,
+        final_due_date, outstanding_balance, status)
+       VALUES ('LN-APPROVED', 'CM-LN-2026-9998', 'CLI-TEST-022', 'PRD-TEST-001', 400000, 20.00,
+        'Flat Rate', 16, 80000, 480000, 30000, 16000, 4000, 2000, 60000, 60000, 318000,
+        CURRENT_DATE + 7, CURRENT_DATE + 112, 480000, 'Pending')$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'a Loan Officer cannot stamp disbursed_at by hand',
+    '33333333-3333-3333-3333-333333333333',
+    $q$UPDATE loans SET disbursed_at = now() WHERE id = 'LN-HARD-A'$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'a Loan Officer cannot insert a repayment receipt',
+    '33333333-3333-3333-3333-333333333333',
+    $q$INSERT INTO loan_repayments (loan_id, schedule_id, client_id, amount_paid, payment_date,
+        payment_method, collection_type, recorded_by)
+       SELECT 'LN-HARD-B', s.id, 'CLI-TEST-022', 30000, CURRENT_DATE, 'Cash', 'Regular',
+              '33333333-3333-3333-3333-333333333333'
+         FROM loan_repayment_schedule s WHERE s.loan_id = 'LN-HARD-B' LIMIT 1$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'an Administrator cannot insert an expense',
+    '11111111-1111-1111-1111-111111111111',
+    $q$INSERT INTO expenses (expense_number, category, description, amount, expense_date,
+        payment_method, recorded_by, branch_id)
+       VALUES ('CM-EX-BYPASS', 'Transport', 'bypass', 5000, CURRENT_DATE, 'Cash',
+               '11111111-1111-1111-1111-111111111111', 'BR-TEST-001')$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'an Administrator cannot settle a loan by hand',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE loans SET status = 'Settled', settled_at = now(), settlement_amount = 100,
+              outstanding_balance = 0 WHERE id = 'LN-HARD-B'$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'an Administrator cannot write a loan off by hand',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE loans SET status = 'Written Off', writeoff_at = now(), writeoff_amount = 100,
+              outstanding_balance = 0 WHERE id = 'LN-HARD-B'$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'nobody can move a loan balance by hand',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE loans SET outstanding_balance = 1 WHERE id = 'LN-HARD-B'$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'nobody can release security by hand',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE loans SET security_balance = 0 WHERE id = 'LN-HARD-B'$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'a Loan Officer cannot record a member fee',
+    '33333333-3333-3333-3333-333333333333',
+    $q$INSERT INTO member_fees (client_id, admission_fee, passbook_fee, crb_fee, total_amount,
+        payment_method, branch_id, collected_by)
+       VALUES ('CLI-HARD-001', 5000, 5000, 0, 10000, 'Cash', 'BR-TEST-001',
+               '33333333-3333-3333-3333-333333333333')$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'an Administrator cannot record a security refund',
+    '11111111-1111-1111-1111-111111111111',
+    $q$INSERT INTO loan_security_returns (loan_id, client_id, branch_id, return_date,
+        return_amount, previous_amount, present_amount, duration_weeks, principal, interest, status)
+       VALUES ('LN-HARD-B', 'CLI-TEST-022', 'BR-TEST-001', CURRENT_DATE, 60000, 60000, 0,
+               16, 400000, 80000, 'Returned')$q$);
+
+  -- The legacy register keeps its own wording: it is not "post this properly"
+  -- but "this table is finished".
+  DECLARE v_msg TEXT;
+  BEGIN
+    BEGIN
+      PERFORM set_config('request.jwt.claims',
+        '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', TRUE);
+      EXECUTE 'SET LOCAL ROLE authenticated';
+      INSERT INTO bank_transactions (transaction_number, transaction_type, category,
+        description, amount, balance_after, reference_number)
+      VALUES ('X', 'Deposit', 'test', 'test', 1, 1, 'X');
+      RAISE EXCEPTION 'CHETU_WRITE_SUCCEEDED';
+    EXCEPTION WHEN OTHERS THEN
+      v_msg := SQLERRM;
+    END;
+    EXECUTE 'RESET ROLE';
+    PERFORM _check('hardening', 'the legacy bank register is closed to a signed-in caller',
+      position('closed legacy register' in v_msg) > 0 OR position('permission denied' in v_msg) > 0,
+      left(v_msg, 90));
+  END;
+
+  PERFORM _direct_write_refused('hardening',
+    'nobody can forge a reversal record',
+    '11111111-1111-1111-1111-111111111111',
+    $q$INSERT INTO loan_reversals (loan_id, reversal_type, reference_number, amount, reason, reversed_by)
+       VALUES ('LN-HARD-B', 'Disbursement', 'FORGED', 1, 'x',
+               '11111111-1111-1111-1111-111111111111')$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'nobody can mark an instalment paid by hand',
+    '33333333-3333-3333-3333-333333333333',
+    $q$UPDATE loan_repayment_schedule SET paid_amount = installment_amount, remaining_balance = 0
+        WHERE loan_id = 'LN-HARD-B'$q$);
+
+  PERFORM _direct_write_refused('hardening',
+    'a disbursed loan cannot be deleted',
+    '11111111-1111-1111-1111-111111111111',
+    $q$DELETE FROM loans WHERE id = 'LN-HARD-B'$q$);
+
+  -- ...and the writes that are not money must still go through.
+  PERFORM _direct_write_allowed('hardening',
+    'declaring a bad debt is still an ordinary update',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE loans SET is_bad_debt = TRUE, bad_debt_comment = 'in arrears' WHERE id = 'LN-HARD-B'$q$);
+
+  PERFORM _direct_write_allowed('hardening',
+    'a Pending loan can still be deleted, which is how approval rolls back',
+    '11111111-1111-1111-1111-111111111111',
+    $q$DELETE FROM loans WHERE id = 'LN-HARD-A'$q$);
+
+  PERFORM _direct_write_allowed('hardening',
+    'correcting an instalment due date is still allowed',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE loan_repayment_schedule SET due_date = due_date
+        WHERE loan_id = 'LN-HARD-B' AND week_number = 16$q$);
+END $$;
+
+-- --- settlement, atomically ------------------------------------------------
+DO $$
+DECLARE
+  v_cash TEXT; v_closed TEXT; v_row RECORD;
+  v_recv_before NUMERIC; v_recv_after NUMERIC;
+  v_cash_before NUMERIC; v_cash_after NUMERIC;
+  v_sec_before NUMERIC; v_sec_after NUMERIC; v_status TEXT; v_msg TEXT;
+BEGIN
+  SELECT id INTO v_cash   FROM financial_accounts WHERE account_code = 'CASH-HO';
+  SELECT id INTO v_closed FROM financial_accounts WHERE account_code = 'BANK-CLOSED';
+
+  -- First: a settlement whose journal cannot post must leave nothing behind.
+  BEGIN
+    PERFORM settle_loan('LN-HARD-B', 300000, 'Cash', v_closed, 'should fail');
+    PERFORM _check('hardening', 'a settlement to a closed account is refused', FALSE, 'it succeeded');
+  EXCEPTION WHEN OTHERS THEN
+    PERFORM _check('hardening', 'a settlement to a closed account is refused', TRUE, left(SQLERRM, 70));
+  END;
+  SELECT status INTO v_status FROM loans WHERE id = 'LN-HARD-B';
+  PERFORM _check('hardening', 'the failed settlement left the loan open', v_status <> 'Settled', v_status);
+  PERFORM _check('hardening', 'the failed settlement left no receipt',
+    NOT EXISTS (SELECT 1 FROM loan_repayments WHERE loan_id = 'LN-HARD-B'), NULL);
+  PERFORM _check('hardening', 'the failed settlement left no paid instalment',
+    NOT EXISTS (SELECT 1 FROM loan_repayment_schedule
+                 WHERE loan_id = 'LN-HARD-B' AND status = 'Paid'), NULL);
+
+  SELECT current_balance INTO v_recv_before FROM v_account_balances WHERE account_code = 'LOANS-RECEIVABLE';
+  SELECT current_balance INTO v_cash_before FROM v_account_balances WHERE account_id = v_cash;
+  SELECT natural_balance  INTO v_sec_before FROM v_account_balances WHERE account_code = 'SECURITY-HELD';
+
+  SELECT * INTO v_row FROM settle_loan('LN-HARD-B', 480000, 'Cash', v_cash, 'cleared early');
+
+  SELECT current_balance INTO v_recv_after FROM v_account_balances WHERE account_code = 'LOANS-RECEIVABLE';
+  SELECT current_balance INTO v_cash_after  FROM v_account_balances WHERE account_id = v_cash;
+  SELECT status INTO v_status FROM loans WHERE id = 'LN-HARD-B';
+
+  PERFORM _check('hardening', 'settle_loan returns its receipt and journal',
+                 v_row.repayment_id IS NOT NULL AND v_row.transaction_id IS NOT NULL, NULL);
+  PERFORM _check('hardening', 'the settled loan is closed', v_status = 'Settled', v_status);
+  PERFORM _check('hardening', 'the settlement journal balances',
+    (SELECT sum(signed_amount) FROM financial_transaction_lines
+      WHERE transaction_id = v_row.transaction_id) = 0, NULL);
+  PERFORM _check('hardening', 'the cash received is the full settlement',
+                 v_cash_after - v_cash_before = 480000, format('%s', v_cash_after - v_cash_before));
+  PERFORM _check('hardening', 'only the principal leaves the receivable',
+                 v_recv_before - v_recv_after = 400000, format('%s', v_recv_before - v_recv_after));
+  PERFORM _check('hardening', 'the rest is recognised as interest',
+                 v_row.interest_portion = 80000, format('%s', v_row.interest_portion));
+  PERFORM _check('hardening', 'every instalment is closed',
+    NOT EXISTS (SELECT 1 FROM loan_repayment_schedule
+                 WHERE loan_id = 'LN-HARD-B' AND status <> 'Paid'), NULL);
+  PERFORM _check('hardening', 'the security held is released with it',
+                 v_row.security_released = 60000
+                 AND (SELECT security_balance FROM loans WHERE id = 'LN-HARD-B') = 0, NULL);
+  PERFORM _check_raises('hardening', 'a settled loan cannot be settled again',
+    format('SELECT settle_loan(%L, 1000, %L, %L)', 'LN-HARD-B', 'Cash', v_cash),
+    'already closed');
+END $$;
+
+-- --- write-off, atomically -------------------------------------------------
+DO $$
+DECLARE
+  v_row RECORD; v_recv_before NUMERIC; v_recv_after NUMERIC; v_loss_before NUMERIC; v_loss_after NUMERIC;
+BEGIN
+  PERFORM _check_raises('hardening', 'a loan not declared bad cannot be written off',
+    $q$SELECT write_off_loan('LN-HARD-C', 'no reason')$q$, 'bad debt');
+
+  UPDATE loans SET is_bad_debt = TRUE WHERE id = 'LN-HARD-C';
+
+  PERFORM _check_raises('hardening', 'a write-off without a reason is refused',
+    $q$SELECT write_off_loan('LN-HARD-C', '   ')$q$, 'reason');
+
+  SELECT current_balance INTO v_recv_before FROM v_account_balances WHERE account_code = 'LOANS-RECEIVABLE';
+  SELECT natural_balance  INTO v_loss_before FROM v_account_balances WHERE account_code = 'WRITEOFF-LOSS';
+
+  SELECT * INTO v_row FROM write_off_loan('LN-HARD-C', 'Member deceased, no recovery');
+
+  SELECT current_balance INTO v_recv_after FROM v_account_balances WHERE account_code = 'LOANS-RECEIVABLE';
+  SELECT natural_balance  INTO v_loss_after FROM v_account_balances WHERE account_code = 'WRITEOFF-LOSS';
+
+  PERFORM _check('hardening', 'write_off_loan returns its journal',
+                 v_row.transaction_id IS NOT NULL, NULL);
+  PERFORM _check('hardening', 'the written-off loan is closed with nothing outstanding',
+    (SELECT status FROM loans WHERE id = 'LN-HARD-C') = 'Written Off'
+    AND (SELECT outstanding_balance FROM loans WHERE id = 'LN-HARD-C') = 0, NULL);
+  PERFORM _check('hardening', 'the write-off journal balances',
+    (SELECT sum(signed_amount) FROM financial_transaction_lines
+      WHERE transaction_id = v_row.transaction_id) = 0, NULL);
+  PERFORM _check('hardening', 'only the principal is taken as a loss',
+                 v_loss_after - v_loss_before = 400000
+                 AND v_recv_before - v_recv_after = 400000,
+                 format('loss %s, receivable %s', v_loss_after - v_loss_before,
+                        v_recv_before - v_recv_after));
+  PERFORM _check('hardening', 'the write-off is minuted against the loan',
+    EXISTS (SELECT 1 FROM bad_loan_comments WHERE loan_id = 'LN-HARD-C'
+             AND comment LIKE 'Written off:%'), NULL);
+  PERFORM _check_raises('hardening', 'a written-off loan cannot be written off twice',
+    $q$SELECT write_off_loan('LN-HARD-C', 'again')$q$, 'already written off');
+END $$;
+
+-- --- member fees and security refunds, the two paths never wired -----------
+DO $$
+DECLARE
+  v_cash TEXT; v_row RECORD; v_again RECORD; v_inc_before NUMERIC; v_inc_after NUMERIC;
+  v_sec_before NUMERIC; v_sec_after NUMERIC; v_ret RECORD; v_bank TEXT;
+BEGIN
+  SELECT id INTO v_cash FROM financial_accounts WHERE account_code = 'CASH-HO';
+  SELECT id INTO v_bank FROM financial_accounts WHERE account_code = 'BANK-MAIN';
+
+  SELECT natural_balance INTO v_inc_before FROM v_account_balances WHERE account_code = 'INC-FEE-ADMISSION';
+  SELECT * INTO v_row FROM record_member_fee('CLI-HARD-001', v_cash, 5000, 5000, 0, 'Cash', NULL);
+  SELECT natural_balance INTO v_inc_after FROM v_account_balances WHERE account_code = 'INC-FEE-ADMISSION';
+
+  PERFORM _check('hardening', 'a member fee now posts its journal',
+                 v_row.transaction_id IS NOT NULL AND NOT v_row.already_recorded, NULL);
+  PERFORM _check('hardening', 'the admission fee reaches fee income',
+                 v_inc_after - v_inc_before = 5000, format('%s', v_inc_after - v_inc_before));
+  PERFORM _check('hardening', 'the member fee journal balances',
+    (SELECT sum(signed_amount) FROM financial_transaction_lines
+      WHERE transaction_id = v_row.transaction_id) = 0, NULL);
+
+  SELECT * INTO v_again FROM record_member_fee('CLI-HARD-001', v_cash, 5000, 5000, 0, 'Cash', NULL);
+  SELECT natural_balance INTO v_inc_after FROM v_account_balances WHERE account_code = 'INC-FEE-ADMISSION';
+  PERFORM _check('hardening', 'charging the same member twice posts nothing',
+                 v_again.already_recorded AND v_inc_after - v_inc_before = 5000, NULL);
+
+  -- Security refund on a loan that still holds one.
+  SELECT natural_balance INTO v_sec_before FROM v_account_balances WHERE account_code = 'SECURITY-HELD';
+  SELECT * INTO v_ret FROM return_loan_security('LN-TEST-ATOMIC', 20000, v_bank);
+  SELECT natural_balance INTO v_sec_after FROM v_account_balances WHERE account_code = 'SECURITY-HELD';
+
+  PERFORM _check('hardening', 'a security refund now posts its journal',
+                 v_ret.transaction_id IS NOT NULL, NULL);
+  PERFORM _check('hardening', 'the liability falls by what was refunded',
+                 v_sec_before - v_sec_after = 20000, format('%s', v_sec_before - v_sec_after));
+  PERFORM _check('hardening', 'the loan keeps the rest of the security',
+                 v_ret.remaining_security = 40000, format('%s', v_ret.remaining_security));
+  PERFORM _check_raises('hardening', 'more security cannot be returned than is held',
+    format('SELECT return_loan_security(%L, 999999, %L)', 'LN-TEST-ATOMIC', v_bank),
+    'holds only');
+END $$;
+
+-- --- the new functions answer to the same permission model -----------------
+DO $$
+DECLARE v_cash TEXT;
+BEGIN
+  SELECT id INTO v_cash FROM financial_accounts WHERE account_code = 'CASH-HO';
+
+  PERFORM _as('44444444-4444-4444-4444-444444444444');
+  PERFORM _check_raises('hardening', 'an Auditor cannot settle a loan',
+    format('SELECT settle_loan(%L, 1000, %L, %L)', 'LN-TEST-ATOMIC', 'Cash', v_cash),
+    'Auditors cannot');
+  PERFORM _check_raises('hardening', 'an Auditor cannot collect a member fee',
+    format('SELECT record_member_fee(%L, %L, 5000, 5000)', 'CLI-TEST-020', v_cash),
+    'Auditors cannot');
+  PERFORM _check_raises('hardening', 'an Auditor cannot return security',
+    format('SELECT return_loan_security(%L, 1000, %L)', 'LN-TEST-ATOMIC', v_cash),
+    'Auditors cannot');
+
+  PERFORM _as('33333333-3333-3333-3333-333333333333');
+  PERFORM _check_raises('hardening', 'a Loan Officer cannot write a loan off',
+    $q$SELECT write_off_loan('LN-TEST-ATOMIC', 'trying it on')$q$,
+    'Only an Administrator');
+
+  PERFORM _as('22222222-2222-2222-2222-222222222222');
+  PERFORM _check_raises('hardening', 'a Branch Manager cannot write a loan off either',
+    $q$SELECT write_off_loan('LN-TEST-ATOMIC', 'trying it on')$q$,
+    'Only an Administrator');
+
+  PERFORM _as(NULL);
+END $$;
+
+-- --- half a financial event is unreachable too -----------------------------
+-- The other way round from the original bug: a journal posted for a business
+-- record nothing else wrote. Each of these is now reached only by the atomic
+-- function that owns it.
+DO $$
+DECLARE v_msg TEXT; fn TEXT; v_blocked INT := 0; v_total INT := 0;
+BEGIN
+  FOREACH fn IN ARRAY ARRAY['post_disbursement', 'post_repayment', 'post_expense',
+                            'post_member_fee', 'post_security_refund', 'post_writeoff'] LOOP
+    v_total := v_total + 1;
+    BEGIN
+      EXECUTE 'SET LOCAL ROLE authenticated';
+      EXECUTE format('SELECT %I(%L, %L)', fn, 'x', 'y');
+      RAISE EXCEPTION 'CHETU_WRITE_SUCCEEDED';
+    EXCEPTION WHEN OTHERS THEN
+      v_msg := SQLERRM;
+      IF position('permission denied' in v_msg) > 0
+         OR position('does not exist' in v_msg) > 0 THEN
+        v_blocked := v_blocked + 1;
+      END IF;
+    END;
+    EXECUTE 'RESET ROLE';
+  END LOOP;
+  PERFORM _check('hardening', 'no single-step posting is callable from a session',
+                 v_blocked = v_total, format('%s of %s refused', v_blocked, v_total));
+END $$;
+
+-- ...while the standalone postings, which have no business row to be atomic
+-- with, stay open to the Financial Ledger screen.
+DO $$
+DECLARE fn TEXT; v_open INT := 0;
+BEGIN
+  FOREACH fn IN ARRAY ARRAY['post_capital_injection', 'post_internal_transfer',
+                            'post_reconciliation_adjustment', 'post_opening_balance',
+                            'reverse_financial_transaction'] LOOP
+    IF has_function_privilege('authenticated',
+         (SELECT p.oid FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+           WHERE n.nspname = 'public' AND p.proname = fn LIMIT 1), 'EXECUTE') THEN
+      v_open := v_open + 1;
+    END IF;
+  END LOOP;
+  PERFORM _check('hardening', 'the standalone postings are still reachable',
+                 v_open = 5, format('%s of 5', v_open));
+END $$;
+
+-- --- the system reset cannot be used against real money -------------------
+-- Only the refusals are exercised: running the reset for real would empty the
+-- database this suite is still asserting against.
+DO $$
+BEGIN
+  PERFORM _as('33333333-3333-3333-3333-333333333333');
+  PERFORM _check_raises('hardening', 'a Loan Officer cannot reset the system',
+    $q$SELECT reset_operational_data('RESET ALL DATA')$q$, 'Only an Administrator');
+
+  PERFORM _as('11111111-1111-1111-1111-111111111111');
+  PERFORM _check_raises('hardening', 'the reset needs its exact confirmation phrase',
+    $q$SELECT reset_operational_data('yes please')$q$, 'exact phrase');
+
+  UPDATE settings SET financial_cutover_completed = TRUE WHERE id = 1;
+  PERFORM _check_raises('hardening', 'the reset is refused once the cut-over is complete',
+    $q$SELECT reset_operational_data('RESET ALL DATA')$q$, 'permanently disabled');
+  UPDATE settings SET financial_cutover_completed = FALSE WHERE id = 1;
+
+  PERFORM _as(NULL);
+END $$;
+
+-- --- and after all of that, the ledger is still whole ----------------------
+DO $$
+BEGIN
+  PERFORM _check('hardening', 'reversal still works after hardening',
+    (SELECT count(*) FROM financial_transactions WHERE entry_type = 'reversal') > 0,
+    format('%s reversals', (SELECT count(*) FROM financial_transactions WHERE entry_type = 'reversal')));
+  PERFORM _check('hardening', 'no member fee is left without a journal',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health WHERE check_name = 'member_fee_without_journal'), NULL);
+  PERFORM _check('hardening', 'no security refund is left without a journal',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health WHERE check_name = 'security_refund_without_journal'), NULL);
+  PERFORM _check('hardening', 'no write-off is left without a journal',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health WHERE check_name = 'writeoff_without_journal'), NULL);
+  PERFORM _check('hardening', 'the ledger health view is still clean',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health),
+    (SELECT string_agg(DISTINCT check_name || ': ' || COALESCE(detail, ''), ' | ') FROM v_ledger_health));
 END $$;
 
 -- ---------------------------------------------------------------------------

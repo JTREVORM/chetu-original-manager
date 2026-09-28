@@ -256,8 +256,17 @@ export const Settings: React.FC = () => {
         )}
       </form>
 
-      {/* Destructive operations, kept clearly apart from ordinary configuration. */}
-      {isAdmin && (
+      {/*
+        Destructive operations, kept clearly apart from ordinary configuration.
+
+        The reset exists to clear a demonstration or training database, so it
+        is not built into a production bundle at all: `import.meta.env.DEV` is
+        resolved at build time and the panel disappears with it. The database
+        refuses the reset outright once `financial_cutover_completed` is set,
+        which is the control; this only keeps the button out of reach of
+        somebody who has no business seeing it.
+      */}
+      {isAdmin && import.meta.env.DEV && (
         <section className="overflow-hidden rounded-lg border border-red-200 bg-white shadow-xs">
           <h2 className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-red-800">
             <AlertTriangle className="h-3.5 w-3.5" />
@@ -268,11 +277,14 @@ export const Settings: React.FC = () => {
               <p className="text-[13px] font-semibold text-slate-900">Reset all operational data</p>
               <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
                 Permanently deletes every member, group, loan, application, repayment, savings
-                record, expense, bank transaction and audit log. Staff accounts, branches and these
-                settings are kept.{" "}
+                record, member fee, expense, security refund, bank transaction, audit log{" "}
+                <span className="font-semibold">and every journal in the financial ledger</span>.
+                Staff accounts, branches, the chart of accounts and these settings are kept.{" "}
                 <span className="font-semibold text-red-700">
                   There is no undo and no backup is taken.
-                </span>
+                </span>{" "}
+                Development builds only, and the database refuses it once the financial cut-over is
+                complete.
               </p>
             </div>
 

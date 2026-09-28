@@ -2059,16 +2059,40 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!isSupabaseConfigured) throw new Error("Database not configured");
     const targetLoan = loans.find((l) => l.id === loanId);
     if (!targetLoan) throw new Error("Loan not found");
-    if (CLOSED_LOAN_STATUSES.includes(targetLoan.status))
-      throw new Error("This loan is already closed");
-    if (targetLoan.status === "Pending") throw new Error("This loan has not been disbursed yet");
-    if (amount <= 0) throw new Error("Enter the settlement amount");
     if (!receivingAccountId) {
       throw new Error("Choose the cash, bank or wallet account receiving the settlement");
     }
 
+    // One call. The receipt, the instalments, the loan closure, the release of
+    // the security and the journal are one transaction in the database; the
+    // remaining checks below are a courtesy so the operator hears about an
+    // obvious mistake before the round trip, not a control.
+    if (CLOSED_LOAN_STATUSES.includes(targetLoan.status))
+      throw new Error("This loan is already closed");
+    if (targetLoan.status === "Pending") throw new Error("This loan has not been disbursed yet");
+    if (amount <= 0) throw new Error("Enter the settlement amount");
+
     const today = new Date().toISOString().split("T")[0];
-    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .rpc("settle_loan", {
+        _loan_id: loanId,
+        _amount: amount,
+        _payment_method: method,
+        _receiving_account_id: receivingAccountId,
+        _notes: notes || null,
+        _payment_date: today,
+      })
+      .single();
+    if (error) throw new LedgerError("settle loan", error.message, error.code);
+
+    const result = data as {
+      repayment_id: string;
+      receipt_number: string;
+      transaction_id: string;
+      principal_portion: number;
+      interest_portion: number;
+      security_released: number;
+    };
 
     const settledSchedule = (targetLoan.schedule || []).map((row) =>
       row.status === "Paid"
@@ -2081,21 +2105,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             paid_at: today,
           },
     );
-
-    const { error: loanError } = await supabase
-      .from("loans")
-      .update({
-        outstanding_balance: 0,
-        completion_percentage: 100,
-        status: "Settled",
-        security_balance: 0,
-        settled_at: now,
-        settlement_amount: amount,
-        settled_by: user?.id || null,
-        updated_at: now,
-      })
-      .eq("id", loanId);
-    if (loanError) throw new Error(loanError.message);
+    const now = new Date().toISOString();
     setLoans((prev) =>
       prev.map((l) =>
         l.id === loanId
@@ -2114,68 +2124,31 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ),
     );
 
-    // Numbers come from the database — see recordRepayment for why.
-    const repInsertPayload = {
+    const newRepayment: LoanRepayment = {
+      id: result.repayment_id,
+      receipt_number: result.receipt_number,
       loan_id: loanId,
       client_id: targetLoan.client_id,
+      schedule_id: null,
       amount_paid: amount,
       payment_date: today,
       payment_method: method,
-      recorded_by: user?.id || null,
       collection_type: "Settlement",
-      security_amount: Number(targetLoan.security_balance || 0),
+      security_amount: result.security_released,
+      recorded_by: user?.id || null,
       notes: notes || "Early loan settlement",
-    };
-    const { data: repData, error: repError } = await supabase
-      .from("loan_repayments")
-      .insert([repInsertPayload])
-      .select()
-      .single();
-    if (repError || !repData)
-      throw new Error(repError?.message || "Failed to record the settlement");
-    const newRepayment: LoanRepayment = {
-      ...repData,
+      principal_portion: result.principal_portion,
+      interest_portion: result.interest_portion,
       loan: targetLoan,
       client: targetLoan.client,
-    } as LoanRepayment;
+    } as unknown as LoanRepayment;
     setRepayments((prev) => [newRepayment, ...prev]);
-
-    // A settlement is cash arriving like any other collection, so it posts the
-    // same balanced journal: the receiving account rises by the full amount,
-    // Loans Receivable falls by the principal cleared, and the rest is income.
-    // The split is derived from the instalments the settlement closes.
-    const { error: settleJournalError } = await supabase.rpc("post_repayment", {
-      _repayment_id: repData.id,
-      _receiving_account_id: receivingAccountId,
-    });
-    if (settleJournalError) {
-      throw new LedgerError(
-        "post settlement",
-        `The settlement receipt ${repData.receipt_number} was written but its ledger entry failed: ` +
-          `${settleJournalError.message}. Reverse the receipt before retrying.`,
-        settleJournalError.code,
-      );
-    }
-
-    for (const row of settledSchedule) {
-      if (row.id) {
-        await supabase
-          .from("loan_repayment_schedule")
-          .update({
-            paid_amount: row.paid_amount,
-            remaining_balance: row.remaining_balance,
-            status: row.status,
-            paid_at: row.paid_at || null,
-          })
-          .eq("id", row.id);
-      }
-    }
 
     await logAudit(
       "Settled Loan",
       "Loan Settlement",
-      `Settled loan ${targetLoan.loan_number} with UGX ${amount} (Receipt #${newRepayment.receipt_number})`,
-      newRepayment.receipt_number,
+      `Settled loan ${targetLoan.loan_number} with UGX ${amount} (Receipt #${result.receipt_number})`,
+      result.receipt_number,
     );
     await sendNotification({
       title: "Loan settled",
@@ -2199,29 +2172,20 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!reason.trim()) throw new Error("A write-off reason is required");
     const targetLoan = loans.find((l) => l.id === loanId);
     if (!targetLoan) throw new Error("Loan not found");
-    if (!targetLoan.is_bad_debt)
-      throw new Error("Declare the loan a bad debt before writing it off");
-    if (targetLoan.status === "Written Off") throw new Error("This loan is already written off");
 
+    // The loan row, the minute against it and the loss journal move together.
+    // Previously the loan was marked written off and the journal posted after,
+    // so a dropped connection between the two destroyed a receivable with no
+    // record of where it went.
+    const { data, error } = await supabase
+      .rpc("write_off_loan", { _loan_id: loanId, _reason: reason })
+      .single();
+    if (error) throw new LedgerError("write off loan", error.message, error.code);
+
+    const result = data as { amount_written_off: number };
+    const writtenOff = Number(result.amount_written_off || 0);
     const now = new Date().toISOString();
-    const writtenOff = Number(targetLoan.outstanding_balance || 0);
 
-    // The balance moves off the portfolio and is preserved in `writeoff_amount`,
-    // so outstanding reports and collection screens stop counting it.
-    const { error } = await supabase
-      .from("loans")
-      .update({
-        status: "Written Off",
-        writeoff_status: "Written Off",
-        writeoff_at: now,
-        writeoff_amount: writtenOff,
-        writeoff_reason: reason,
-        writeoff_by: user?.id || null,
-        outstanding_balance: 0,
-        updated_at: now,
-      })
-      .eq("id", loanId);
-    if (error) throw new Error(error.message);
     setLoans((prev) =>
       prev.map((l) =>
         l.id === loanId
@@ -2238,24 +2202,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           : l,
       ),
     );
-
-    await supabase
-      .from("bad_loan_comments")
-      .insert({ loan_id: loanId, comment: `Written off: ${reason}` });
-
-    // Move the principal off the loan book and recognise the loss. Only the
-    // principal: uncollected interest was never taken to income, so writing it
-    // off is not a further loss — booking it as one would overstate the hit.
-    const { error: writeoffJournalError } = await supabase.rpc("post_writeoff", {
-      _loan_id: loanId,
-    });
-    if (writeoffJournalError) {
-      throw new LedgerError(
-        "post write-off",
-        writeoffJournalError.message,
-        writeoffJournalError.code,
-      );
-    }
 
     await logAudit(
       "Wrote Off Loan",
@@ -3052,37 +2998,34 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
   };
 
+  /**
+   * Reset a demonstration or training database.
+   *
+   * This used to be fifteen `delete()` calls from the browser with no error
+   * checked, written before the ledger existed. It left every journal standing
+   * while deleting the loans they described, and its `bank_transactions` delete
+   * now fails against the legacy-register guard — silently, because nothing
+   * read the error.
+   *
+   * It is one database function now: foreign-key order, ledger first, one
+   * transaction, and it refuses outright once `financial_cutover_completed` is
+   * set. After a real opening balance has been posted these rows are Chetu's
+   * financial history, and no button erases them.
+   */
   const clearAllData = async () => {
     requireRoles(["Administrator"]);
-    if (!isSupabaseConfigured) return;
-    // Delete in dependency order (children before parents)
-    // NOTE: 'guarantors' table does not exist — data is stored as columns in loan_applications
-    await supabase.from("audit_logs").delete().neq("id", "none");
-    await supabase.from("bank_transactions").delete().neq("id", "none");
-    await supabase.from("expenses").delete().neq("id", "none");
-    await supabase.from("savings_transactions").delete().neq("id", "none");
-    await supabase.from("savings_accounts").delete().neq("id", "none");
-    await supabase.from("loan_repayments").delete().neq("id", "none");
-    await supabase.from("loan_repayment_schedule").delete().neq("id", "none");
-    await supabase.from("loans").delete().neq("id", "none");
-    await supabase.from("loan_applications").delete().neq("id", "none");
-    await supabase.from("loan_products").delete().neq("id", "none");
-    await supabase.from("group_attendance").delete().neq("id", "none");
-    await supabase.from("group_members").delete().neq("id", "none");
-    await supabase.from("clients").delete().neq("id", "none");
-    await supabase.from("client_groups").delete().neq("id", "none");
-    await supabase
-      .from("settings")
-      .update({
-        company_name: "Chetu Microfinance Ltd",
-        default_currency: "UGX",
-        default_interest_rate: 15.0,
-        default_processing_fee: 2.0,
-        receipt_footer: defaultSettings.receipt_footer,
-        report_header: defaultSettings.report_header,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", 1);
+    if (!isSupabaseConfigured) throw new Error("Database not configured");
+
+    const { error } = await supabase.rpc("reset_operational_data", {
+      _confirm: "RESET ALL DATA",
+    });
+    if (error) throw new Error(error.message);
+
+    await logAudit(
+      "Reset System Data",
+      "Settings",
+      "Cleared every operational and financial record from this database.",
+    );
 
     setClients([]);
     setClientGroups([]);
@@ -3096,7 +3039,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setExpenses([]);
     setBankTransactions([]);
     setAuditLogs([]);
-    setSettings(defaultSettings);
   };
 
   const performGlobalSearch = (query: string): GlobalSearchResult[] => {

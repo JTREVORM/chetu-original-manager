@@ -32,9 +32,9 @@ node scripts/verify-financials.mjs --project <ref> --migrate --seed
 
 It rebuilds a throwaway database, applies the base migrations, seeds production's exact control
 totals, applies the financial migrations so the backfills run over realistic data, then asserts
-138 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
+201 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
 overdue, penalty, capital, expense, transfer, reversal, immutability, reconciliation, closure,
-write-off, branch scoping, permissions and report reconciliation. Both scripts refuse to run
+write-off, branch scoping, permissions, report reconciliation and the direct-write guards. Both scripts refuse to run
 against production — they post and reverse real journals.
 
 ### Typechecking
@@ -68,7 +68,7 @@ public.
 
 ### Migrations
 
-`supabase/migrations/` holds twenty-two files that are replayable in order against an empty
+`supabase/migrations/` holds twenty-three files that are replayable in order against an empty
 database. The first four build the system and **must run in sequence**, because each depends on
 the one before:
 
@@ -81,11 +81,13 @@ the one before:
 
 `…000400` through `…001200` add transfers, frozen loan fees, sequence-backed reference numbers,
 real-email login, business-day control, the branch network, staff management and schedule
-integrity. `…001300` through `…002100` are the financial ledger — see below.
+integrity. `…001300` through `…002200` are the financial ledger — see below.
 
-Production carries **no migration history**: `supabase_migrations.schema_migrations` is empty,
-because everything was applied by hand through the SQL editor. Record the applied versions there
-before adding anything new, or the same drift recurs.
+Production carries **no migration history**: the `supabase_migrations` schema does not exist at
+all, because everything was applied by hand through the SQL editor. Migrations 000000–001200 have
+been verified byte-identical to production across 1,407 object definitions, so they can be recorded
+as applied — `supabase/REGISTER_APPLIED_MIGRATIONS.sql` does exactly that and nothing else. Run it
+before applying anything new, or the same drift recurs.
 
 `supabase/legacy-migrations/` contains 48 archived files from the original history. They are **not
 replayable** — that history contained several full `DROP SCHEMA public CASCADE` rebuilds, so running
@@ -176,15 +178,19 @@ drift, and drift is what this replaced.
 `post_*` and atomic operation functions, which check the _business_ permission for the action,
 validate the account, and post the journal in the same transaction:
 
-| Function                                            | What it does                                                         |
-| --------------------------------------------------- | -------------------------------------------------------------------- |
-| `disburse_loan(loan, funding_account)`              | marks the loan, closes the application, posts the journal — together |
-| `record_loan_repayment(...)`                        | receipt, instalments, loan balance, journal — together               |
-| `record_expense(...)`                               | an expense cannot exist without the account that paid it             |
-| `post_capital_injection` / `post_internal_transfer` | capital has a destination; a transfer touches no income account      |
-| `undo_loan_disbursement` / `undo_loan_repayment`    | reverse the real journal, line for line                              |
-| `reverse_financial_transaction`                     | mirrors any journal and links back to it                             |
-| `record_account_reconciliation`                     | counts an account and, on approval, posts the adjustment             |
+| Function                                            | What it does                                                                       |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `disburse_loan(loan, funding_account)`              | marks the loan, closes the application, posts the journal — together               |
+| `record_loan_repayment(...)`                        | receipt, instalments, loan balance, journal — together                             |
+| `record_expense(...)`                               | an expense cannot exist without the account that paid it                           |
+| `post_capital_injection` / `post_internal_transfer` | capital has a destination; a transfer touches no income account                    |
+| `undo_loan_disbursement` / `undo_loan_repayment`    | reverse the real journal, line for line                                            |
+| `reverse_financial_transaction`                     | mirrors any journal and links back to it                                           |
+| `settle_loan(...)`                                  | closes every instalment, releases the security, closes the loan, posts the journal |
+| `write_off_loan(loan, reason)`                      | closes the loan, minutes it, recognises the loss                                   |
+| `record_member_fee(...)`                            | admission and passbook fees; once per member, a retry posts nothing                |
+| `return_loan_security(...)`                         | the refund record, the loan's remaining security and the journal                   |
+| `record_account_reconciliation`                     | counts an account and, on approval, posts the adjustment                           |
 
 This exists because of a real failure. `disburseLoan` used to insert into `bank_transactions`,
 row level security rejected it for every Loan Officer, and the caller discarded the error —
@@ -205,6 +211,25 @@ whether a shilling was in a till, a bank or a wallet. **`payment_method` is not 
 other. The legacy balance is resolved once, at cut-over, against a real count.
 
 `bank_transactions` is a closed legacy register: read-only, superseded, backfilled.
+
+**The tables underneath are closed too.** Migration `…002200` puts a guard trigger on `loans`,
+`loan_repayments`, `expenses`, `member_fees`, `loan_security_returns`, `loan_reversals` and the
+paid columns of `loan_repayment_schedule`. It refuses any write arriving straight from PostgREST,
+because `private.is_api_write()` sees `current_user` as `anon` or `authenticated` rather than the
+owner a `SECURITY DEFINER` posting function runs as. The guards are `SECURITY INVOKER` for exactly
+that reason. `service_role` is not blocked — the seed and repair scripts need it, and it bypasses
+RLS anyway.
+
+Non-financial writes still go through: creating, editing and deleting a _Pending_ loan, the
+bad-debt flag, building a schedule, correcting a due date. Only the money moves are guarded.
+
+The single-step `post_disbursement`, `post_repayment`, `post_expense`, `post_member_fee`,
+`post_security_refund` and `post_writeoff` are no longer callable by `authenticated`: each writes
+half a financial event and each is now reached only by the atomic function that owns it.
+
+The Settings "System reset" is `reset_operational_data()` — one transaction, ledger first, and
+**permanently refused once `settings.financial_cutover_completed` is set**. The panel is also
+behind `import.meta.env.DEV`, so it is not in a production bundle.
 
 ### Fees are frozen onto each loan
 

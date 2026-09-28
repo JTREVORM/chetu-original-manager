@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import { Info } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useDatabase } from "../context/DatabaseContext";
 import { useNotifications } from "../context/NotificationContext";
 import type { Client, Loan } from "../types/database.types";
@@ -20,6 +19,8 @@ import {
   type MisColumn,
 } from "../components/mis/MisKit";
 import { ReportExportButtons } from "../components/mis/ReportExport";
+import { AccountSelect } from "../components/financial/AccountSelect";
+import { returnLoanSecurity } from "../lib/financial/ledger";
 
 interface ReturnRow {
   loan: Loan;
@@ -101,29 +102,20 @@ export const LoanSecurityReturnList: React.FC = () => {
     });
   };
 
-  const processReturn = async (row: ReturnRow, amount: number) => {
+  const processReturn = async (row: ReturnRow, amount: number, accountId: string) => {
     setSaving(true);
     try {
-      const { error } = await supabase.from("loan_security_returns").insert({
-        loan_id: row.loan.id,
-        client_id: row.client.id,
-        branch_id: row.client.branch_id ?? null,
-        return_date: returnDate,
-        return_amount: amount,
-        previous_amount: row.previous_amount,
-        present_amount: Math.max(0, row.present_amount - amount),
-        duration_weeks: row.loan.loan_period_weeks || 0,
-        principal: row.loan.principal_amount,
-        interest: row.loan.total_interest_amount,
-        status: "Returned",
+      // Returning security is cash leaving the building against a liability the
+      // ledger already carries, so the refund record, the loan's remaining
+      // balance and the journal that pays it move together. This screen used to
+      // write the first two and never call `post_security_refund`, so every
+      // refund was invisible to the ledger.
+      await returnLoanSecurity({
+        loanId: row.loan.id,
+        amount,
+        sourceAccountId: accountId,
+        returnDate,
       });
-      if (error) throw error;
-
-      const { error: loanError } = await supabase
-        .from("loans")
-        .update({ security_balance: Math.max(0, row.present_amount - amount) })
-        .eq("id", row.loan.id);
-      if (loanError) throw loanError;
 
       addToast(
         "success",
@@ -282,9 +274,10 @@ const SecurityReturnModal: React.FC<{
   readOnly?: boolean;
   returnDate: string;
   onClose: () => void;
-  onSubmit: (row: ReturnRow, amount: number) => Promise<void>;
+  onSubmit: (row: ReturnRow, amount: number, accountId: string) => Promise<void>;
 }> = ({ row, saving, readOnly, returnDate, onClose, onSubmit }) => {
   const [amount, setAmount] = useState("");
+  const [accountId, setAccountId] = useState("");
   if (!row) return null;
   const value = amount === "" ? row.present_amount : Number(amount || 0);
 
@@ -351,6 +344,19 @@ const SecurityReturnModal: React.FC<{
         </Field>
       </div>
 
+      {!readOnly && (
+        <div className="mt-3 max-w-md">
+          <AccountSelect
+            value={accountId}
+            onChange={setAccountId}
+            branchId={row.client.branch_id}
+            method="Cash"
+            label="Account the refund is paid from"
+            direction="source"
+          />
+        </div>
+      )}
+
       <div className="mt-5 flex justify-end gap-2">
         <button
           type="button"
@@ -362,8 +368,8 @@ const SecurityReturnModal: React.FC<{
         {!readOnly && (
           <button
             type="button"
-            disabled={saving || value <= 0 || value > row.present_amount}
-            onClick={() => onSubmit(row, value)}
+            disabled={saving || value <= 0 || value > row.present_amount || !accountId}
+            onClick={() => onSubmit(row, value, accountId)}
             className="rounded bg-[#0B4394] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
           >
             {saving ? "Saving…" : "Return Security"}

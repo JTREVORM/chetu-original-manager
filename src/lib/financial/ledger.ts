@@ -177,42 +177,20 @@ export const postCapitalWithdrawal = (args: {
     _note: args.note ?? null,
   });
 
-/**
- * Posts a disbursement's journal.
- *
- * Reduces the funding account by the NET handed over, raises Loans Receivable
- * by the full principal, recognises the three fees as income and the security
- * as a liability. Those five figures are read from the loan row inside the
- * database, so the client cannot get them wrong or out of step.
- */
-export const postDisbursement = (loanId: string, fundingAccountId: string) =>
-  rpc<string>("post disbursement", "post_disbursement", {
-    _loan_id: loanId,
-    _funding_account_id: fundingAccountId,
-  });
-
-/**
- * Posts a receipt's journal: the receiving account rises by the full amount,
- * Loans Receivable falls by the principal portion only, and the interest and
- * penalty portions become income.
- */
-export const postRepayment = (repaymentId: string, receivingAccountId: string) =>
-  rpc<string>("post repayment", "post_repayment", {
-    _repayment_id: repaymentId,
-    _receiving_account_id: receivingAccountId,
-  });
-
-export const postMemberFee = (memberFeeId: string, receivingAccountId: string) =>
-  rpc<string>("post member fee", "post_member_fee", {
-    _member_fee_id: memberFeeId,
-    _receiving_account_id: receivingAccountId,
-  });
-
-export const postExpense = (expenseId: string, sourceAccountId: string) =>
-  rpc<string>("post expense", "post_expense", {
-    _expense_id: expenseId,
-    _source_account_id: sourceAccountId,
-  });
+// The single-step postings are not exposed here, on purpose.
+//
+// `post_disbursement`, `post_repayment`, `post_expense`, `post_member_fee`,
+// `post_security_refund` and `post_writeoff` each write a journal for a
+// business record that some other statement was supposed to have written.
+// That is one half of a financial event: a caller that posts one without the
+// other produces the same inconsistency this module exists to prevent, only
+// the other way round from the original bug.
+//
+// Each is now called by an atomic database function instead, and migration
+// 002200 revoked EXECUTE from `authenticated`, so none can be reached from a
+// browser at all. Use `disburseLoan`, `recordRepayment`, `settleLoan`,
+// `writeOffLoan`, `recordExpense`, `recordMemberFee` or `returnLoanSecurity` —
+// each of which is one transaction.
 
 /** Moves money between Chetu's own accounts. Never income, never expense. */
 export const postInternalTransfer = (args: {
@@ -232,14 +210,62 @@ export const postInternalTransfer = (args: {
     _note: args.note ?? null,
   });
 
-export const postSecurityRefund = (securityReturnId: string, sourceAccountId: string) =>
-  rpc<string>("refund security", "post_security_refund", {
-    _security_return_id: securityReturnId,
-    _source_account_id: sourceAccountId,
+/**
+ * Admission and passbook fees, with the journal that records them.
+ *
+ * Charged once per member: the database returns the existing row rather than
+ * charging twice, so a retried admission cannot double-count fee income.
+ */
+export const recordMemberFee = (args: {
+  clientId: string;
+  receivingAccountId: string;
+  admissionFee: number;
+  passbookFee: number;
+  crbFee?: number;
+  paymentMethod?: PaymentMethod;
+  receiptNumber?: string | null;
+}) =>
+  rpc<
+    {
+      member_fee_id: string;
+      receipt_number: string;
+      transaction_id: string | null;
+      total_amount: number;
+      already_recorded: boolean;
+    }[]
+  >("record member fee", "record_member_fee", {
+    _client_id: args.clientId,
+    _receiving_account_id: args.receivingAccountId,
+    _admission_fee: args.admissionFee,
+    _passbook_fee: args.passbookFee,
+    _crb_fee: args.crbFee ?? 0,
+    _payment_method: args.paymentMethod ?? "Cash",
+    _receipt_number: args.receiptNumber ?? null,
   });
 
-export const postWriteoff = (loanId: string) =>
-  rpc<string>("post write-off", "post_writeoff", { _loan_id: loanId });
+/**
+ * Release a member's security deposit.
+ *
+ * Cash leaving the building against a liability the ledger already carries, so
+ * the refund record, the loan's remaining security and the journal that pays it
+ * are one transaction.
+ */
+export const returnLoanSecurity = (args: {
+  loanId: string;
+  amount: number;
+  sourceAccountId: string;
+  returnDate?: string;
+}) =>
+  rpc<{ security_return_id: string; transaction_id: string; remaining_security: number }[]>(
+    "return security",
+    "return_loan_security",
+    {
+      _loan_id: args.loanId,
+      _amount: args.amount,
+      _source_account_id: args.sourceAccountId,
+      _return_date: args.returnDate ?? null,
+    },
+  );
 
 /**
  * Reverses a posted journal by mirroring every one of its lines and linking

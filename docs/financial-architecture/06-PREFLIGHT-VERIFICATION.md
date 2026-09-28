@@ -206,6 +206,11 @@ been corrected. §6 was read off production and was always right.
 | Lint                                 | 30 errors, 45 warnings — **all pre-existing on `main`**, byte-identical file list. The PR adds none.                                                                                                                                                                                                                                                     |
 | Advisors                             | The PR fixes both `function_search_path_mutable` findings live on production today (`block_audit_mutation`, `block_audit_log_update`) and revokes public `EXECUTE` on nine trigger functions.                                                                                                                                                            |
 
+> **All three findings below are now closed.** See
+> [`07-HARDENING.md`](07-HARDENING.md) and migration `20260101002200_financial_hardening.sql`.
+> They are left here as written, because a report that quietly edits away what it found is worth
+> less than one that shows the work.
+
 ### Finding 1 — the money workflows are atomic in the application, not in the database
 
 `disburse_loan`, `record_loan_repayment`, `undo_loan_disbursement`, `undo_loan_repayment` and
@@ -281,14 +286,15 @@ after a wipe the ledger and the operational tables no longer describe the same i
 
 ## 8. Unresolved issues
 
-1. Findings 1–3 above.
+1. Findings 1–3 above — **all closed**; see [`07-HARDENING.md`](07-HARDENING.md).
 2. **Legacy / Unclassified −2,068,900** is unresolved by design and only a physical count can
    resolve it. Note the direction: posting the counted Cash at Hand and Bank balances _credits_
    Legacy further, so the residual after step 7 below is larger than 2,068,900 and needs the
    explicit step 8 adjustment.
 3. **No migration history row has been written.** Recording the 13 is step 2 of the sequence.
 4. `public/schema_restore.sql` and `public/schema_test.sql` are schema dumps served from the web
-   root of a public repository.
+   root of a public repository. **Resolved**: moved to `supabase/archive/` and deleted respectively;
+   no `.sql` is served any more.
 
 ---
 
