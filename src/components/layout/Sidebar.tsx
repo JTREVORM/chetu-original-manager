@@ -12,6 +12,7 @@ import {
   Receipt,
   PiggyBank,
   CreditCard,
+  Wallet,
   Building2,
   BarChart3,
   Calculator,
@@ -176,24 +177,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         { name: "Group LO Transfer", path: "/transfers/group-officer", icon: UserCog },
       ],
     },
-    {
-      id: "savings",
-      name: "Savings - Management",
-      icon: PiggyBank,
-      subItems: [
-        { name: "Savings Dashboard", path: "/savings", icon: PiggyBank },
-        { name: "Savings Accounts", path: "/savings-accounts", icon: PiggyBank },
-        { name: "Savings Report", path: "/reports/savings", icon: FileText },
-      ],
-    },
+    // Savings is not in the navigation: it posts no journal, so no deposit or
+    // withdrawal can be recorded, and the database refuses both. /savings and
+    // /savings-accounts still resolve — an old bookmark should meet a sentence,
+    // not a 404 — and both render the closed notice.
     {
       id: "ledger",
       name: "Financial Ledger",
       icon: Building2,
       managementOnly: true,
       subItems: [
+        { name: "Accounts & Cash", path: "/financial-ledger", icon: Wallet },
         { name: "Expense Management", path: "/expenses", icon: CreditCard },
-        { name: "Bank Management", path: "/bank-management", icon: Building2 },
+        // The superseded single-account register, kept readable.
+        { name: "Legacy Bank Register", path: "/bank-management", icon: Building2 },
       ],
     },
     {
@@ -202,6 +199,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       icon: BarChart3,
       subItems: [
         { name: "Master Reports & PDFs", path: "/reports", icon: BarChart3 },
+        { name: "Financial Position", path: "/reports/financial-position", icon: Wallet },
+        { name: "Cash Flow", path: "/reports/cash-flow", icon: Wallet },
+        { name: "Profit & Loss", path: "/reports/profit-and-loss", icon: BarChart3 },
+        { name: "Loan Portfolio", path: "/reports/loan-portfolio", icon: FileSpreadsheet },
+        { name: "Collections", path: "/reports/collections", icon: Receipt },
+        { name: "Arrears & PAR", path: "/reports/arrears", icon: Clock },
         { name: "Master Roll", path: "/reports/master-roll", icon: FileText },
         { name: "Daily Overdue Report", path: "/reports/daily-overdue", icon: Clock },
         {

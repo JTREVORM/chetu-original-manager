@@ -20,8 +20,22 @@ npm run lint           # eslint
 npm run format         # prettier --write .
 ```
 
-There is **no test suite** — no test runner is installed and there are no test files. Verify changes
-by typechecking, building, and driving the running app.
+There is **no test runner** and there are no test files. Verify changes by typechecking, building
+and driving the running app.
+
+Financial changes have their own harness, which is not a test framework:
+
+```sh
+scripts/financial-verify/run.sh        # needs a local PostgreSQL on port 55432
+node scripts/verify-financials.mjs --project <ref> --migrate --seed
+```
+
+It rebuilds a throwaway database, applies the base migrations, seeds production's exact control
+totals, applies the financial migrations so the backfills run over realistic data, then asserts
+222 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
+overdue, penalty, capital, expense, transfer, reversal, immutability, reconciliation, closure,
+write-off, branch scoping, permissions, report reconciliation, the direct-write guards and the savings closure. Both scripts refuse to run
+against production — they post and reverse real journals.
 
 ### Typechecking
 
@@ -54,15 +68,26 @@ public.
 
 ### Migrations
 
-`supabase/migrations/` holds eight files that are replayable in order against an empty database. The
-first four build the system and **must run in sequence**, because each depends on the one before:
+`supabase/migrations/` holds twenty-four files that are replayable in order against an empty
+database. The first four build the system and **must run in sequence**, because each depends on
+the one before:
 
-| File | Contents |
-| --- | --- |
-| `…000000_core_schema` | 27 tables, sequences, indexes, seed rows |
-| `…000100_security_helpers` | the `private` schema and its 10 helper functions |
-| `…000200_row_level_security` | RLS enabled on every table, ~70 policies |
-| `…000300_business_rules` | triggers: signup, `updated_at`, reference numbers, approval and lifecycle guards |
+| File                         | Contents                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| `…000000_core_schema`        | 27 tables, sequences, indexes, seed rows                                         |
+| `…000100_security_helpers`   | the `private` schema and its 10 helper functions                                 |
+| `…000200_row_level_security` | RLS enabled on every table, ~70 policies                                         |
+| `…000300_business_rules`     | triggers: signup, `updated_at`, reference numbers, approval and lifecycle guards |
+
+`…000400` through `…001200` add transfers, frozen loan fees, sequence-backed reference numbers,
+real-email login, business-day control, the branch network, staff management and schedule
+integrity. `…001300` through `…002300` are the financial ledger — see below.
+
+Production carries **no migration history**: the `supabase_migrations` schema does not exist at
+all, because everything was applied by hand through the SQL editor. Migrations 000000–001200 have
+been verified byte-identical to production across 1,407 object definitions, so they can be recorded
+as applied — `supabase/REGISTER_APPLIED_MIGRATIONS.sql` does exactly that and nothing else. Run it
+before applying anything new, or the same drift recurs.
 
 `supabase/legacy-migrations/` contains 48 archived files from the original history. They are **not
 replayable** — that history contained several full `DROP SCHEMA public CASCADE` rebuilds, so running
@@ -78,12 +103,12 @@ into the Supabase SQL editor.
 Four roles: Administrator, Branch Manager, Loan Officer, Auditor. Two independent mechanisms enforce
 them, and UI checks are a courtesy on top of both:
 
-1. **RLS policies** answer *may this person touch this row?* They are written entirely in terms of
+1. **RLS policies** answer _may this person touch this row?_ They are written entirely in terms of
    `private.*` helper functions (`is_admin()`, `is_management()`, `can_see_client()`, …). The
    `private` schema is not exposed through PostgREST, so a signed-in client cannot call the helpers
    to probe the permission model. Every write policy carries `NOT private.is_auditor()`.
 
-2. **Trigger guards** answer *may this person make **this** change?* Approving a group, writing a
+2. **Trigger guards** answer _may this person make **this** change?_ Approving a group, writing a
    loan off and reopening a closed loan are all ordinary UPDATEs as far as RLS is concerned; only
    `guard_group_approval_transition`, `guard_client_approval_transition` and
    `guard_loan_lifecycle_transition` can tell them apart.
@@ -110,11 +135,11 @@ second loan officer could not submit their first application at all.
 
 ### Two Supabase clients — pick deliberately
 
-| Import | Typed? | Use for |
-| --- | --- | --- |
-| `src/lib/supabase.ts` | no | `DatabaseContext` and general app queries |
-| `src/integrations/supabase/client.ts` | yes, from `types.ts` | anything wanting generated types |
-| `src/integrations/supabase/client.server.ts` | — | **service role, server only** |
+| Import                                       | Typed?               | Use for                                   |
+| -------------------------------------------- | -------------------- | ----------------------------------------- |
+| `src/lib/supabase.ts`                        | no                   | `DatabaseContext` and general app queries |
+| `src/integrations/supabase/client.ts`        | yes, from `types.ts` | anything wanting generated types          |
+| `src/integrations/supabase/client.server.ts` | —                    | **service role, server only**             |
 
 `types.ts` is generated. After a schema change, regenerate it from the live database (Management API
 `/types/typescript`) or the typed client will reject the new columns.
@@ -135,6 +160,86 @@ rather than hand-rolling a table.
 layout the original UMIS system used. Columns keyed `act`/`action`/`pick`, or labelled `Action`,
 become a button strip at the foot of the mobile card. Supply `text()` on a column whose `render`
 returns JSX, or exports and tooltips get nothing.
+
+### Money moves through a balanced ledger
+
+`financial_transactions` + `financial_transaction_lines`: one journal per financial event, two or
+more lines that **must sum to zero**, enforced by a deferred constraint trigger. Posted journals
+are immutable — a mistake is corrected by a reversal that references the original, never by an
+edit or a delete.
+
+`financial_accounts` is the chart of accounts: real money locations (cash, till, branch cash,
+bank, mobile money, merchant) alongside control accounts (Loans Receivable, Security Held,
+Capital, the income and expense categories). **There is no stored balance anywhere.** A balance is
+`opening_balance + SUM(lines)`, served by `v_account_balances`. A stored total is a total that can
+drift, and drift is what this replaced.
+
+**Never insert into the ledger directly** — no signed-in role can. Money moves only through the
+`post_*` and atomic operation functions, which check the _business_ permission for the action,
+validate the account, and post the journal in the same transaction:
+
+| Function                                            | What it does                                                                       |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `disburse_loan(loan, funding_account)`              | marks the loan, closes the application, posts the journal — together               |
+| `record_loan_repayment(...)`                        | receipt, instalments, loan balance, journal — together                             |
+| `record_expense(...)`                               | an expense cannot exist without the account that paid it                           |
+| `post_capital_injection` / `post_internal_transfer` | capital has a destination; a transfer touches no income account                    |
+| `undo_loan_disbursement` / `undo_loan_repayment`    | reverse the real journal, line for line                                            |
+| `reverse_financial_transaction`                     | mirrors any journal and links back to it                                           |
+| `settle_loan(...)`                                  | closes every instalment, releases the security, closes the loan, posts the journal |
+| `write_off_loan(loan, reason)`                      | closes the loan, minutes it, recognises the loss                                   |
+| `record_member_fee(...)`                            | admission and passbook fees; once per member, a retry posts nothing                |
+| `return_loan_security(...)`                         | the refund record, the loan's remaining security and the journal                   |
+| `record_account_reconciliation`                     | counts an account and, on approval, posts the adjustment                           |
+
+This exists because of a real failure. `disburseLoan` used to insert into `bank_transactions`,
+row level security rejected it for every Loan Officer, and the caller discarded the error —
+`if (!txError && btData)`. Fifteen loans were disbursed with no financial record, and the ledger
+read UGX 2,090,000 while 5,250,000 had gone out. **Never test a financial error only to decide
+whether to update local state.**
+
+`v_ledger_health` is the standing check that it has not come back. Any row is a financial fact the
+ledger has lost track of; it should always be empty, and the Financial Ledger screen shows it.
+
+Reports and the dashboard read `src/lib/financial/reports.ts`, one function per view, so they
+cannot disagree. Do not re-sum rows in a screen — that is how the Dashboard, `branchMetrics.ts`
+and `Reports.tsx` came to define "this month" three different ways.
+
+`LEGACY-UNCLASSIFIED` holds every pre-ledger cash movement, because production never recorded
+whether a shilling was in a till, a bank or a wallet. **`payment_method` is not an account** —
+"Cash" says the member handed over notes, not where those notes went. Do not promote one to the
+other. The legacy balance is resolved once, at cut-over, against a real count.
+
+`bank_transactions` is a closed legacy register: read-only, superseded, backfilled.
+
+**The tables underneath are closed too.** Migration `…002200` puts a guard trigger on `loans`,
+`loan_repayments`, `expenses`, `member_fees`, `loan_security_returns`, `loan_reversals` and the
+paid columns of `loan_repayment_schedule`. It refuses any write arriving straight from PostgREST,
+because `private.is_api_write()` sees `current_user` as `anon` or `authenticated` rather than the
+owner a `SECURITY DEFINER` posting function runs as. The guards are `SECURITY INVOKER` for exactly
+that reason. `service_role` is not blocked — the seed and repair scripts need it, and it bypasses
+RLS anyway.
+
+Non-financial writes still go through: creating, editing and deleting a _Pending_ loan, the
+bad-debt flag, building a schedule, correcting a due date. Only the money moves are guarded.
+
+The single-step `post_disbursement`, `post_repayment`, `post_expense`, `post_member_fee`,
+`post_security_refund` and `post_writeoff` are no longer callable by `authenticated`: each writes
+half a financial event and each is now reached only by the atomic function that owns it.
+
+The Settings "System reset" is `reset_operational_data()` — one transaction, ledger first, and
+**permanently refused once `settings.financial_cutover_completed` is set**. The panel is also
+behind `import.meta.env.DEV`, so it is not in a production bundle.
+
+**Savings is closed**, because it is the one money-shaped module that posts no journal. Production
+has 25 accounts, all at zero, and has never recorded a savings transaction. Migration `…002300`
+refuses every write to `savings_transactions` and any change to `savings_accounts.balance`; opening
+and closing an account still works, because neither moves a shilling. Savings is out of the
+sidebar, `/savings` renders a closed notice, and `addSavingsTransaction` throws — its docstring
+lists the six faults that must be fixed before it can be reopened. The seam is
+`private.savings_ledger_ready()`, a function rather than a settings row so that reopening takes a
+migration; `v_ledger_health` reports any savings transaction or non-zero balance that appears
+meanwhile.
 
 ### Fees are frozen onto each loan
 

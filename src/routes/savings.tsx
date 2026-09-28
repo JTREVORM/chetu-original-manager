@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ProtectedLayout } from "@/components/layout/ProtectedLayout";
-import { SavingsDashboardPage } from "@/pages/Savings";
+import { SavingsClosedPage } from "@/pages/SavingsClosed";
 
 export const Route = createFileRoute("/savings")({
   head: () => ({
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/savings")({
   }),
   component: () => (
     <ProtectedLayout>
-      <SavingsDashboardPage />
+      <SavingsClosedPage />
     </ProtectedLayout>
   ),
 });

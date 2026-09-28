@@ -3,9 +3,11 @@ import { useNavigate } from "../lib/router-compat";
 import { useAuth } from "../context/AuthContext";
 import { useDatabase } from "../context/DatabaseContext";
 import { useNotifications } from "../context/NotificationContext";
-import { supabase } from "@/integrations/supabase/client";
 import { UploadCloud } from "lucide-react";
 import { FEES, admissionFees } from "../lib/fees";
+import { supabase } from "@/integrations/supabase/client";
+import { AccountSelect } from "../components/financial/AccountSelect";
+import { recordMemberFee } from "../lib/financial/ledger";
 
 const field = "form-field";
 const label = "form-label";
@@ -43,6 +45,7 @@ export const MemberAdmission: React.FC = () => {
   const [docPreview, setDocPreview] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [feeAccountId, setFeeAccountId] = useState("");
   const [form, setForm] = useState({
     branch_id: "",
     group_id: "",
@@ -135,6 +138,7 @@ export const MemberAdmission: React.FC = () => {
     if (!form.physical_address.trim()) missing.push("Address");
     if (!form.district.trim()) missing.push("District");
     if (!form.division.trim()) missing.push("Division");
+    if (!feeAccountId) missing.push("Account receiving the admission fees");
     if (missing.length) {
       setError(`Please fill in: ${missing.join(", ")}`);
       return;
@@ -166,24 +170,28 @@ export const MemberAdmission: React.FC = () => {
         status: "Active",
       } as any);
 
-      // Admission and passbook are charged once per member, so upsert on the
-      // member: a retry must not double-count the fee income. CRB is zero here
-      // because it is charged per loan, not per member.
-      const { error: feeError } = await supabase.from("member_fees").upsert(
-        {
-          client_id: created.id,
-          admission_fee: FEES.admissionFee,
-          passbook_fee: FEES.passbookFee,
-          crb_fee: 0,
-          total_amount: admissionFees().total,
-          payment_method: "Cash",
-          receipt_number: `CM-ADM-${created.client_number}`,
-          branch_id: form.branch_id,
-          collected_by: user?.id ?? null,
-        },
-        { onConflict: "client_id" },
-      );
-      // The member is admitted either way; a failed fee row must be visible
+      // Admission and passbook fees are money, so they go through the posting
+      // function: the fee row and its journal are written in one transaction,
+      // or neither is. This screen used to write the row on its own and never
+      // call `post_member_fee`, so every fee taken was invisible to the ledger.
+      //
+      // Charged once per member. The function returns the existing row rather
+      // than charging twice, so a retry cannot double-count the income.
+      let feeError: Error | null = null;
+      try {
+        await recordMemberFee({
+          clientId: created.id,
+          receivingAccountId: feeAccountId,
+          admissionFee: FEES.admissionFee,
+          passbookFee: FEES.passbookFee,
+          crbFee: 0,
+          paymentMethod: "Cash",
+          receiptNumber: `CM-ADM-${created.client_number}`,
+        });
+      } catch (err) {
+        feeError = err instanceof Error ? err : new Error("The fee posting failed");
+      }
+      // The member is admitted either way; a failed fee posting must be visible
       // rather than silently leaving the charge uncollected.
       if (feeError) {
         addToast(
@@ -463,6 +471,16 @@ export const MemberAdmission: React.FC = () => {
               className={`${field} bg-slate-100 font-bold`}
             />
           </div>
+        </div>
+        <div className="mt-3 max-w-md">
+          <AccountSelect
+            value={feeAccountId}
+            onChange={setFeeAccountId}
+            branchId={form.branch_id}
+            method="Cash"
+            label="Account receiving the fees"
+            showBalances={false}
+          />
         </div>
         <p className="mt-2 text-[11px] text-slate-500">
           CRB fee ({FEES.crbFeePct}% of the loan amount) and the security deposit (

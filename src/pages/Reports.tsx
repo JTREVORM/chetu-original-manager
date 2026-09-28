@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { TableScroll } from "../components/common/ScrollArea";
 import { useDatabase } from "../context/DatabaseContext";
 import { generatePortfolioReportPDF } from "../lib/pdfGenerator";
 import { exportToCSV } from "../lib/excelExporter";
 import { formatUGX } from "../lib/loanCalculations";
+import { buildProfitAndLoss, fetchIncomeStatement } from "../lib/financial/reports";
+import type { IncomeStatementRow } from "../types/database.types";
 import { BarChart3, Download, FileText, Printer, Search } from "lucide-react";
 import {
   PageHeader,
@@ -27,7 +29,28 @@ export const Reports: React.FC = () => {
     expenses,
     bankTransactions,
     auditLogs,
+    moneyPosition,
   } = useDatabase();
+
+  // The ledger's income and expense accounts. One source, shared with the
+  // Financial Ledger screen and the dashboard, so the three cannot disagree.
+  const [incomeRows, setIncomeRows] = useState<IncomeStatementRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchIncomeStatement()
+      .then((rows) => {
+        if (!cancelled) setIncomeRows(rows);
+      })
+      .catch(() => {
+        // The P&L simply shows nothing rather than a number it cannot stand
+        // behind. Reporting a wrong total is worse than reporting none.
+        if (!cancelled) setIncomeRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [moneyPosition]);
+  const pnl = useMemo(() => buildProfitAndLoss(incomeRows), [incomeRows]);
 
   const [activeReportTab, setActiveReportTab] = useState<string>("Client Register");
 
@@ -304,50 +327,80 @@ export const Reports: React.FC = () => {
 
       // Braced so these three stay scoped to this case rather than leaking
       // into the whole switch, which is what `no-case-declarations` warns about.
+      // Income is income. Returned loan principal is a balance-sheet movement
+      // and is not revenue — this report used to count every shilling
+      // collected as income, which on the live book overstated it by 496%.
+      //
+      // The figures come from the ledger's income and expense accounts, so
+      // principal cannot appear here even by accident: it never touches one.
       case "Profit and Loss": {
-        const totalIncome = repayments.reduce((s, r) => s + Number(r.amount_paid), 0);
-        const totalExp = expenses.reduce((s, e) => s + Number(e.amount), 0);
-        const netProfit = totalIncome - totalExp;
         return {
           title: "Profit & Loss Statement (P&L)",
           headers: ["Financial Item", "Category", "Amount (UGX)"],
           rows: [
-            ["Gross Interest & Collections Inflow", "Revenue", formatUGX(totalIncome)],
-            ["Operating Expenses (Salaries, Rent, Fuel)", "Expenses", formatUGX(totalExp)],
-            ["Net Operating Income / (Loss)", "Net Profit", formatUGX(netProfit)],
+            ...pnl.income.map((r) => [r.name, "Income", formatUGX(r.amount)]),
+            ["Total income", "Income", formatUGX(pnl.totalIncome)],
+            ...pnl.expenses.map((r) => [r.name, "Expense", formatUGX(r.amount)]),
+            ["Total operating expenses", "Expense", formatUGX(pnl.totalExpenses)],
+            ["Net operating result", "Net", formatUGX(pnl.netResult)],
+            [
+              "Loan principal collected (not income)",
+              "Memo",
+              formatUGX(repayments.reduce((s2, r) => s2 + Number(r.principal_portion || 0), 0)),
+            ],
           ],
         };
       }
 
-      case "Financial Statement":
+      // Every figure here is read from the ledger.
+      //
+      // This report previously seeded its bank balance with a hard-coded
+      // `250000000`, so it printed a branded statement claiming UGX
+      // 252,090,000 against an actual register of 2,090,000. That literal is
+      // gone; nothing on this page is invented.
+      case "Financial Statement": {
+        const p = moneyPosition;
+        if (!p) {
+          return {
+            title: "Statement of Financial Position",
+            headers: ["Financial Pillar", "Current Valuation (UGX)"],
+            rows: [["Reading the ledger…", "—"]],
+          };
+        }
         return {
-          title: "Institutional Financial Statement",
+          title: "Statement of Financial Position",
           headers: ["Financial Pillar", "Current Valuation (UGX)"],
           rows: [
+            ["Cash at Hand", formatUGX(Number(p.cash_at_hand))],
+            ["Cash at Bank", formatUGX(Number(p.cash_at_bank))],
+            ["Mobile Money / Merchant", formatUGX(Number(p.mobile_money))],
+            ...(Number(p.unclassified_legacy) !== 0
+              ? [
+                  [
+                    "Legacy / Unclassified (location not yet established)",
+                    formatUGX(Number(p.unclassified_legacy)),
+                  ],
+                ]
+              : []),
+            ["Total Available Liquidity", formatUGX(Number(p.total_available_liquidity))],
             [
-              "Active Outstanding Portfolio",
-              formatUGX(loans.reduce((s, l) => s + Number(l.outstanding_balance), 0)),
+              "Loans Receivable (outstanding principal)",
+              formatUGX(Number(p.outstanding_principal)),
             ],
+            ["Total Assets (ledger)", formatUGX(Number(p.total_assets_ledger))],
+            ["Member Security Deposits (liability)", formatUGX(Number(p.security_held))],
+            ["Capital Introduced", formatUGX(Number(p.capital_introduced))],
+            ["Retained Result", formatUGX(Number(p.net_result))],
+            ["Net Worth (ledger)", formatUGX(Number(p.net_worth_ledger))],
             [
-              "Bank Liquidity Balance",
-              formatUGX(
-                bankTransactions.reduce(
-                  (s, t) =>
-                    t.transaction_type === "Deposit" ? s + Number(t.amount) : s - Number(t.amount),
-                  250000000,
-                ),
-              ),
+              "Interest Receivable (contracted, not yet earned)",
+              formatUGX(Number(p.interest_receivable)),
             ],
-            [
-              "Member Savings Deposits Vault",
-              formatUGX(savingsAccounts.reduce((s, acc) => s + Number(acc.balance), 0)),
-            ],
-            [
-              "Operating Expenses Accumulated",
-              formatUGX(expenses.reduce((s, e) => s + Number(e.amount), 0)),
-            ],
+            ["Total Loan Portfolio", formatUGX(Number(p.total_loan_portfolio))],
+            ["Total Financial Position", formatUGX(Number(p.total_financial_position))],
           ],
         };
+      }
 
       case "Audit Log Report":
       case "User Activity Report":

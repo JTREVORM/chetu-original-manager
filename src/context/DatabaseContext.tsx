@@ -20,6 +20,10 @@ import {
   LoanStatus,
   Branch,
   Transfer,
+  AccountBalance,
+  MoneyPosition,
+  LedgerHealthRow,
+  AccountReconciliation,
   CLOSED_LOAN_STATUSES,
 } from "../types/database.types";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
@@ -29,6 +33,17 @@ import { calculateLoanSchedule } from "../lib/loanCalculations";
 import { graceDaysFor, resolveFirstRepaymentDate, weeklyDueDates } from "../lib/meetingDay";
 import { persistApprovedLoan } from "../lib/approvalPersistence";
 import { allocatePayment } from "../lib/scheduleView";
+import {
+  LedgerError,
+  listAccountBalances,
+  postCapitalInjection,
+  postCapitalWithdrawal,
+  postInternalTransfer,
+  postOpeningBalance,
+  recordReconciliation,
+  reverseTransaction,
+} from "../lib/financial/ledger";
+import { fetchLedgerHealth, fetchMoneyPosition } from "../lib/financial/reports";
 import { fetchAllRows } from "../lib/fetchAll";
 import { FEES, loanFees } from "../lib/fees";
 import { useAuth } from "./AuthContext";
@@ -101,17 +116,27 @@ interface DatabaseContextType {
   approveLoanApplication: (appId: string) => Promise<Loan>;
   rejectLoanApplication: (appId: string, reason: string) => Promise<void>;
   resubmitLoanApplication: (appId: string) => Promise<void>;
-  disburseLoan: (loanId: string) => Promise<void>;
+  /**
+   * Disburses a loan and posts its journal in one database transaction.
+   *
+   * `fundingAccountId` is required and is the account the cash actually
+   * leaves. Without it the system is back where it started: money out of the
+   * building with no record of where it came from.
+   */
+  disburseLoan: (loanId: string, fundingAccountId: string) => Promise<void>;
   recordRepayment: (
     loanId: string,
     amount: number,
     method: PaymentMethod,
+    receivingAccountId: string,
     notes?: string,
+    collectionType?: string,
   ) => Promise<LoanRepayment>;
   settleLoan: (
     loanId: string,
     amount: number,
     method: PaymentMethod,
+    receivingAccountId: string,
     notes?: string,
   ) => Promise<LoanRepayment>;
   writeOffLoan: (loanId: string, reason: string) => Promise<void>;
@@ -146,10 +171,51 @@ interface DatabaseContextType {
     attendees: string[],
     notes?: string,
   ) => Promise<GroupAttendance>;
-  addExpense: (expense: Omit<Expense, "id" | "expense_number" | "created_at">) => Promise<Expense>;
-  addBankTransaction: (
-    tx: Omit<BankTransaction, "id" | "transaction_number" | "balance_after" | "created_at">,
-  ) => Promise<BankTransaction>;
+  addExpense: (
+    expense: Omit<Expense, "id" | "expense_number" | "created_at">,
+    sourceAccountId: string,
+  ) => Promise<Expense>;
+
+  // --- the financial ledger ------------------------------------------------
+  /** Every account with its derived balance. Nothing here is stored. */
+  accountBalances: AccountBalance[];
+  /** Where Chetu's money is right now. Null until the first read. */
+  moneyPosition: MoneyPosition | null;
+  /** Any row is a financial fact the ledger has lost track of. Should be empty. */
+  ledgerHealth: LedgerHealthRow[];
+  refreshFinancials: () => Promise<void>;
+  recordCapital: (input: {
+    accountId: string;
+    amount: number;
+    direction: "in" | "out";
+    date?: string;
+    reference?: string | null;
+    note?: string | null;
+  }) => Promise<string>;
+  recordInternalTransfer: (input: {
+    fromAccountId: string;
+    toAccountId: string;
+    amount: number;
+    date?: string;
+    reference?: string | null;
+    note?: string | null;
+  }) => Promise<string>;
+  reverseFinancialTransaction: (transactionId: string, reason: string) => Promise<string>;
+  reconcileAccount: (input: {
+    accountId: string;
+    actualBalance: number;
+    reconciledOn?: string;
+    statementReference?: string | null;
+    notes?: string | null;
+    postAdjustment?: boolean;
+    adjustmentReason?: string | null;
+  }) => Promise<unknown>;
+  setOpeningBalance: (input: {
+    accountId: string;
+    amount: number;
+    asAt: string;
+    note?: string | null;
+  }) => Promise<string>;
   updateSettings: (newSettings: Partial<SystemSettings>) => Promise<void>;
   performGlobalSearch: (query: string) => GlobalSearchResult[];
   logAudit: (action: string, module: string, details: string, record_id?: string) => Promise<void>;
@@ -185,6 +251,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [savingsTransactions, setSavingsTransactions] = useState<SavingsTransaction[]>([]);
   const [groupAttendance, setGroupAttendance] = useState<GroupAttendance[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  // The ledger. These are the authoritative financial figures: every screen
+  // that shows money reads them rather than re-summing rows of its own, which
+  // is how the dashboard, the branch cards and the reports used to disagree.
+  const [accountBalances, setAccountBalances] = useState<AccountBalance[]>([]);
+  const [moneyPosition, setMoneyPosition] = useState<MoneyPosition | null>(null);
+  const [ledgerHealth, setLedgerHealth] = useState<LedgerHealthRow[]>([]);
   const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -225,6 +298,9 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setBankTransactions([]);
     setAuditLogs([]);
     setTransfers([]);
+    setAccountBalances([]);
+    setMoneyPosition(null);
+    setLedgerHealth([]);
     // `dataVersion` is deliberately NOT bumped here. Screens that fetch for
     // themselves treat it as "re-pull now", and doing that during sign-out
     // sends a fresh round of protected reads from a browser that no longer has
@@ -426,6 +502,11 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (settingsRes.data) setSettings(settingsRes.data as SystemSettings);
     if (branchesRes.data) setBranches(branchesRes.data as Branch[]);
     if (transfersRes.data) setTransfers(transfersRes.data as unknown as Transfer[]);
+
+    // The ledger. Read last, and separately, because the financial views are
+    // derived: they must see the rows this refetch just pulled, and a failure
+    // to read them must not blank out the operational data above it.
+    await refreshFinancials();
     // Signals every self-fetching screen to re-pull; see `dataVersion` above.
     setDataVersion((v) => v + 1);
     setIsLoading(false);
@@ -629,6 +710,35 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const visibleAuditLogs = institutionWide
     ? auditLogs
     : auditLogs.filter((l) => l.user_id === user?.id);
+
+  /**
+   * Re-reads the ledger after anything that moves money.
+   *
+   * Financial figures are derived, never stored, so a posting changes nothing
+   * in local state until the views are read again. Keeping that in one place
+   * means no screen can forget it and show a stale balance.
+   */
+  const refreshFinancials = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const [balances, position, health] = await Promise.all([
+        listAccountBalances(),
+        fetchMoneyPosition(),
+        fetchLedgerHealth(),
+      ]);
+      setAccountBalances(balances);
+      setMoneyPosition(position);
+      setLedgerHealth(health);
+    } catch (error) {
+      // A failed refresh must not swallow the posting that preceded it, and it
+      // must not leave a wrong number on screen either — so it is reported
+      // rather than ignored, and the stale figures stay until the next read.
+      console.error("Could not refresh the financial position", error);
+    }
+  };
+
+  const accountName = (accountId: string) =>
+    accountBalances.find((a) => a.account_id === accountId)?.account_name || accountId;
 
   const totalDeposits = visibleBankTransactions
     .filter((t) => t.transaction_type === "Deposit")
@@ -1628,11 +1738,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
-  const disburseLoan = async (loanId: string) => {
-    requireRoles(["Administrator", "Loan Officer"]);
-    if (!isSupabaseConfigured) return;
+  const disburseLoan = async (loanId: string, fundingAccountId: string) => {
+    // A Branch Manager runs the branch and covers for absent officers.
+    requireRoles(["Administrator", "Branch Manager", "Loan Officer"]);
+    if (!isSupabaseConfigured) throw new Error("Database not configured");
     const targetLoan = loans.find((l) => l.id === loanId);
-    if (!targetLoan) return;
+    if (!targetLoan) throw new Error("Loan not found");
+    if (!fundingAccountId) {
+      throw new Error("Choose the cash or bank account this loan is funded from");
+    }
 
     const now = new Date().toISOString();
 
@@ -1681,34 +1795,58 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     }
 
-    const { error: loanError } = await supabase
-      .from("loans")
-      .update({
-        status: "Active",
-        disbursed_by: user?.id,
-        disbursed_at: now,
-        ...(rebasedLoanDates || {}),
-        updated_at: now,
+    // One call: the loan is marked disbursed, the application is closed and the
+    // balanced journal is posted, inside a single database transaction.
+    //
+    // This is the fix for the failure that started this work. The old code
+    // marked the loan Active, then inserted into `bank_transactions`, then
+    // tested the error only to decide whether to update React state:
+    //
+    //     if (!txError && btData) { ...setBankTransactions... }
+    //
+    // Every officer-initiated disbursement was rejected by row level security
+    // and discarded, so fifteen loans left the building with no financial
+    // record. Now the posting cannot fail separately from the disbursement —
+    // if the funding account is wrong, nothing happens at all, and the
+    // operator is told why.
+    const { data: disbursed, error: disburseError } = await supabase
+      .rpc("disburse_loan", {
+        _loan_id: loanId,
+        _funding_account_id: fundingAccountId,
+        _first_repayment_date: rebasedLoanDates?.first_repayment_date ?? null,
+        _final_due_date: rebasedLoanDates?.final_due_date ?? null,
       })
-      .eq("id", loanId);
-    if (!loanError) {
-      setLoans((prev) =>
-        prev.map((l) =>
-          l.id === loanId
-            ? {
-                ...l,
-                status: "Active",
-                disbursed_by: user?.id,
-                disbursed_at: now,
-                ...(rebasedLoanDates || {}),
-                ...(rebasedSchedule ? { schedule: rebasedSchedule } : {}),
-              }
-            : l,
-        ),
+      .maybeSingle<{ transaction_id: string; transaction_number: string }>();
+
+    if (disburseError) {
+      throw new LedgerError("disburse loan", disburseError.message, disburseError.code);
+    }
+
+    setLoans((prev) =>
+      prev.map((l) =>
+        l.id === loanId
+          ? {
+              ...l,
+              status: "Active",
+              disbursed_by: user?.id,
+              disbursed_at: now,
+              ...(rebasedLoanDates || {}),
+              ...(rebasedSchedule ? { schedule: rebasedSchedule } : {}),
+            }
+          : l,
+      ),
+    );
+    if (targetLoan.application_id) {
+      setLoanApplications((prev) =>
+        prev.map((a) => (a.id === targetLoan.application_id ? { ...a, status: "Disbursed" } : a)),
       );
     }
 
-    if (!loanError && rebasedSchedule) {
+    // Instalment dates are not money, so they are corrected after the
+    // disbursement has committed rather than inside it. A failure here leaves
+    // the schedule to `scripts/repair-schedules.mjs`; it cannot leave the
+    // ledger wrong.
+    if (rebasedSchedule) {
       for (const row of rebasedSchedule) {
         if (!row.id) continue;
         const { error } = await supabase
@@ -1725,60 +1863,20 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       );
     }
 
-    const { error: appError } = await supabase
-      .from("loan_applications")
-      .update({ status: "Disbursed", updated_at: now })
-      .eq("id", targetLoan.application_id);
-    if (!appError) {
-      setLoanApplications((prev) =>
-        prev.map((a) => (a.id === targetLoan.application_id ? { ...a, status: "Disbursed" } : a)),
-      );
-    }
-
-    const nextTxSeq = bankTransactions.length + 1;
-    const txNum = `CM-TX-2026-${String(nextTxSeq).padStart(4, "0")}`;
     const targetClient = clients.find((client) => client.id === targetLoan.client_id);
-    const branchId = targetClient?.branch_id || null;
-    const branchLedgerBalance = bankTransactions
-      .filter((transaction) => (transaction.branch_id || null) === branchId)
-      .reduce(
-        (balance, transaction) =>
-          balance +
-          (transaction.transaction_type === "Deposit"
-            ? Number(transaction.amount)
-            : -Number(transaction.amount)),
-        0,
-      );
-    // Do NOT include `id` — let DB generate it
-    const btInsertPayload = {
-      transaction_number: txNum,
-      transaction_type: "Withdrawal" as const,
-      category: "Loan Disbursement",
-      description: `Loan disbursement for ${targetClient?.full_name || "Client"} (Loan ${targetLoan.loan_number})`,
-      amount: targetLoan.principal_amount,
-      balance_after: branchLedgerBalance - targetLoan.principal_amount,
-      reference_number: `STB-DISB-${targetLoan.loan_number}`,
-      transaction_date: now.split("T")[0] || "",
-      branch_id: branchId,
-      recorded_by: user?.id || null,
-    };
-    const { data: btData, error: txError } = await supabase
-      .from("bank_transactions")
-      .insert([btInsertPayload])
-      .select()
-      .single();
-    if (!txError && btData) {
-      setBankTransactions((prev) => [btData as BankTransaction, ...prev]);
-    }
+
     await logAudit(
       "Disbursed Loan",
       "Loan Disbursement",
-      `Disbursed loan ${targetLoan.loan_number} (Net Amount: UGX ${targetLoan.principal_amount})`,
+      `Disbursed loan ${targetLoan.loan_number}: principal UGX ${targetLoan.principal_amount}, ` +
+        `net cash UGX ${targetLoan.net_disbursed_amount ?? targetLoan.principal_amount} from ${fundingAccountId}`,
       targetLoan.loan_number,
     );
     await sendNotification({
       title: "Loan disbursed",
-      message: `Loan ${targetLoan.loan_number} of UGX ${Number(targetLoan.principal_amount).toLocaleString()} was disbursed to ${targetClient?.full_name || "a member"}.`,
+      message:
+        `Loan ${targetLoan.loan_number} of UGX ${Number(targetLoan.principal_amount).toLocaleString()} was disbursed to ` +
+        `${targetClient?.full_name || "a member"}. Journal ${disbursed?.transaction_number || "posted"}.`,
       type: "Disbursement",
       link_url: "/loan-management",
       audience: "managers",
@@ -1790,7 +1888,9 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loanId: string,
     amount: number,
     method: PaymentMethod,
+    receivingAccountId: string,
     notes?: string,
+    collectionType?: string,
   ): Promise<LoanRepayment> => {
     // A Branch Manager runs the branch and covers for absent officers, so they
     // collect too. Settling a loan — a larger cash event — already allowed it.
@@ -1798,6 +1898,9 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!isSupabaseConfigured) throw new Error("Database not configured");
     const targetLoan = loans.find((l) => l.id === loanId);
     if (!targetLoan) throw new Error("Loan not found");
+    if (!receivingAccountId) {
+      throw new Error("Choose the cash, bank or wallet account receiving this payment");
+    }
 
     const today = new Date().toISOString().split("T")[0];
 
@@ -1826,14 +1929,55 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       };
     });
 
-    // Which instalment this receipt is against. The oldest one it touched: a
-    // payment that clears three weeks of arrears belongs to the earliest of
-    // them, which is what the collection screens and the loan history read it
-    // as. `loan_repayments.schedule_id` has existed since the first migration
-    // and was never populated, so no receipt could be traced to a week.
+    // Which instalment this receipt is against: the oldest one it touched. A
+    // payment clearing three weeks of arrears belongs to the earliest of them,
+    // which is what the collection screens and the loan history read it as.
     const primaryScheduleId = allocations[0]?.scheduleId ?? null;
 
-    const newOutstanding = Math.max(0, targetLoan.outstanding_balance - amount);
+    // One call: the receipt, the instalments it clears, the loan balance and
+    // the balanced journal, in a single database transaction. The receipt and
+    // repayment numbers come from the database — counting rows in the browser
+    // gives every officer the same number, because row level security means
+    // each of them only sees their own.
+    const { data: posted, error: postError } = await supabase
+      .rpc("record_loan_repayment", {
+        _loan_id: loanId,
+        _amount: amount,
+        _payment_method: method,
+        _receiving_account_id: receivingAccountId,
+        _allocations: allocations
+          .filter((a) => a.scheduleId)
+          .map((a) => ({
+            schedule_id: a.scheduleId,
+            paid_amount: a.paidAmount,
+            remaining_balance: a.balance,
+            status: a.status,
+          })),
+        _primary_schedule_id: primaryScheduleId,
+        _collection_type: collectionType ?? "Regular",
+        _notes: notes || null,
+        _payment_date: today,
+      })
+      .maybeSingle<{
+        repayment_id: string;
+        receipt_number: string;
+        transaction_id: string;
+        principal_portion: number;
+        interest_portion: number;
+        outstanding_balance: number;
+        loan_status: LoanStatus;
+      }>();
+
+    if (postError || !posted) {
+      throw new LedgerError(
+        "record repayment",
+        postError?.message || "Could not record the collection",
+        postError?.code,
+      );
+    }
+
+    const newOutstanding = Number(posted.outstanding_balance);
+    const newStatus = posted.loan_status;
     const completionPct = Math.min(
       100,
       Math.round(
@@ -1841,75 +1985,45 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           100,
       ),
     );
-    const newStatus = newOutstanding === 0 ? "Fully Paid" : "Partially Paid";
+    const receipt_number = posted.receipt_number;
 
-    const { error: loanError } = await supabase
-      .from("loans")
-      .update({
-        outstanding_balance: newOutstanding,
-        completion_percentage: completionPct,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", loanId);
-    if (!loanError) {
-      setLoans((prev) =>
-        prev.map((l) =>
-          l.id === loanId
-            ? {
-                ...l,
-                outstanding_balance: newOutstanding,
-                completion_percentage: completionPct,
-                status: newStatus,
-                schedule: updatedSchedule,
-              }
-            : l,
-        ),
-      );
-    }
-
-    // Do NOT include `id`, `loan`, or `client` — joined fields, not DB columns.
-    // The repayment and receipt numbers are left to the database: counting rows
-    // in the browser gives every officer the same number, because row level
-    // security means each of them only ever sees their own.
-    const repInsertPayload = {
+    const newRepayment: LoanRepayment = {
+      id: posted.repayment_id,
+      repayment_number: receipt_number,
+      receipt_number,
       loan_id: loanId,
-      schedule_id: primaryScheduleId,
+      schedule_id: primaryScheduleId || undefined,
       client_id: targetLoan.client_id,
       amount_paid: amount,
+      principal_portion: Number(posted.principal_portion),
+      interest_portion: Number(posted.interest_portion),
+      penalty_portion: 0,
+      fee_portion: 0,
+      security_amount: 0,
       payment_date: today,
       payment_method: method,
-      recorded_by: user?.id || null,
-      notes: notes || null,
-    };
-    const { data: repData, error: repError } = await supabase
-      .from("loan_repayments")
-      .insert([repInsertPayload])
-      .select()
-      .single();
-    if (repError || !repData)
-      throw new Error(repError?.message || "Could not record the repayment");
-    const newRepayment: LoanRepayment = {
-      ...repData,
+      collection_type: collectionType ?? "Regular",
+      recorded_by: user?.id,
+      notes: notes || undefined,
+      created_at: new Date().toISOString(),
       loan: targetLoan,
       client: targetLoan.client,
     } as LoanRepayment;
-    const receipt_number = newRepayment.receipt_number;
-    setRepayments((prev) => [newRepayment, ...prev]);
 
-    for (const row of updatedSchedule) {
-      if (row.id) {
-        await supabase
-          .from("loan_repayment_schedule")
-          .update({
-            paid_amount: row.paid_amount,
-            remaining_balance: row.remaining_balance,
-            status: row.status,
-            paid_at: row.paid_at || null,
-          })
-          .eq("id", row.id);
-      }
-    }
+    setRepayments((prev) => [newRepayment, ...prev]);
+    setLoans((prev) =>
+      prev.map((l) =>
+        l.id === loanId
+          ? {
+              ...l,
+              outstanding_balance: newOutstanding,
+              completion_percentage: completionPct,
+              status: newStatus,
+              schedule: updatedSchedule,
+            }
+          : l,
+      ),
+    );
 
     await logAudit(
       "Recorded Weekly Repayment",
@@ -1938,19 +2052,47 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loanId: string,
     amount: number,
     method: PaymentMethod,
+    receivingAccountId: string,
     notes?: string,
   ): Promise<LoanRepayment> => {
     requireRoles(["Administrator", "Branch Manager", "Loan Officer"]);
     if (!isSupabaseConfigured) throw new Error("Database not configured");
     const targetLoan = loans.find((l) => l.id === loanId);
     if (!targetLoan) throw new Error("Loan not found");
+    if (!receivingAccountId) {
+      throw new Error("Choose the cash, bank or wallet account receiving the settlement");
+    }
+
+    // One call. The receipt, the instalments, the loan closure, the release of
+    // the security and the journal are one transaction in the database; the
+    // remaining checks below are a courtesy so the operator hears about an
+    // obvious mistake before the round trip, not a control.
     if (CLOSED_LOAN_STATUSES.includes(targetLoan.status))
       throw new Error("This loan is already closed");
     if (targetLoan.status === "Pending") throw new Error("This loan has not been disbursed yet");
     if (amount <= 0) throw new Error("Enter the settlement amount");
 
     const today = new Date().toISOString().split("T")[0];
-    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .rpc("settle_loan", {
+        _loan_id: loanId,
+        _amount: amount,
+        _payment_method: method,
+        _receiving_account_id: receivingAccountId,
+        _notes: notes || null,
+        _payment_date: today,
+      })
+      .single();
+    if (error) throw new LedgerError("settle loan", error.message, error.code);
+
+    const result = data as {
+      repayment_id: string;
+      receipt_number: string;
+      transaction_id: string;
+      principal_portion: number;
+      interest_portion: number;
+      security_released: number;
+    };
 
     const settledSchedule = (targetLoan.schedule || []).map((row) =>
       row.status === "Paid"
@@ -1963,21 +2105,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             paid_at: today,
           },
     );
-
-    const { error: loanError } = await supabase
-      .from("loans")
-      .update({
-        outstanding_balance: 0,
-        completion_percentage: 100,
-        status: "Settled",
-        security_balance: 0,
-        settled_at: now,
-        settlement_amount: amount,
-        settled_by: user?.id || null,
-        updated_at: now,
-      })
-      .eq("id", loanId);
-    if (loanError) throw new Error(loanError.message);
+    const now = new Date().toISOString();
     setLoans((prev) =>
       prev.map((l) =>
         l.id === loanId
@@ -1996,51 +2124,31 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ),
     );
 
-    // Numbers come from the database — see recordRepayment for why.
-    const repInsertPayload = {
+    const newRepayment: LoanRepayment = {
+      id: result.repayment_id,
+      receipt_number: result.receipt_number,
       loan_id: loanId,
       client_id: targetLoan.client_id,
+      schedule_id: null,
       amount_paid: amount,
       payment_date: today,
       payment_method: method,
-      recorded_by: user?.id || null,
       collection_type: "Settlement",
-      security_amount: Number(targetLoan.security_balance || 0),
+      security_amount: result.security_released,
+      recorded_by: user?.id || null,
       notes: notes || "Early loan settlement",
-    };
-    const { data: repData, error: repError } = await supabase
-      .from("loan_repayments")
-      .insert([repInsertPayload])
-      .select()
-      .single();
-    if (repError || !repData)
-      throw new Error(repError?.message || "Failed to record the settlement");
-    const newRepayment: LoanRepayment = {
-      ...repData,
+      principal_portion: result.principal_portion,
+      interest_portion: result.interest_portion,
       loan: targetLoan,
       client: targetLoan.client,
-    } as LoanRepayment;
+    } as unknown as LoanRepayment;
     setRepayments((prev) => [newRepayment, ...prev]);
-
-    for (const row of settledSchedule) {
-      if (row.id) {
-        await supabase
-          .from("loan_repayment_schedule")
-          .update({
-            paid_amount: row.paid_amount,
-            remaining_balance: row.remaining_balance,
-            status: row.status,
-            paid_at: row.paid_at || null,
-          })
-          .eq("id", row.id);
-      }
-    }
 
     await logAudit(
       "Settled Loan",
       "Loan Settlement",
-      `Settled loan ${targetLoan.loan_number} with UGX ${amount} (Receipt #${newRepayment.receipt_number})`,
-      newRepayment.receipt_number,
+      `Settled loan ${targetLoan.loan_number} with UGX ${amount} (Receipt #${result.receipt_number})`,
+      result.receipt_number,
     );
     await sendNotification({
       title: "Loan settled",
@@ -2064,29 +2172,20 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!reason.trim()) throw new Error("A write-off reason is required");
     const targetLoan = loans.find((l) => l.id === loanId);
     if (!targetLoan) throw new Error("Loan not found");
-    if (!targetLoan.is_bad_debt)
-      throw new Error("Declare the loan a bad debt before writing it off");
-    if (targetLoan.status === "Written Off") throw new Error("This loan is already written off");
 
+    // The loan row, the minute against it and the loss journal move together.
+    // Previously the loan was marked written off and the journal posted after,
+    // so a dropped connection between the two destroyed a receivable with no
+    // record of where it went.
+    const { data, error } = await supabase
+      .rpc("write_off_loan", { _loan_id: loanId, _reason: reason })
+      .single();
+    if (error) throw new LedgerError("write off loan", error.message, error.code);
+
+    const result = data as { amount_written_off: number };
+    const writtenOff = Number(result.amount_written_off || 0);
     const now = new Date().toISOString();
-    const writtenOff = Number(targetLoan.outstanding_balance || 0);
 
-    // The balance moves off the portfolio and is preserved in `writeoff_amount`,
-    // so outstanding reports and collection screens stop counting it.
-    const { error } = await supabase
-      .from("loans")
-      .update({
-        status: "Written Off",
-        writeoff_status: "Written Off",
-        writeoff_at: now,
-        writeoff_amount: writtenOff,
-        writeoff_reason: reason,
-        writeoff_by: user?.id || null,
-        outstanding_balance: 0,
-        updated_at: now,
-      })
-      .eq("id", loanId);
-    if (error) throw new Error(error.message);
     setLoans((prev) =>
       prev.map((l) =>
         l.id === loanId
@@ -2103,10 +2202,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           : l,
       ),
     );
-
-    await supabase
-      .from("bad_loan_comments")
-      .insert({ loan_id: loanId, comment: `Written off: ${reason}` });
 
     await logAudit(
       "Wrote Off Loan",
@@ -2127,9 +2222,12 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   /**
    * Roll a disbursement back. Used when cash was never actually handed over or
    * the wrong loan was disbursed: the loan returns to the disbursement queue,
-   * the application reverts to Approved and the cash withdrawal is reversed
-   * with a matching deposit rather than deleted, so the bank ledger stays
-   * append-only.
+   * the application reverts to Approved, and the original journal is reversed
+   * line for line — every leg of it, including the fee income and the security
+   * liability, not just the cash.
+   *
+   * The reversal references the journal it undoes and the original is marked
+   * `reversed` rather than deleted, so the history stays readable.
    */
   const undoDisbursement = async (loanId: string, reason: string) => {
     requireRoles(["Administrator"]);
@@ -2143,17 +2241,23 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       throw new Error("This loan already has repayments. Undo those first.");
     }
 
-    const now = new Date().toISOString();
-    const { error: loanError } = await supabase
-      .from("loans")
-      .update({
-        status: "Pending",
-        disbursed_by: null,
-        disbursed_at: null,
-        updated_at: now,
-      })
-      .eq("id", loanId);
-    if (loanError) throw new Error(loanError.message);
+    // Reverse the journal that exists, rather than inventing a new one.
+    //
+    // The old rollback posted a fresh Deposit of the principal, unconnected to
+    // anything. Because the matching disbursement debit had been silently
+    // rejected by row level security, that would have credited the ledger with
+    // money that never left the building — and for the wrong amount, since
+    // only the NET is ever handed over. The database now mirrors every line of
+    // the original posting, marks it reversed, returns the loan to the queue
+    // and writes the reversal register entry, all together.
+    const { data: reversed, error: reverseError } = await supabase
+      .rpc("undo_loan_disbursement", { _loan_id: loanId, _reason: reason })
+      .maybeSingle<{ reversal_id: string; reversal_number: string }>();
+
+    if (reverseError) {
+      throw new LedgerError("undo disbursement", reverseError.message, reverseError.code);
+    }
+
     setLoans((prev) =>
       prev.map((l) =>
         l.id === loanId
@@ -2161,59 +2265,16 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           : l,
       ),
     );
-
-    await supabase
-      .from("loan_applications")
-      .update({ status: "Approved", updated_at: now })
-      .eq("id", targetLoan.application_id);
-    setLoanApplications((prev) =>
-      prev.map((a) => (a.id === targetLoan.application_id ? { ...a, status: "Approved" } : a)),
-    );
-
-    // Contra entry putting the disbursed cash back into the branch ledger.
-    const nextTxSeq = bankTransactions.length + 1;
-    const txNum = `CM-TX-2026-${String(nextTxSeq).padStart(4, "0")}`;
-    const targetClient = clients.find((c) => c.id === targetLoan.client_id);
-    const branchId = targetClient?.branch_id || null;
-    const branchLedgerBalance = bankTransactions
-      .filter((t) => (t.branch_id || null) === branchId)
-      .reduce(
-        (bal, t) => bal + (t.transaction_type === "Deposit" ? Number(t.amount) : -Number(t.amount)),
-        0,
+    if (targetLoan.application_id) {
+      setLoanApplications((prev) =>
+        prev.map((a) => (a.id === targetLoan.application_id ? { ...a, status: "Approved" } : a)),
       );
-    const { data: btData } = await supabase
-      .from("bank_transactions")
-      .insert([
-        {
-          transaction_number: txNum,
-          transaction_type: "Deposit" as const,
-          category: "Disbursement Reversal",
-          description: `Reversal of disbursement for loan ${targetLoan.loan_number}: ${reason}`,
-          amount: targetLoan.principal_amount,
-          balance_after: branchLedgerBalance + Number(targetLoan.principal_amount),
-          reference_number: `STB-REV-${targetLoan.loan_number}`,
-          transaction_date: now.split("T")[0] || "",
-          branch_id: branchId,
-          recorded_by: user?.id || null,
-        },
-      ])
-      .select()
-      .single();
-    if (btData) setBankTransactions((prev) => [btData as BankTransaction, ...prev]);
-
-    await supabase.from("loan_reversals").insert({
-      loan_id: loanId,
-      reversal_type: "Disbursement",
-      reference_number: targetLoan.loan_number,
-      amount: targetLoan.principal_amount,
-      reason,
-      reversed_by: user?.id || null,
-    });
+    }
 
     await logAudit(
       "Undid Loan Disbursement",
       "Loan Rollback",
-      `Rolled back disbursement of loan ${targetLoan.loan_number}: ${reason}`,
+      `Rolled back disbursement of loan ${targetLoan.loan_number} (reversal ${reversed?.reversal_number || "posted"}): ${reason}`,
       targetLoan.loan_number,
     );
     await sendNotification({
@@ -2227,10 +2288,13 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   /**
-   * Roll a repayment back. The receipt is deleted, the outstanding balance is
-   * restored and the whole schedule is re-applied from the surviving receipts,
-   * which keeps the week-by-week allocation correct no matter which receipt
-   * was removed.
+   * Roll a repayment back. The journal is reversed line for line, the
+   * instalment re-opens, the loan carries the balance again and the receipt is
+   * removed — all in one database transaction, so the ledger and the loan book
+   * cannot end up disagreeing about whether the money came in.
+   *
+   * The reversal journal survives the receipt's deletion: its `source_id` keeps
+   * the provenance, which is why the foreign key nulls rather than blocks.
    */
   const undoRepayment = async (repaymentId: string, reason: string) => {
     requireRoles(["Administrator"]);
@@ -2241,125 +2305,66 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const targetLoan = loans.find((l) => l.id === target.loan_id);
     if (!targetLoan) throw new Error("Loan not found");
 
-    const { error: delError } = await supabase
-      .from("loan_repayments")
-      .delete()
-      .eq("id", repaymentId);
-    if (delError) throw new Error(delError.message);
+    // Reverse the journal first, then unwind the loan. The database does both
+    // in one transaction, so a receipt can never disappear while its posting
+    // survives — or the other way round.
+    const { data: reversed, error: reverseError } = await supabase
+      .rpc("undo_loan_repayment", { _repayment_id: repaymentId, _reason: reason })
+      .maybeSingle<{ reversal_id: string; reversal_number: string }>();
 
-    // Re-apply every remaining receipt on this loan from a clean schedule.
-    const survivingTotal = repayments
-      .filter((r) => r.loan_id === target.loan_id && r.id !== repaymentId)
-      .reduce((sum, r) => sum + Number(r.amount_paid), 0);
-
-    let toAllocate = survivingTotal;
-    const rebuiltSchedule = (targetLoan.schedule || [])
-      .slice()
-      .sort((a, b) => a.week_number - b.week_number)
-      .map((row) => {
-        const due = Number(row.installment_amount);
-        if (toAllocate >= due) {
-          toAllocate -= due;
-          return {
-            ...row,
-            paid_amount: due,
-            remaining_balance: 0,
-            status: "Paid" as RepaymentStatus,
-          };
-        }
-        const paid = Math.max(0, toAllocate);
-        toAllocate = 0;
-        return {
-          ...row,
-          paid_amount: paid,
-          remaining_balance: due - paid,
-          status: (paid > 0 ? "Partially Paid" : "Pending") as RepaymentStatus,
-          paid_at: paid > 0 ? row.paid_at : undefined,
-        };
-      });
-
-    const total = Number(targetLoan.total_amount_payable);
-    const newOutstanding = Math.max(0, total - survivingTotal);
-    const completionPct =
-      total > 0 ? Math.min(100, Math.round(((total - newOutstanding) / total) * 100)) : 0;
-    const restoredStatus: LoanStatus =
-      newOutstanding === 0 ? "Fully Paid" : survivingTotal > 0 ? "Partially Paid" : "Active";
-
-    // Reversing a settlement also has to undo the settlement stamps and give
-    // back the security deposit that was released against it.
-    const wasSettlement = target.collection_type === "Settlement";
-    const settlementUndo = wasSettlement
-      ? {
-          settled_at: null,
-          settlement_amount: null,
-          settled_by: null,
-          security_balance: Number(target.security_amount || 0),
-        }
-      : {};
-
-    const now = new Date().toISOString();
-    const { error: loanError } = await supabase
-      .from("loans")
-      .update({
-        outstanding_balance: newOutstanding,
-        completion_percentage: completionPct,
-        status: restoredStatus,
-        ...settlementUndo,
-        updated_at: now,
-      })
-      .eq("id", target.loan_id);
-    if (loanError) throw new Error(loanError.message);
-
-    for (const row of rebuiltSchedule) {
-      if (row.id) {
-        await supabase
-          .from("loan_repayment_schedule")
-          .update({
-            paid_amount: row.paid_amount,
-            remaining_balance: row.remaining_balance,
-            status: row.status,
-            paid_at: row.paid_at || null,
-          })
-          .eq("id", row.id);
-      }
+    if (reverseError) {
+      throw new LedgerError("undo repayment", reverseError.message, reverseError.code);
     }
 
+    // Mirror locally what the database did: the receipt is gone, its instalment
+    // is re-opened and the loan carries the balance again. `allocatePayment`
+    // re-derives the week-by-week position from the surviving receipts on the
+    // next refetch, so nothing here needs to re-run the allocation.
+    const restored = Math.min(
+      targetLoan.total_amount_payable,
+      Number(targetLoan.outstanding_balance) + Number(target.amount_paid),
+    );
     setRepayments((prev) => prev.filter((r) => r.id !== repaymentId));
     setLoans((prev) =>
       prev.map((l) =>
-        l.id === target.loan_id
+        l.id === targetLoan.id
           ? {
               ...l,
-              outstanding_balance: newOutstanding,
-              completion_percentage: completionPct,
-              status: restoredStatus,
-              ...(wasSettlement
-                ? {
-                    settled_at: null,
-                    settlement_amount: null,
-                    settled_by: null,
-                    security_balance: Number(target.security_amount || 0),
-                  }
-                : {}),
-              schedule: rebuiltSchedule,
+              outstanding_balance: restored,
+              completion_percentage: Math.min(
+                100,
+                Math.round(((l.total_amount_payable - restored) / l.total_amount_payable) * 100),
+              ),
+              status: restored >= l.total_amount_payable ? "Active" : "Partially Paid",
+              schedule: (l.schedule || []).map((row) =>
+                row.id === target.schedule_id
+                  ? {
+                      ...row,
+                      paid_amount: Math.max(
+                        0,
+                        Number(row.paid_amount) - Number(target.amount_paid),
+                      ),
+                      remaining_balance: Math.min(
+                        Number(row.installment_amount),
+                        Number(row.remaining_balance) + Number(target.amount_paid),
+                      ),
+                      status:
+                        Math.max(0, Number(row.paid_amount) - Number(target.amount_paid)) === 0
+                          ? "Pending"
+                          : "Partially Paid",
+                    }
+                  : row,
+              ),
             }
           : l,
       ),
     );
 
-    await supabase.from("loan_reversals").insert({
-      loan_id: target.loan_id,
-      reversal_type: target.collection_type === "Settlement" ? "Settlement" : "Repayment",
-      reference_number: target.receipt_number,
-      amount: target.amount_paid,
-      reason,
-      reversed_by: user?.id || null,
-    });
-
     await logAudit(
       "Undid Repayment",
       "Loan Rollback",
-      `Reversed receipt ${target.receipt_number} of UGX ${target.amount_paid} on loan ${targetLoan.loan_number}: ${reason}`,
+      `Reversed receipt ${target.receipt_number} of UGX ${target.amount_paid} on loan ${targetLoan.loan_number} ` +
+        `(reversal ${reversed?.reversal_number || "posted"}): ${reason}`,
       target.receipt_number,
     );
     await sendNotification({
@@ -2637,75 +2642,36 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
-  const addSavingsTransaction = async (
-    accountId: string,
-    amount: number,
-    type: SavingsTransactionType,
-    method: PaymentMethod,
-    notes?: string,
-  ): Promise<SavingsTransaction> => {
-    // A Branch Manager takes deposits over the counter too.
-    requireRoles(["Administrator", "Branch Manager", "Loan Officer"]);
-    if (!isSupabaseConfigured) throw new Error("Database not configured");
-    const acc = savingsAccounts.find((a) => a.id === accountId);
-    if (!acc) throw new Error("Savings account not found");
-
-    const nextSeq = savingsTransactions.length + 1;
-    const txNum = `CM-STX-2026-${String(nextSeq).padStart(4, "0")}`;
-    const recNum = `CM-SREC-2026-${String(nextSeq).padStart(4, "0")}`;
-
-    const newBalance =
-      type === "Withdrawal" ? Math.max(0, acc.balance - amount) : acc.balance + amount;
-
-    const { error: accError } = await supabase
-      .from("savings_accounts")
-      .update({ balance: newBalance, updated_at: new Date().toISOString() })
-      .eq("id", accountId);
-    if (!accError) {
-      setSavingsAccounts((prev) =>
-        prev.map((a) =>
-          a.id === accountId
-            ? { ...a, balance: newBalance, updated_at: new Date().toISOString() }
-            : a,
-        ),
-      );
-    }
-
-    // Do NOT include `id` or `account` join — let DB generate id
-    const stxInsertPayload = {
-      transaction_number: txNum,
-      account_id: accountId,
-      transaction_type: type,
-      amount,
-      balance_after: newBalance,
-      payment_method: method,
-      recorded_by: user?.id || null,
-      receipt_number: recNum,
-      notes: notes || null,
-    };
-    const { data: stxData, error: txError } = await supabase
-      .from("savings_transactions")
-      .insert([stxInsertPayload])
-      .select()
-      .single();
-    const newTx: SavingsTransaction = stxData
-      ? ({ ...stxData, account: acc } as SavingsTransaction)
-      : ({
-          ...stxInsertPayload,
-          id: `stx-${Date.now()}`,
-          created_at: new Date().toISOString(),
-          account: acc,
-        } as SavingsTransaction);
-    if (!txError) {
-      setSavingsTransactions((prev) => [newTx, ...prev]);
-    }
-    await logAudit(
-      `Recorded Savings ${type}`,
-      "Savings Management",
-      `Recorded ${type} of UGX ${amount} for Account ${acc.account_number} (Receipt #${recNum})`,
-      recNum,
+  /**
+   * Savings is closed, and this is the one mutation that would have moved a
+   * member's money without the ledger hearing about it.
+   *
+   * It is left as a refusal rather than deleted, because the body it replaces
+   * is a catalogue of everything this programme removed elsewhere and whoever
+   * reopens savings needs the list. It took the reference number from
+   * `savingsTransactions.length + 1` — an RLS-filtered array, the documented
+   * bug that stopped the second loan officer submitting their first
+   * application. It tested `accError` and `txError` only to decide whether to
+   * update local state, which is the exact shape of the discarded error that
+   * left fifteen loans disbursed with no ledger entry. When the insert failed
+   * it still returned a transaction carrying a client-invented id, so the
+   * screen printed a receipt for a row that did not exist. It maintained
+   * `savings_accounts.balance` as a stored total from the browser. It clamped
+   * an over-withdrawal with `Math.max(0, …)` instead of refusing it. And it
+   * wrote the balance and the transaction in two separate round trips.
+   *
+   * The control is in the database — `trg_guard_savings_transaction` and
+   * `trg_guard_savings_balance` refuse these writes whatever any interface
+   * does. This refusal is so a caller fails immediately, and legibly, rather
+   * than discovering it at the edge.
+   *
+   * See `supabase/migrations/20260101002300_savings_financial_guard.sql` for
+   * what reopening savings requires.
+   */
+  const addSavingsTransaction = async (): Promise<SavingsTransaction> => {
+    throw new Error(
+      "Savings is not enabled. A deposit or withdrawal has nowhere to post in the financial ledger, so it cannot be recorded.",
     );
-    return newTx;
   };
 
   const recordGroupAttendance = async (
@@ -2739,34 +2705,66 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return newAtt;
   };
 
+  /**
+   * Records an expense and the journal that pays for it, together.
+   *
+   * `payment_method` says how it was paid; `sourceAccountId` says WHICH
+   * account the money left. They are not the same thing, and the account is
+   * required: an expense with no source is a number with no money behind it,
+   * which is how the ledger lost sight of every disbursement.
+   *
+   * Branch Managers may record their own branch's spending. That is enforced
+   * in `record_expense` and again by the row level security policy, not here.
+   */
   const addExpense = async (
     expData: Omit<Expense, "id" | "expense_number" | "created_at">,
+    sourceAccountId: string,
   ): Promise<Expense> => {
-    requireRoles(["Administrator"]);
+    requireRoles(["Administrator", "Branch Manager"]);
     if (!isSupabaseConfigured) throw new Error("Database not configured");
-    const nextSeq = expenses.length + 1;
-    const expense_number = `CM-EXP-2026-${String(nextSeq).padStart(4, "0")}`;
-    const newExpRow = {
-      ...expData,
-      expense_number,
-      recorded_by: user?.id,
-    };
-    const { data, error } = await supabase.from("expenses").insert([newExpRow]).select().single();
-    if (error || !data) throw new Error(error?.message || "Failed to create expense");
+    if (!sourceAccountId) {
+      throw new Error("Choose the account this expense is paid from");
+    }
+
+    const { data, error } = await supabase
+      .rpc("record_expense", {
+        _category: expData.category,
+        _description: expData.description,
+        _amount: expData.amount,
+        _expense_date: expData.expense_date,
+        _payment_method: expData.payment_method,
+        _source_account_id: sourceAccountId,
+        _branch_id: expData.branch_id || null,
+        _receipt_url: expData.receipt_url || null,
+      })
+      .maybeSingle<{ expense_id: string; expense_number: string; transaction_id: string }>();
+
+    if (error || !data) {
+      throw new LedgerError(
+        "record expense",
+        error?.message || "Failed to record the expense",
+        error?.code,
+      );
+    }
+
     const newExp: Expense = {
-      ...data,
-      expense_number: data.expense_number || expense_number,
+      ...expData,
+      id: data.expense_id,
+      expense_number: data.expense_number,
+      recorded_by: user?.id,
+      created_at: new Date().toISOString(),
     } as Expense;
     setExpenses((prev) => [newExp, ...prev]);
+
     await logAudit(
       "Recorded Expense",
       "Expense Management",
-      `Logged expense ${expense_number} (${newExp.category} - UGX ${newExp.amount})`,
-      expense_number,
+      `Logged expense ${newExp.expense_number} (${newExp.category} - UGX ${newExp.amount})`,
+      newExp.expense_number,
     );
     await sendNotification({
       title: "Expense recorded",
-      message: `${expense_number} — ${newExp.category}, UGX ${Number(newExp.amount).toLocaleString()}.`,
+      message: `${newExp.expense_number} — ${newExp.category}, UGX ${Number(newExp.amount).toLocaleString()}.`,
       type: "System",
       audience: "managers",
       link_url: "/expenses",
@@ -2776,62 +2774,172 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return newExp;
   };
 
-  const addBankTransaction = async (
-    txData: Omit<BankTransaction, "id" | "transaction_number" | "balance_after" | "created_at">,
-  ): Promise<BankTransaction> => {
+  /**
+   * Capital in or out.
+   *
+   * Replaces `addBankTransaction`, which wrote to `bank_transactions` — a
+   * table with one implicit account, a client-computed running balance and a
+   * write policy that silently rejected everyone but an Administrator. That
+   * table is now a closed legacy register; capital has a destination account
+   * and a balanced journal like every other movement.
+   */
+  const recordCapital = async (input: {
+    accountId: string;
+    amount: number;
+    direction: "in" | "out";
+    date?: string;
+    reference?: string | null;
+    note?: string | null;
+  }): Promise<string> => {
     requireRoles(["Administrator"]);
     if (!isSupabaseConfigured) throw new Error("Database not configured");
-    const nextSeq = bankTransactions.length + 1;
-    const transaction_number = `CM-TX-2026-${String(nextSeq).padStart(4, "0")}`;
-    const ledgerBranchId = txData.branch_id || "";
-    const branchLedgerBalance = bankTransactions
-      .filter((transaction) => (transaction.branch_id || "") === ledgerBranchId)
-      .reduce(
-        (balance, transaction) =>
-          balance +
-          (transaction.transaction_type === "Deposit"
-            ? Number(transaction.amount)
-            : -Number(transaction.amount)),
-        0,
-      );
-    const balance_after =
-      txData.transaction_type === "Deposit"
-        ? branchLedgerBalance + Number(txData.amount)
-        : branchLedgerBalance - Number(txData.amount);
+    if (!input.accountId) throw new Error("Choose the account the capital lands in");
+    if (!input.amount || input.amount <= 0) throw new Error("Enter an amount greater than zero");
 
-    const newTxRow = {
-      ...txData,
-      transaction_number,
-      balance_after,
-      recorded_by: user?.id,
-    };
-    const { data, error } = await supabase
-      .from("bank_transactions")
-      .insert([newTxRow])
-      .select()
-      .single();
-    if (error || !data) throw new Error(error?.message || "Failed to create transaction");
-    const newTx: BankTransaction = {
-      ...data,
-      transaction_number: data.transaction_number || transaction_number,
-    } as BankTransaction;
-    setBankTransactions((prev) => [newTx, ...prev]);
+    const txId =
+      input.direction === "out"
+        ? await postCapitalWithdrawal({
+            accountId: input.accountId,
+            amount: input.amount,
+            date: input.date,
+            reference: input.reference,
+            note: input.note,
+          })
+        : await postCapitalInjection({
+            accountId: input.accountId,
+            amount: input.amount,
+            date: input.date,
+            reference: input.reference,
+            note: input.note,
+          });
+
+    await refreshFinancials();
     await logAudit(
-      `Recorded Bank ${txData.transaction_type}`,
-      "Bank Management",
-      `${txData.transaction_type} of UGX ${txData.amount} (${txData.category})`,
-      transaction_number,
+      input.direction === "out" ? "Recorded Capital Withdrawal" : "Recorded Capital Injection",
+      "Financial Ledger",
+      `${input.direction === "out" ? "Withdrew" : "Injected"} UGX ${input.amount} ` +
+        `${input.direction === "out" ? "from" : "into"} ${accountName(input.accountId)}`,
+      txId,
     );
     await sendNotification({
-      title: `Bank ${txData.transaction_type.toLowerCase()} posted`,
-      message: `${transaction_number} — ${txData.category}, UGX ${Number(txData.amount).toLocaleString()}. Closing balance UGX ${Number(balance_after).toLocaleString()}.`,
+      title: input.direction === "out" ? "Capital withdrawn" : "Capital injected",
+      message:
+        `UGX ${Number(input.amount).toLocaleString()} ` +
+        `${input.direction === "out" ? "withdrawn from" : "received into"} ${accountName(input.accountId)}.`,
       type: "System",
       audience: "managers",
-      link_url: "/bank-management",
+      link_url: "/financial-ledger",
       excludeId: user?.id,
       includeActor: true,
     });
-    return newTx;
+    return txId;
+  };
+
+  /**
+   * Moves money between Chetu's own accounts — bank to till, till to bank,
+   * head office to a branch, cash to a wallet.
+   *
+   * It touches no income or expense account, so a transfer cannot inflate
+   * either. That is a property of the journal's shape, not a rule anyone has
+   * to remember.
+   */
+  const recordInternalTransfer = async (input: {
+    fromAccountId: string;
+    toAccountId: string;
+    amount: number;
+    date?: string;
+    reference?: string | null;
+    note?: string | null;
+  }): Promise<string> => {
+    requireRoles(["Administrator", "Branch Manager"]);
+    if (!isSupabaseConfigured) throw new Error("Database not configured");
+    if (!input.fromAccountId || !input.toAccountId) {
+      throw new Error("Choose both the account the money leaves and the one it arrives in");
+    }
+    if (input.fromAccountId === input.toAccountId) {
+      throw new Error("Source and destination must be different accounts");
+    }
+    if (!input.amount || input.amount <= 0) throw new Error("Enter an amount greater than zero");
+
+    const txId = await postInternalTransfer(input);
+    await refreshFinancials();
+    await logAudit(
+      "Transferred Between Accounts",
+      "Financial Ledger",
+      `Moved UGX ${input.amount} from ${accountName(input.fromAccountId)} to ${accountName(input.toAccountId)}`,
+      txId,
+    );
+    return txId;
+  };
+
+  /** Reverses any posted journal, mirroring every line and linking to it. */
+  const reverseFinancialTransaction = async (
+    transactionId: string,
+    reason: string,
+  ): Promise<string> => {
+    requireRoles(["Administrator"]);
+    if (!isSupabaseConfigured) throw new Error("Database not configured");
+    if (!reason.trim()) throw new Error("A reversal reason is required");
+    const txId = await reverseTransaction(transactionId, reason);
+    await refreshFinancials();
+    await logAudit(
+      "Reversed Financial Transaction",
+      "Financial Ledger",
+      `Reversed transaction ${transactionId}: ${reason}`,
+      txId,
+    );
+    return txId;
+  };
+
+  /**
+   * Records a physical count against an account, and — when an Administrator
+   * approves it with a reason — posts the adjustment that closes the gap.
+   *
+   * This is how the cut-over completes: the legacy account carries the whole
+   * historical funding gap, and it is resolved once, visibly, against a real
+   * cash count and a real bank statement. Never silently.
+   */
+  const reconcileAccount = async (input: {
+    accountId: string;
+    actualBalance: number;
+    reconciledOn?: string;
+    statementReference?: string | null;
+    notes?: string | null;
+    postAdjustment?: boolean;
+    adjustmentReason?: string | null;
+  }) => {
+    requireRoles(["Administrator", "Branch Manager"]);
+    if (!isSupabaseConfigured) throw new Error("Database not configured");
+    const result = await recordReconciliation(input);
+    await refreshFinancials();
+    await logAudit(
+      "Reconciled Account",
+      "Financial Ledger",
+      `Counted ${accountName(input.accountId)} at UGX ${input.actualBalance}` +
+        (input.postAdjustment ? ` and posted an adjustment: ${input.adjustmentReason}` : ""),
+      input.accountId,
+    );
+    return result;
+  };
+
+  /** Sets an account's counted opening balance at cut-over. Once, per account. */
+  const setOpeningBalance = async (input: {
+    accountId: string;
+    amount: number;
+    asAt: string;
+    note?: string | null;
+  }) => {
+    requireRoles(["Administrator"]);
+    if (!isSupabaseConfigured) throw new Error("Database not configured");
+    const txId = await postOpeningBalance(input);
+    await refreshFinancials();
+    await logAudit(
+      "Set Opening Balance",
+      "Financial Ledger",
+      `Opening balance for ${accountName(input.accountId)} set to UGX ${input.amount} as at ${input.asAt}`,
+      txId,
+    );
+    return txId;
   };
 
   const updateSettings = async (newSettings: Partial<SystemSettings>) => {
@@ -2851,37 +2959,34 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     );
   };
 
+  /**
+   * Reset a demonstration or training database.
+   *
+   * This used to be fifteen `delete()` calls from the browser with no error
+   * checked, written before the ledger existed. It left every journal standing
+   * while deleting the loans they described, and its `bank_transactions` delete
+   * now fails against the legacy-register guard — silently, because nothing
+   * read the error.
+   *
+   * It is one database function now: foreign-key order, ledger first, one
+   * transaction, and it refuses outright once `financial_cutover_completed` is
+   * set. After a real opening balance has been posted these rows are Chetu's
+   * financial history, and no button erases them.
+   */
   const clearAllData = async () => {
     requireRoles(["Administrator"]);
-    if (!isSupabaseConfigured) return;
-    // Delete in dependency order (children before parents)
-    // NOTE: 'guarantors' table does not exist — data is stored as columns in loan_applications
-    await supabase.from("audit_logs").delete().neq("id", "none");
-    await supabase.from("bank_transactions").delete().neq("id", "none");
-    await supabase.from("expenses").delete().neq("id", "none");
-    await supabase.from("savings_transactions").delete().neq("id", "none");
-    await supabase.from("savings_accounts").delete().neq("id", "none");
-    await supabase.from("loan_repayments").delete().neq("id", "none");
-    await supabase.from("loan_repayment_schedule").delete().neq("id", "none");
-    await supabase.from("loans").delete().neq("id", "none");
-    await supabase.from("loan_applications").delete().neq("id", "none");
-    await supabase.from("loan_products").delete().neq("id", "none");
-    await supabase.from("group_attendance").delete().neq("id", "none");
-    await supabase.from("group_members").delete().neq("id", "none");
-    await supabase.from("clients").delete().neq("id", "none");
-    await supabase.from("client_groups").delete().neq("id", "none");
-    await supabase
-      .from("settings")
-      .update({
-        company_name: "Chetu Microfinance Ltd",
-        default_currency: "UGX",
-        default_interest_rate: 15.0,
-        default_processing_fee: 2.0,
-        receipt_footer: defaultSettings.receipt_footer,
-        report_header: defaultSettings.report_header,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", 1);
+    if (!isSupabaseConfigured) throw new Error("Database not configured");
+
+    const { error } = await supabase.rpc("reset_operational_data", {
+      _confirm: "RESET ALL DATA",
+    });
+    if (error) throw new Error(error.message);
+
+    await logAudit(
+      "Reset System Data",
+      "Settings",
+      "Cleared every operational and financial record from this database.",
+    );
 
     setClients([]);
     setClientGroups([]);
@@ -2895,7 +3000,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setExpenses([]);
     setBankTransactions([]);
     setAuditLogs([]);
-    setSettings(defaultSettings);
   };
 
   const performGlobalSearch = (query: string): GlobalSearchResult[] => {
@@ -3043,7 +3147,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         addSavingsTransaction,
         recordGroupAttendance,
         addExpense,
-        addBankTransaction,
+        accountBalances,
+        moneyPosition,
+        ledgerHealth,
+        refreshFinancials,
+        recordCapital,
+        recordInternalTransfer,
+        reverseFinancialTransaction,
+        reconcileAccount,
+        setOpeningBalance,
         updateSettings,
         performGlobalSearch,
         logAudit,

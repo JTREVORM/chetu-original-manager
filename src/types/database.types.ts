@@ -458,6 +458,23 @@ export interface LoanRepayment {
   notes?: string;
   collection_type?: string;
   security_amount?: number;
+  /**
+   * How the receipt splits.
+   *
+   * Derived from the instalment's frozen principal/interest ratio and stored
+   * on the row, so every screen reads the same split instead of each one
+   * re-deriving it differently. The four always sum to `amount_paid`, which
+   * the database enforces.
+   *
+   * `penalty_portion` is zero throughout: production has no penalty logic and
+   * no historical penalty was invented for it.
+   */
+  principal_portion?: number;
+  interest_portion?: number;
+  penalty_portion?: number;
+  fee_portion?: number;
+  /** schedule_backfill | schedule_auto | posted | unallocated_principal */
+  allocation_source?: string | null;
   created_at: string;
   // Joined
   loan?: Loan;
@@ -530,3 +547,480 @@ export interface SystemSettings {
   report_header: string;
   updated_at?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Financial ledger
+//
+// Money moves through balanced journals: one `FinancialTransaction` per
+// business event, two or more `FinancialTransactionLine`s that sum to zero.
+// Balances are always derived — there is no stored balance anywhere in this
+// model, which is what stops a figure drifting from the postings behind it.
+// ---------------------------------------------------------------------------
+
+/** Where money can sit, or the category it flows to. */
+export type FinancialAccountType =
+  // real money locations
+  | "cash_at_hand"
+  | "cashier_till"
+  | "branch_cash"
+  | "bank"
+  | "mobile_money"
+  | "merchant"
+  // control accounts — only a posting function may touch these
+  | "loans_receivable"
+  | "interest_receivable"
+  | "penalty_receivable"
+  | "security_held"
+  | "capital"
+  | "income"
+  | "expense"
+  | "writeoff"
+  | "other";
+
+/** What the reports group by. */
+export type FinancialAccountClass =
+  "asset_liquid" | "asset_receivable" | "liability" | "equity" | "income" | "expense";
+
+export type FinancialAccountStatus = "Active" | "Dormant" | "Closed";
+
+export type FinancialEntryType =
+  | "capital_injection"
+  | "capital_withdrawal"
+  | "disbursement"
+  | "repayment"
+  | "fee_collection"
+  | "expense"
+  | "internal_transfer"
+  | "security_refund"
+  | "writeoff"
+  | "other_income"
+  | "reconciliation_adjustment"
+  | "opening_balance"
+  | "legacy_backfill"
+  | "reversal";
+
+export type FinancialTransactionStatus = "posted" | "reversed" | "reversal";
+
+export interface FinancialAccount {
+  id: string;
+  account_code: string;
+  account_name: string;
+  account_type: FinancialAccountType;
+  account_class: FinancialAccountClass;
+  branch_id?: string | null;
+  institution?: string | null;
+  account_reference?: string | null;
+  description?: string | null;
+  opening_balance: number;
+  opening_balance_date?: string | null;
+  currency: string;
+  status: FinancialAccountStatus;
+  is_system: boolean;
+  is_legacy: boolean;
+  allow_manual_posting: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A row of `v_account_balances`: the account plus its derived position. */
+export interface AccountBalance {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: FinancialAccountType;
+  account_class: FinancialAccountClass;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  institution?: string | null;
+  account_reference?: string | null;
+  currency: string;
+  status: FinancialAccountStatus;
+  is_system: boolean;
+  is_legacy: boolean;
+  opening_balance: number;
+  opening_balance_date?: string | null;
+  total_debits: number;
+  total_credits: number;
+  total_inflows: number;
+  total_outflows: number;
+  current_balance: number;
+  natural_balance: number;
+  last_transaction_at?: string | null;
+  last_transaction_date?: string | null;
+  posting_count: number;
+  sort_order: number;
+}
+
+export interface FinancialTransactionLine {
+  id: string;
+  transaction_id: string;
+  line_no: number;
+  account_id: string;
+  direction: "debit" | "credit";
+  amount: number;
+  signed_amount: number;
+  memo?: string | null;
+}
+
+/** A row of `v_transaction_audit`. */
+export interface FinancialTransactionRow {
+  id: string;
+  transaction_number: string;
+  transaction_date: string;
+  created_at: string;
+  entry_type: FinancialEntryType;
+  status: FinancialTransactionStatus;
+  description: string;
+  reference_number?: string | null;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  loan_id?: string | null;
+  loan_number?: string | null;
+  repayment_id?: string | null;
+  receipt_number?: string | null;
+  expense_id?: string | null;
+  expense_number?: string | null;
+  member_fee_id?: string | null;
+  client_id?: string | null;
+  client_name?: string | null;
+  approval_status: string;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  reversal_of_id?: string | null;
+  reverses_number?: string | null;
+  reversal_reason?: string | null;
+  reversed_by_number?: string | null;
+  is_legacy: boolean;
+  business_day_id?: string | null;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_by_role?: string | null;
+  amount: number;
+  accounts?: string | null;
+  source_account?: string | null;
+  destination_account?: string | null;
+}
+
+/** The single row of `v_money_position`. */
+export interface MoneyPosition {
+  cash_at_hand: number;
+  cash_at_bank: number;
+  mobile_money: number;
+  unclassified_legacy: number;
+  total_available_liquidity: number;
+  outstanding_principal: number;
+  interest_receivable: number;
+  penalties_receivable: number;
+  total_loan_portfolio: number;
+  overdue_portfolio: number;
+  overdue_principal: number;
+  par30_value: number;
+  par30_count: number;
+  active_loans: number;
+  active_borrowers: number;
+  capital_introduced: number;
+  total_income: number;
+  total_expenses: number;
+  net_result: number;
+  security_held: number;
+  /** Ledger-only assets: liquidity plus receivable control accounts. */
+  total_assets_ledger: number;
+  /** Ties exactly to the trial balance: capital + net result. */
+  net_worth_ledger: number;
+  /** Adds contracted-but-uncollected interest. Management view, not accounting. */
+  total_assets: number;
+  total_financial_position: number;
+}
+
+/** A row of `v_loan_portfolio`. */
+export interface LoanPortfolioRow {
+  loan_id: string;
+  loan_number: string;
+  client_id: string;
+  client_name: string;
+  client_number: string;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  officer_id?: string | null;
+  group_id?: string | null;
+  group_name?: string | null;
+  product_id: string;
+  product_name?: string | null;
+  status: LoanStatus;
+  is_bad_debt: boolean;
+  writeoff_status?: string | null;
+  principal_amount: number;
+  total_interest_amount: number;
+  total_amount_payable: number;
+  total_fees_charged: number;
+  security_amount: number;
+  security_balance: number;
+  net_disbursed_amount?: number | null;
+  disbursed_at?: string | null;
+  first_repayment_date: string;
+  final_due_date: string;
+  loan_period_weeks: number;
+  principal_collected: number;
+  interest_collected: number;
+  total_collected: number;
+  principal_outstanding: number;
+  interest_outstanding: number;
+  total_outstanding: number;
+  stored_outstanding_balance: number;
+  overdue_amount: number;
+  overdue_principal: number;
+  overdue_interest: number;
+  days_past_due: number;
+  par_bucket: "Current" | "1-7" | "8-30" | "31-60" | "61-90" | "90+";
+  created_at: string;
+}
+
+/** A row of `v_repayment_allocation`. */
+export interface RepaymentAllocationRow {
+  repayment_id: string;
+  repayment_number: string;
+  receipt_number: string;
+  loan_id: string;
+  loan_number?: string | null;
+  client_id: string;
+  client_name?: string | null;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  officer_id?: string | null;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  collection_type: string;
+  amount_paid: number;
+  principal_portion: number;
+  interest_portion: number;
+  penalty_portion: number;
+  fee_portion: number;
+  security_amount: number;
+  allocation_source?: string | null;
+  schedule_id?: string | null;
+  week_number?: number | null;
+  due_date?: string | null;
+  was_overdue: boolean;
+  recorded_by?: string | null;
+  created_at: string;
+  journal_id?: string | null;
+  journal_number?: string | null;
+}
+
+/** A row of `v_account_ledger`. */
+export interface AccountLedgerRow {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_class: FinancialAccountClass;
+  branch_id?: string | null;
+  transaction_id: string;
+  transaction_number: string;
+  transaction_date: string;
+  created_at: string;
+  entry_type: FinancialEntryType;
+  status: FinancialTransactionStatus;
+  description: string;
+  reference_number?: string | null;
+  is_legacy: boolean;
+  line_no: number;
+  direction: "debit" | "credit";
+  amount: number;
+  signed_amount: number;
+  memo?: string | null;
+  running_balance: number;
+  created_by?: string | null;
+  loan_id?: string | null;
+  repayment_id?: string | null;
+  expense_id?: string | null;
+}
+
+/** A row of `v_cash_flow`. */
+export interface CashFlowRow {
+  transaction_date: string;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: FinancialAccountType;
+  entry_type: FinancialEntryType;
+  flow_category: string;
+  is_internal_transfer: boolean;
+  cash_movement: number;
+  cash_in: number;
+  cash_out: number;
+  transaction_id: string;
+  transaction_number: string;
+  description: string;
+  is_legacy: boolean;
+}
+
+/** A row of `v_income_statement`. */
+export interface IncomeStatementRow {
+  account_class: "income" | "expense";
+  account_code: string;
+  account_name: string;
+  sort_order: number;
+  branch_id?: string | null;
+  transaction_date: string;
+  income_amount: number;
+  expense_amount: number;
+}
+
+/** A row of `v_financial_position`. */
+export interface FinancialPositionRow {
+  section: "Assets" | "Liabilities" | "Capital & Equity" | "Result";
+  account_class: FinancialAccountClass;
+  account_code: string;
+  account_name: string;
+  account_type: FinancialAccountType;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  amount: number;
+  sort_order: number;
+}
+
+/** A row of `v_par_ageing`. */
+export interface ParAgeingRow {
+  par_bucket: string;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  officer_id?: string | null;
+  product_name?: string | null;
+  loan_count: number;
+  overdue_principal: number;
+  overdue_interest: number;
+  overdue_total: number;
+  principal_outstanding: number;
+  total_outstanding: number;
+}
+
+/** A row of `v_branch_financials`. */
+export interface BranchFinancialsRow {
+  branch_id: string;
+  branch_name: string;
+  branch_code: string;
+  status: string;
+  liquidity: number;
+  principal_outstanding: number;
+  interest_outstanding: number;
+  total_outstanding: number;
+  arrears: number;
+  active_loans: number;
+  principal_disbursed: number;
+  total_collected: number;
+  principal_collected: number;
+  interest_collected: number;
+  income: number;
+  expenses: number;
+  net_result: number;
+}
+
+/** A row of `v_officer_performance`. */
+export interface OfficerPerformanceRow {
+  officer_id: string;
+  officer_name: string;
+  role: UserRole;
+  branch_ids?: string[] | null;
+  active_loans: number;
+  active_borrowers: number;
+  principal_outstanding: number;
+  portfolio_managed: number;
+  amount_disbursed: number;
+  expected_collections: number;
+  actual_collections: number;
+  overdue_portfolio: number;
+  collection_rate?: number | null;
+}
+
+/** A row of `v_borrower_statement`. */
+export interface BorrowerStatementRow {
+  client_id: string;
+  client_number: string;
+  full_name: string;
+  phone_number?: string | null;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  group_id?: string | null;
+  group_name?: string | null;
+  loan_officer_id?: string | null;
+  member_status: string;
+  approval_status: string;
+  fees_paid: number;
+  loans_count: number;
+  principal_disbursed: number;
+  principal_outstanding: number;
+  interest_outstanding: number;
+  total_outstanding: number;
+  overdue_amount: number;
+  security_held: number;
+  total_paid: number;
+  principal_paid: number;
+  interest_paid: number;
+  last_payment_date?: string | null;
+}
+
+export interface AccountReconciliation {
+  id: string;
+  account_id: string;
+  reconciled_on: string;
+  system_balance: number;
+  actual_balance: number;
+  difference: number;
+  statement_reference?: string | null;
+  notes?: string | null;
+  adjustment_reason?: string | null;
+  adjustment_tx_id?: string | null;
+  status: "Unresolved" | "Adjusted" | "Accepted";
+  reconciled_by?: string | null;
+  reconciled_at: string;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  created_at: string;
+}
+
+/** A row of `v_account_reconciliation`. */
+export interface AccountReconciliationRow {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  account_type: FinancialAccountType;
+  branch_id?: string | null;
+  branch_name?: string | null;
+  system_balance: number;
+  actual_balance?: number | null;
+  difference?: number | null;
+  reconciled_on?: string | null;
+  reconciled_at?: string | null;
+  statement_reference?: string | null;
+  notes?: string | null;
+  adjustment_reason?: string | null;
+  adjustment_tx_id?: string | null;
+  reconciliation_status?: string | null;
+  reconciled_by_name?: string | null;
+  state: string;
+}
+
+/** A row of `v_ledger_health`. Any row is a problem. */
+export interface LedgerHealthRow {
+  check_name: string;
+  subject_id?: string | null;
+  subject_ref?: string | null;
+  detail: string;
+}
+
+/** Accounts money can actually be posted through by an operator. */
+export const LIQUID_ACCOUNT_TYPES: FinancialAccountType[] = [
+  "cash_at_hand",
+  "cashier_till",
+  "branch_cash",
+  "bank",
+  "mobile_money",
+  "merchant",
+];
+
+export const isPostableAccount = (
+  a: Pick<FinancialAccount, "status" | "allow_manual_posting" | "account_class">,
+) => a.status === "Active" && a.allow_manual_posting && a.account_class === "asset_liquid";
