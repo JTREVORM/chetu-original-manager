@@ -3,7 +3,7 @@
 Audit, baseline and plan for rebuilding the Financial Ledger, Money Management, Dashboard Financial
 Position and Reports on the existing production data.
 
-**Status: Phases 1–15 complete against a test database. Production is untouched and awaits the
+**Status: Phases 1–16 complete against a test database. Production is untouched and awaits the
 manual cut-over steps in the readiness report. Production's schema has been proven byte-identical
 to a clean replay of migrations 000000–001200, so all 13 can be recorded in migration history.**
 
@@ -17,6 +17,7 @@ to a clean replay of migrations 000000–001200, so all 13 can be recorded in mi
 | [`05-PRODUCTION-READINESS.md`](05-PRODUCTION-READINESS.md)       | 9–13     | What was built, migrations, schema, files, backfill results, before/after totals, reconciliation, 138 tests, RLS changes, limitations and the manual cut-over steps                      |
 | [`06-PREFLIGHT-VERIFICATION.md`](06-PREFLIGHT-VERIFICATION.md)   | 14       | Migration-history reconciliation against live production, schema-drift proof, PR review findings, remaining test limitations and what Chetu must supply before cut-over                  |
 | [`07-HARDENING.md`](07-HARDENING.md)                             | 15       | Closing the direct-write bypasses in the database, atomic settlement and write-off, the two paths that were never wired, the system reset, and the schema dumps served from the web root |
+| [`08-SAVINGS.md`](08-SAVINGS.md)                                 | 16       | Why savings is closed rather than integrated, what the guard does, the single seam for reopening it, and the two ledger-health checks that watch it                                      |
 
 ## The short version
 

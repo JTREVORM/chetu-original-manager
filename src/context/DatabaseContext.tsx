@@ -2642,75 +2642,36 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
-  const addSavingsTransaction = async (
-    accountId: string,
-    amount: number,
-    type: SavingsTransactionType,
-    method: PaymentMethod,
-    notes?: string,
-  ): Promise<SavingsTransaction> => {
-    // A Branch Manager takes deposits over the counter too.
-    requireRoles(["Administrator", "Branch Manager", "Loan Officer"]);
-    if (!isSupabaseConfigured) throw new Error("Database not configured");
-    const acc = savingsAccounts.find((a) => a.id === accountId);
-    if (!acc) throw new Error("Savings account not found");
-
-    const nextSeq = savingsTransactions.length + 1;
-    const txNum = `CM-STX-2026-${String(nextSeq).padStart(4, "0")}`;
-    const recNum = `CM-SREC-2026-${String(nextSeq).padStart(4, "0")}`;
-
-    const newBalance =
-      type === "Withdrawal" ? Math.max(0, acc.balance - amount) : acc.balance + amount;
-
-    const { error: accError } = await supabase
-      .from("savings_accounts")
-      .update({ balance: newBalance, updated_at: new Date().toISOString() })
-      .eq("id", accountId);
-    if (!accError) {
-      setSavingsAccounts((prev) =>
-        prev.map((a) =>
-          a.id === accountId
-            ? { ...a, balance: newBalance, updated_at: new Date().toISOString() }
-            : a,
-        ),
-      );
-    }
-
-    // Do NOT include `id` or `account` join — let DB generate id
-    const stxInsertPayload = {
-      transaction_number: txNum,
-      account_id: accountId,
-      transaction_type: type,
-      amount,
-      balance_after: newBalance,
-      payment_method: method,
-      recorded_by: user?.id || null,
-      receipt_number: recNum,
-      notes: notes || null,
-    };
-    const { data: stxData, error: txError } = await supabase
-      .from("savings_transactions")
-      .insert([stxInsertPayload])
-      .select()
-      .single();
-    const newTx: SavingsTransaction = stxData
-      ? ({ ...stxData, account: acc } as SavingsTransaction)
-      : ({
-          ...stxInsertPayload,
-          id: `stx-${Date.now()}`,
-          created_at: new Date().toISOString(),
-          account: acc,
-        } as SavingsTransaction);
-    if (!txError) {
-      setSavingsTransactions((prev) => [newTx, ...prev]);
-    }
-    await logAudit(
-      `Recorded Savings ${type}`,
-      "Savings Management",
-      `Recorded ${type} of UGX ${amount} for Account ${acc.account_number} (Receipt #${recNum})`,
-      recNum,
+  /**
+   * Savings is closed, and this is the one mutation that would have moved a
+   * member's money without the ledger hearing about it.
+   *
+   * It is left as a refusal rather than deleted, because the body it replaces
+   * is a catalogue of everything this programme removed elsewhere and whoever
+   * reopens savings needs the list. It took the reference number from
+   * `savingsTransactions.length + 1` — an RLS-filtered array, the documented
+   * bug that stopped the second loan officer submitting their first
+   * application. It tested `accError` and `txError` only to decide whether to
+   * update local state, which is the exact shape of the discarded error that
+   * left fifteen loans disbursed with no ledger entry. When the insert failed
+   * it still returned a transaction carrying a client-invented id, so the
+   * screen printed a receipt for a row that did not exist. It maintained
+   * `savings_accounts.balance` as a stored total from the browser. It clamped
+   * an over-withdrawal with `Math.max(0, …)` instead of refusing it. And it
+   * wrote the balance and the transaction in two separate round trips.
+   *
+   * The control is in the database — `trg_guard_savings_transaction` and
+   * `trg_guard_savings_balance` refuse these writes whatever any interface
+   * does. This refusal is so a caller fails immediately, and legibly, rather
+   * than discovering it at the edge.
+   *
+   * See `supabase/migrations/20260101002300_savings_financial_guard.sql` for
+   * what reopening savings requires.
+   */
+  const addSavingsTransaction = async (): Promise<SavingsTransaction> => {
+    throw new Error(
+      "Savings is not enabled. A deposit or withdrawal has nowhere to post in the financial ledger, so it cannot be recorded.",
     );
-    return newTx;
   };
 
   const recordGroupAttendance = async (

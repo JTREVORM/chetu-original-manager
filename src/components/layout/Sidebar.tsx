@@ -177,16 +177,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         { name: "Group LO Transfer", path: "/transfers/group-officer", icon: UserCog },
       ],
     },
-    {
-      id: "savings",
-      name: "Savings - Management",
-      icon: PiggyBank,
-      subItems: [
-        { name: "Savings Dashboard", path: "/savings", icon: PiggyBank },
-        { name: "Savings Accounts", path: "/savings-accounts", icon: PiggyBank },
-        { name: "Savings Report", path: "/reports/savings", icon: FileText },
-      ],
-    },
+    // Savings is not in the navigation: it posts no journal, so no deposit or
+    // withdrawal can be recorded, and the database refuses both. /savings and
+    // /savings-accounts still resolve — an old bookmark should meet a sentence,
+    // not a 404 — and both render the closed notice.
     {
       id: "ledger",
       name: "Financial Ledger",

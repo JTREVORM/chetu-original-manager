@@ -32,9 +32,9 @@ node scripts/verify-financials.mjs --project <ref> --migrate --seed
 
 It rebuilds a throwaway database, applies the base migrations, seeds production's exact control
 totals, applies the financial migrations so the backfills run over realistic data, then asserts
-201 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
+222 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
 overdue, penalty, capital, expense, transfer, reversal, immutability, reconciliation, closure,
-write-off, branch scoping, permissions, report reconciliation and the direct-write guards. Both scripts refuse to run
+write-off, branch scoping, permissions, report reconciliation, the direct-write guards and the savings closure. Both scripts refuse to run
 against production — they post and reverse real journals.
 
 ### Typechecking
@@ -68,7 +68,7 @@ public.
 
 ### Migrations
 
-`supabase/migrations/` holds twenty-three files that are replayable in order against an empty
+`supabase/migrations/` holds twenty-four files that are replayable in order against an empty
 database. The first four build the system and **must run in sequence**, because each depends on
 the one before:
 
@@ -81,7 +81,7 @@ the one before:
 
 `…000400` through `…001200` add transfers, frozen loan fees, sequence-backed reference numbers,
 real-email login, business-day control, the branch network, staff management and schedule
-integrity. `…001300` through `…002200` are the financial ledger — see below.
+integrity. `…001300` through `…002300` are the financial ledger — see below.
 
 Production carries **no migration history**: the `supabase_migrations` schema does not exist at
 all, because everything was applied by hand through the SQL editor. Migrations 000000–001200 have
@@ -230,6 +230,16 @@ half a financial event and each is now reached only by the atomic function that 
 The Settings "System reset" is `reset_operational_data()` — one transaction, ledger first, and
 **permanently refused once `settings.financial_cutover_completed` is set**. The panel is also
 behind `import.meta.env.DEV`, so it is not in a production bundle.
+
+**Savings is closed**, because it is the one money-shaped module that posts no journal. Production
+has 25 accounts, all at zero, and has never recorded a savings transaction. Migration `…002300`
+refuses every write to `savings_transactions` and any change to `savings_accounts.balance`; opening
+and closing an account still works, because neither moves a shilling. Savings is out of the
+sidebar, `/savings` renders a closed notice, and `addSavingsTransaction` throws — its docstring
+lists the six faults that must be fixed before it can be reopened. The seam is
+`private.savings_ledger_ready()`, a function rather than a settings row so that reopening takes a
+migration; `v_ledger_health` reports any savings transaction or non-zero balance that appears
+meanwhile.
 
 ### Fees are frozen onto each loan
 

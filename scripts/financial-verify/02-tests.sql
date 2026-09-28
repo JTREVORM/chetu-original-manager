@@ -1166,6 +1166,30 @@ BEGIN
   END IF;
 END $fn$;
 
+-- As above, but for a guard with its own wording rather than the journal one.
+CREATE OR REPLACE FUNCTION _direct_write_refused_msg(_area TEXT, _name TEXT, _uid TEXT,
+                                                     _sql TEXT, _expect TEXT)
+RETURNS VOID LANGUAGE plpgsql AS $fn$
+DECLARE v_msg TEXT;
+BEGIN
+  BEGIN
+    PERFORM set_config('request.jwt.claims',
+      json_build_object('sub', _uid, 'role', 'authenticated')::text, TRUE);
+    EXECUTE 'SET LOCAL ROLE authenticated';
+    EXECUTE _sql;
+    RAISE EXCEPTION 'CHETU_WRITE_SUCCEEDED';
+  EXCEPTION WHEN OTHERS THEN
+    v_msg := SQLERRM;
+  END;
+  EXECUTE 'RESET ROLE';
+  IF v_msg = 'CHETU_WRITE_SUCCEEDED' THEN
+    PERFORM _check(_area, _name, FALSE, 'the direct write was allowed through');
+  ELSE
+    PERFORM _check(_area, _name,
+      _expect IS NULL OR position(lower(_expect) in lower(v_msg)) > 0, left(v_msg, 90));
+  END IF;
+END $fn$;
+
 -- Same shape, for a write that must still be allowed: nothing here is money.
 CREATE OR REPLACE FUNCTION _direct_write_allowed(_area TEXT, _name TEXT, _uid TEXT, _sql TEXT)
 RETURNS VOID LANGUAGE plpgsql AS $fn$
@@ -1627,6 +1651,179 @@ BEGIN
   PERFORM _check('hardening', 'the ledger health view is still clean',
     NOT EXISTS (SELECT 1 FROM v_ledger_health),
     (SELECT string_agg(DISTINCT check_name || ': ' || COALESCE(detail, ''), ' | ') FROM v_ledger_health));
+END $$;
+
+
+-- ---------------------------------------------------------------------------
+-- 14. Savings — closed until it can be journalled  (migration 002300)
+--
+-- Savings is the one money-shaped module with no ledger integration. It has
+-- never been used in production — 25 accounts, every one at zero, and not a
+-- single transaction — and the code that existed could not be journalled, so
+-- it is closed rather than half-wired. These prove it is closed at the
+-- database, that the accounts already open are untouched by closing it, and
+-- that nothing can slip through unnoticed if the guard is ever lifted.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  INSERT INTO savings_accounts (id, account_number, client_id, account_type, balance, status)
+  VALUES ('SAV-TEST-001', 'CM-SAV-9001', 'CLI-TEST-020', 'Individual', 0, 'Active'),
+         ('SAV-TEST-002', 'CM-SAV-9002', 'CLI-TEST-021', 'Individual', 0, 'Active')
+  ON CONFLICT (id) DO NOTHING;
+
+  -- A row for the UPDATE and DELETE tests to aim at. On an empty table those
+  -- statements touch nothing, a FOR EACH ROW guard never fires, and the test
+  -- would pass while proving nothing. Written as the owner, which is the one
+  -- context the guard lets through, and removed again below.
+  INSERT INTO savings_transactions (id, transaction_number, account_id, transaction_type,
+    amount, balance_after, payment_method, recorded_by, receipt_number)
+  VALUES ('STX-TEST-LEGACY', 'CM-STX-9000', 'SAV-TEST-001', 'Deposit', 0, 0, 'Cash',
+          '33333333-3333-3333-3333-333333333333', 'CM-SREC-9000')
+  ON CONFLICT (id) DO NOTHING;
+END $$;
+
+DO $$
+DECLARE v_accounts INT; v_balance NUMERIC; v_tx INT;
+BEGIN
+  SELECT count(*), COALESCE(sum(balance), 0) INTO v_accounts, v_balance FROM savings_accounts;
+  SELECT count(*) INTO v_tx FROM savings_transactions;
+
+  -- --- no signed-in role may record a deposit or a withdrawal --------------
+  PERFORM _direct_write_refused_msg('savings',
+    'a Loan Officer cannot record a savings deposit',
+    '33333333-3333-3333-3333-333333333333',
+    $q$INSERT INTO savings_transactions (transaction_number, account_id, transaction_type,
+        amount, balance_after, payment_method, recorded_by, receipt_number)
+       VALUES ('CM-STX-9001', 'SAV-TEST-001', 'Deposit', 50000, 50000, 'Cash',
+               '33333333-3333-3333-3333-333333333333', 'CM-SREC-9001')$q$,
+    'Savings is not enabled');
+
+  PERFORM _direct_write_refused_msg('savings',
+    'a Branch Manager cannot record a savings withdrawal',
+    '22222222-2222-2222-2222-222222222222',
+    $q$INSERT INTO savings_transactions (transaction_number, account_id, transaction_type,
+        amount, balance_after, payment_method, recorded_by, receipt_number)
+       VALUES ('CM-STX-9002', 'SAV-TEST-001', 'Withdrawal', 10000, 0, 'Cash',
+               '22222222-2222-2222-2222-222222222222', 'CM-SREC-9002')$q$,
+    'Savings is not enabled');
+
+  PERFORM _direct_write_refused_msg('savings',
+    'an Administrator cannot record one either',
+    '11111111-1111-1111-1111-111111111111',
+    $q$INSERT INTO savings_transactions (transaction_number, account_id, transaction_type,
+        amount, balance_after, payment_method, recorded_by, receipt_number)
+       VALUES ('CM-STX-9003', 'SAV-TEST-001', 'Deposit', 50000, 50000, 'Cash',
+               '11111111-1111-1111-1111-111111111111', 'CM-SREC-9003')$q$,
+    'Savings is not enabled');
+
+  PERFORM _direct_write_refused_msg('savings',
+    'an Auditor cannot record one either',
+    '44444444-4444-4444-4444-444444444444',
+    $q$INSERT INTO savings_transactions (transaction_number, account_id, transaction_type,
+        amount, balance_after, payment_method, recorded_by, receipt_number)
+       VALUES ('CM-STX-9004', 'SAV-TEST-001', 'Deposit', 1, 1, 'Cash',
+               '44444444-4444-4444-4444-444444444444', 'CM-SREC-9004')$q$,
+    NULL);
+
+  -- --- nor edit or delete what is already there ---------------------------
+  PERFORM _direct_write_refused_msg('savings',
+    'a posted savings transaction cannot be altered',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE savings_transactions SET amount = 1$q$, 'Savings is not enabled');
+  PERFORM _direct_write_refused_msg('savings',
+    'a posted savings transaction cannot be deleted',
+    '11111111-1111-1111-1111-111111111111',
+    $q$DELETE FROM savings_transactions$q$, 'Savings is not enabled');
+
+  -- --- and the balance is frozen, which is the other way money could move --
+  PERFORM _direct_write_refused_msg('savings',
+    'a savings balance cannot be moved by hand',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE savings_accounts SET balance = 500000 WHERE id = 'SAV-TEST-001'$q$,
+    'cannot be changed');
+
+  PERFORM _direct_write_refused_msg('savings',
+    'not even by a Loan Officer on their own member',
+    '33333333-3333-3333-3333-333333333333',
+    $q$UPDATE savings_accounts SET balance = balance + 1$q$, 'cannot be changed');
+
+  DELETE FROM savings_transactions WHERE id = 'STX-TEST-LEGACY';
+  v_tx := 0;
+
+  -- --- closing savings did not disturb the accounts already open ----------
+  PERFORM _check('savings', 'every savings account is still there',
+    (SELECT count(*) FROM savings_accounts) = v_accounts,
+    format('%s, was %s', (SELECT count(*) FROM savings_accounts), v_accounts));
+  PERFORM _check('savings', 'every savings balance is unchanged, and zero',
+    (SELECT COALESCE(sum(balance), 0) FROM savings_accounts) = v_balance AND v_balance = 0,
+    format('%s', (SELECT COALESCE(sum(balance), 0) FROM savings_accounts)));
+  PERFORM _check('savings', 'no savings transaction was created by any of that',
+    (SELECT count(*) FROM savings_transactions) = v_tx, NULL);
+
+  -- --- accounts are still readable, and still open for new members --------
+  PERFORM _direct_write_allowed('savings',
+    'opening an account for a new member still works — it holds nothing',
+    '33333333-3333-3333-3333-333333333333',
+    $q$INSERT INTO savings_accounts (id, account_number, client_id, account_type, balance, status)
+       VALUES ('SAV-TEST-003', 'CM-SAV-9003', 'CLI-TEST-022', 'Individual', 0, 'Active')$q$);
+
+  PERFORM _direct_write_allowed('savings',
+    'an account can still be closed, which moves nothing',
+    '11111111-1111-1111-1111-111111111111',
+    $q$UPDATE savings_accounts SET status = 'Closed' WHERE id = 'SAV-TEST-002'$q$);
+END $$;
+
+-- --- the integration is genuinely absent, not silently half-present --------
+DO $$
+BEGIN
+  PERFORM _check('savings', 'the ledger does not claim savings is ready',
+                 private.savings_ledger_ready() = FALSE, NULL);
+  PERFORM _check('savings', 'no savings posting function exists to be called',
+    NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+                 WHERE n.nspname = 'public'
+                   AND (p.proname LIKE 'record_savings%' OR p.proname LIKE 'post_savings%'
+                        OR p.proname LIKE '%savings_deposit%'
+                        OR p.proname LIKE '%savings_withdrawal%')),
+    (SELECT string_agg(p.proname, ', ') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname LIKE '%savings%'));
+  PERFORM _check('savings', 'there is no savings liability account to post to yet',
+    NOT EXISTS (SELECT 1 FROM financial_accounts WHERE account_code LIKE 'SAVINGS%'), NULL);
+END $$;
+
+-- --- and if the guard were ever lifted without the ledger, health says so --
+DO $$
+DECLARE v_rows INT;
+BEGIN
+  PERFORM _check('savings', 'no savings transaction is missing a journal',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health
+                 WHERE check_name = 'savings_transaction_without_journal'), NULL);
+  PERFORM _check('savings', 'no savings balance sits outside the ledger',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health
+                 WHERE check_name = 'savings_balance_without_ledger'), NULL);
+
+  -- Prove the check actually fires, by writing what only the owner can write
+  -- and then putting it back. If this ever stopped reporting, the guard above
+  -- would be the only thing standing between savings and a silent hole.
+  UPDATE savings_accounts SET balance = 1 WHERE id = 'SAV-TEST-001';
+  SELECT count(*) INTO v_rows FROM v_ledger_health
+   WHERE check_name = 'savings_balance_without_ledger';
+  PERFORM _check('savings', 'a savings balance outside the ledger is reported',
+                 v_rows = 1, format('%s rows', v_rows));
+  UPDATE savings_accounts SET balance = 0 WHERE id = 'SAV-TEST-001';
+
+  INSERT INTO savings_transactions (transaction_number, account_id, transaction_type,
+    amount, balance_after, payment_method, recorded_by, receipt_number)
+  VALUES ('CM-STX-HEALTH', 'SAV-TEST-001', 'Deposit', 1, 1, 'Cash',
+          '33333333-3333-3333-3333-333333333333', 'CM-SREC-HEALTH');
+  SELECT count(*) INTO v_rows FROM v_ledger_health
+   WHERE check_name = 'savings_transaction_without_journal';
+  PERFORM _check('savings', 'a savings transaction with no journal is reported',
+                 v_rows = 1, format('%s rows', v_rows));
+  DELETE FROM savings_transactions WHERE transaction_number = 'CM-STX-HEALTH';
+
+  PERFORM _check('savings', 'the ledger health view is clean again afterwards',
+    NOT EXISTS (SELECT 1 FROM v_ledger_health),
+    (SELECT string_agg(DISTINCT check_name, ' | ') FROM v_ledger_health));
 END $$;
 
 -- ---------------------------------------------------------------------------
