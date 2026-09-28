@@ -205,6 +205,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       icon: BarChart3,
       subItems: [
         { name: "Master Reports & PDFs", path: "/reports", icon: BarChart3 },
+        { name: "Financial Position", path: "/reports/financial-position", icon: Wallet },
+        { name: "Cash Flow", path: "/reports/cash-flow", icon: Wallet },
+        { name: "Profit & Loss", path: "/reports/profit-and-loss", icon: BarChart3 },
+        { name: "Loan Portfolio", path: "/reports/loan-portfolio", icon: FileSpreadsheet },
+        { name: "Collections", path: "/reports/collections", icon: Receipt },
+        { name: "Arrears & PAR", path: "/reports/arrears", icon: Clock },
         { name: "Master Roll", path: "/reports/master-roll", icon: FileText },
         { name: "Daily Overdue Report", path: "/reports/daily-overdue", icon: Clock },
         {

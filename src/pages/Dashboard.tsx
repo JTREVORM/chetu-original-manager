@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { TableScroll } from "../components/common/ScrollArea";
 import { BusinessDayBanner } from "../components/common/BusinessDayBanner";
+import { Link } from "@tanstack/react-router";
 import { useNavigate } from "../lib/router-compat";
 import { useAuth } from "../context/AuthContext";
 import { useDatabase } from "../context/DatabaseContext";
@@ -78,11 +79,10 @@ export const Dashboard: React.FC = () => {
     repayments,
     branches,
     expenses,
-    currentBankBalance,
+    moneyPosition,
     totalCollectionsToday,
     totalCollectionsWeekly,
     totalCollectionsMonthly,
-    totalSavingsBalance,
   } = useDatabase();
   const navigate = useNavigate();
 
@@ -355,12 +355,90 @@ export const Dashboard: React.FC = () => {
         />
         {institutionWide && (
           <Kpi
-            label="Cash at bank"
-            value={formatUGX(currentBankBalance)}
-            foot={`Savings held ${formatUGX(totalSavingsBalance)}`}
+            label="Total available liquidity"
+            value={formatUGX(Number(moneyPosition?.total_available_liquidity ?? 0))}
+            foot={
+              moneyPosition
+                ? `Cash ${formatUGX(Number(moneyPosition.cash_at_hand))} · Bank ${formatUGX(Number(moneyPosition.cash_at_bank))}`
+                : "Reading the ledger…"
+            }
           />
         )}
       </div>
+
+      {/* Money Position.
+          Liquidity and the loan book, kept apart from the operational KPIs
+          above. Outstanding principal is not revenue and is never added to
+          income here: the two sit in different rows on purpose. */}
+      {institutionWide && moneyPosition && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[13px] font-bold text-slate-900">Money Position</h2>
+            <Link
+              to="/financial-ledger"
+              className="text-[12px] font-semibold text-[#0B4394] hover:underline"
+            >
+              Open the Financial Ledger →
+            </Link>
+          </div>
+
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Money we hold
+          </p>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Money label="Cash at hand" value={moneyPosition.cash_at_hand} />
+            <Money label="Cash at bank" value={moneyPosition.cash_at_bank} />
+            <Money label="Mobile money / merchant" value={moneyPosition.mobile_money} />
+            <Money
+              label="Total available liquidity"
+              value={moneyPosition.total_available_liquidity}
+              strong
+            />
+          </div>
+
+          <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Money with borrowers
+          </p>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Money label="Outstanding principal" value={moneyPosition.outstanding_principal} />
+            <Money label="Interest receivable" value={moneyPosition.interest_receivable} />
+            <Money label="Overdue portfolio" value={moneyPosition.overdue_portfolio} warn />
+            <Money label="Total loan portfolio" value={moneyPosition.total_loan_portfolio} strong />
+          </div>
+
+          <p className="mb-2 mt-4 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+            Capital, income and result
+          </p>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Money label="Capital introduced" value={moneyPosition.capital_introduced} />
+            <Money label="Income" value={moneyPosition.total_income} />
+            <Money label="Expenses" value={moneyPosition.total_expenses} warn />
+            <Money label="Net result" value={moneyPosition.net_result} strong />
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t border-slate-200 pt-3">
+            <span className="text-[13px] font-bold text-slate-900">Total financial position</span>
+            <span className="text-lg font-black text-[#0B4394]">
+              {formatUGX(Number(moneyPosition.total_financial_position))}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+            Liquidity plus what members owe, less the{" "}
+            {formatUGX(Number(moneyPosition.security_held))} of refundable security Chetu is holding
+            for them. On the ledger alone — counting only interest actually collected — net worth is{" "}
+            {formatUGX(Number(moneyPosition.net_worth_ledger))}; the difference is interest members
+            are contracted to pay but have not yet.
+          </p>
+
+          {Number(moneyPosition.unclassified_legacy) !== 0 && (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-900">
+              {formatUGX(Number(moneyPosition.unclassified_legacy))} sits in Legacy / Unclassified:
+              money that moved before the ledger existed, whose account was never recorded. Count
+              the cash and read the bank statement to place it.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* Second band — operational detail. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -618,6 +696,31 @@ const Kpi: React.FC<{ label: string; value: string; foot?: string; tone?: string
     {foot && (
       <p className="mt-1.5 border-t border-slate-100 pt-1.5 text-[12px] text-slate-500">{foot}</p>
     )}
+  </div>
+);
+
+/** One figure in the Money Position band. */
+const Money: React.FC<{
+  label: string;
+  value: number;
+  strong?: boolean;
+  warn?: boolean;
+}> = ({ label, value, strong, warn }) => (
+  <div
+    className={`rounded-xl border p-3 ${
+      strong ? "border-[#0B4394] bg-[#f1f6fd]" : "border-slate-200 bg-slate-50"
+    }`}
+  >
+    <p className="text-[10px] font-bold uppercase leading-tight tracking-wide text-slate-500">
+      {label}
+    </p>
+    <p
+      className={`mt-1 font-black ${strong ? "text-[15px] text-[#0B4394]" : "text-[14px]"} ${
+        warn && Number(value) > 0 ? "text-red-700" : strong ? "" : "text-slate-900"
+      }`}
+    >
+      {formatUGX(Number(value))}
+    </p>
   </div>
 );
 

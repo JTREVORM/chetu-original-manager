@@ -458,6 +458,23 @@ export interface LoanRepayment {
   notes?: string;
   collection_type?: string;
   security_amount?: number;
+  /**
+   * How the receipt splits.
+   *
+   * Derived from the instalment's frozen principal/interest ratio and stored
+   * on the row, so every screen reads the same split instead of each one
+   * re-deriving it differently. The four always sum to `amount_paid`, which
+   * the database enforces.
+   *
+   * `penalty_portion` is zero throughout: production has no penalty logic and
+   * no historical penalty was invented for it.
+   */
+  principal_portion?: number;
+  interest_portion?: number;
+  penalty_portion?: number;
+  fee_portion?: number;
+  /** schedule_backfill | schedule_auto | posted | unallocated_principal */
+  allocation_source?: string | null;
   created_at: string;
   // Joined
   loan?: Loan;

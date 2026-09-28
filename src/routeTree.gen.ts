@@ -57,18 +57,33 @@ import { Route as BranchesBranchIdRouteImport } from './routes/branches.$branchI
 import { Route as GroupsRejectedRouteImport } from './routes/groups.rejected'
 import { Route as GroupsWaitingApprovalRouteImport } from './routes/groups.waiting-approval'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
+import { Route as ReportsAccountLedgerRouteImport } from './routes/reports.account-ledger'
 import { Route as ReportsApprovalsRouteImport } from './routes/reports.approvals'
+import { Route as ReportsArrearsRouteImport } from './routes/reports.arrears'
+import { Route as ReportsBorrowerStatementRouteImport } from './routes/reports.borrower-statement'
+import { Route as ReportsBranchFinancialsRouteImport } from './routes/reports.branch-financials'
+import { Route as ReportsCapitalRouteImport } from './routes/reports.capital'
+import { Route as ReportsCashFlowRouteImport } from './routes/reports.cash-flow'
+import { Route as ReportsCollectionsRouteImport } from './routes/reports.collections'
 import { Route as ReportsDailyOverdueRouteImport } from './routes/reports.daily-overdue'
 import { Route as ReportsDayCollectionListRouteImport } from './routes/reports.day-collection-list'
+import { Route as ReportsExpensesRouteImport } from './routes/reports.expenses'
 import { Route as ReportsFeeCollectionRouteImport } from './routes/reports.fee-collection'
+import { Route as ReportsFinancialPositionRouteImport } from './routes/reports.financial-position'
+import { Route as ReportsIncomeRouteImport } from './routes/reports.income'
 import { Route as ReportsLoWiseGroupRealizableRouteImport } from './routes/reports.lo-wise-group-realizable'
 import { Route as ReportsLoanClosureRouteImport } from './routes/reports.loan-closure'
+import { Route as ReportsLoanOfficerRouteImport } from './routes/reports.loan-officer'
+import { Route as ReportsLoanPortfolioRouteImport } from './routes/reports.loan-portfolio'
 import { Route as ReportsMasterRollRouteImport } from './routes/reports.master-roll'
 import { Route as ReportsOutstandingRouteImport } from './routes/reports.outstanding'
 import { Route as ReportsOverdueCollectionListRouteImport } from './routes/reports.overdue-collection-list'
 import { Route as ReportsParRouteImport } from './routes/reports.par'
+import { Route as ReportsProfitAndLossRouteImport } from './routes/reports.profit-and-loss'
+import { Route as ReportsReconciliationRouteImport } from './routes/reports.reconciliation'
 import { Route as ReportsReversalsRouteImport } from './routes/reports.reversals'
 import { Route as ReportsSavingsRouteImport } from './routes/reports.savings'
+import { Route as ReportsTransactionAuditRouteImport } from './routes/reports.transaction-audit'
 import { Route as TransfersGroupInterchangeRouteImport } from './routes/transfers.group-interchange'
 import { Route as TransfersGroupOfficerRouteImport } from './routes/transfers.group-officer'
 import { Route as TransfersMemberRouteImport } from './routes/transfers.member'
@@ -315,9 +330,45 @@ const ReportsIndexRoute = ReportsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsAccountLedgerRoute = ReportsAccountLedgerRouteImport.update({
+  id: '/account-ledger',
+  path: '/account-ledger',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsApprovalsRoute = ReportsApprovalsRouteImport.update({
   id: '/approvals',
   path: '/approvals',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsArrearsRoute = ReportsArrearsRouteImport.update({
+  id: '/arrears',
+  path: '/arrears',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsBorrowerStatementRoute =
+  ReportsBorrowerStatementRouteImport.update({
+    id: '/borrower-statement',
+    path: '/borrower-statement',
+    getParentRoute: () => ReportsRoute,
+  } as any)
+const ReportsBranchFinancialsRoute = ReportsBranchFinancialsRouteImport.update({
+  id: '/branch-financials',
+  path: '/branch-financials',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsCapitalRoute = ReportsCapitalRouteImport.update({
+  id: '/capital',
+  path: '/capital',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsCashFlowRoute = ReportsCashFlowRouteImport.update({
+  id: '/cash-flow',
+  path: '/cash-flow',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsCollectionsRoute = ReportsCollectionsRouteImport.update({
+  id: '/collections',
+  path: '/collections',
   getParentRoute: () => ReportsRoute,
 } as any)
 const ReportsDailyOverdueRoute = ReportsDailyOverdueRouteImport.update({
@@ -331,9 +382,25 @@ const ReportsDayCollectionListRoute =
     path: '/day-collection-list',
     getParentRoute: () => ReportsRoute,
   } as any)
+const ReportsExpensesRoute = ReportsExpensesRouteImport.update({
+  id: '/expenses',
+  path: '/expenses',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsFeeCollectionRoute = ReportsFeeCollectionRouteImport.update({
   id: '/fee-collection',
   path: '/fee-collection',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsFinancialPositionRoute =
+  ReportsFinancialPositionRouteImport.update({
+    id: '/financial-position',
+    path: '/financial-position',
+    getParentRoute: () => ReportsRoute,
+  } as any)
+const ReportsIncomeRoute = ReportsIncomeRouteImport.update({
+  id: '/income',
+  path: '/income',
   getParentRoute: () => ReportsRoute,
 } as any)
 const ReportsLoWiseGroupRealizableRoute =
@@ -345,6 +412,16 @@ const ReportsLoWiseGroupRealizableRoute =
 const ReportsLoanClosureRoute = ReportsLoanClosureRouteImport.update({
   id: '/loan-closure',
   path: '/loan-closure',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsLoanOfficerRoute = ReportsLoanOfficerRouteImport.update({
+  id: '/loan-officer',
+  path: '/loan-officer',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsLoanPortfolioRoute = ReportsLoanPortfolioRouteImport.update({
+  id: '/loan-portfolio',
+  path: '/loan-portfolio',
   getParentRoute: () => ReportsRoute,
 } as any)
 const ReportsMasterRollRoute = ReportsMasterRollRouteImport.update({
@@ -368,6 +445,16 @@ const ReportsParRoute = ReportsParRouteImport.update({
   path: '/par',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsProfitAndLossRoute = ReportsProfitAndLossRouteImport.update({
+  id: '/profit-and-loss',
+  path: '/profit-and-loss',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsReconciliationRoute = ReportsReconciliationRouteImport.update({
+  id: '/reconciliation',
+  path: '/reconciliation',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsReversalsRoute = ReportsReversalsRouteImport.update({
   id: '/reversals',
   path: '/reversals',
@@ -376,6 +463,11 @@ const ReportsReversalsRoute = ReportsReversalsRouteImport.update({
 const ReportsSavingsRoute = ReportsSavingsRouteImport.update({
   id: '/savings',
   path: '/savings',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsTransactionAuditRoute = ReportsTransactionAuditRouteImport.update({
+  id: '/transaction-audit',
+  path: '/transaction-audit',
   getParentRoute: () => ReportsRoute,
 } as any)
 const TransfersGroupInterchangeRoute =
@@ -452,18 +544,33 @@ export interface FileRoutesByFullPath {
   '/branches/$branchId': typeof BranchesBranchIdRoute
   '/groups/rejected': typeof GroupsRejectedRoute
   '/groups/waiting-approval': typeof GroupsWaitingApprovalRoute
+  '/reports/account-ledger': typeof ReportsAccountLedgerRoute
   '/reports/approvals': typeof ReportsApprovalsRoute
+  '/reports/arrears': typeof ReportsArrearsRoute
+  '/reports/borrower-statement': typeof ReportsBorrowerStatementRoute
+  '/reports/branch-financials': typeof ReportsBranchFinancialsRoute
+  '/reports/capital': typeof ReportsCapitalRoute
+  '/reports/cash-flow': typeof ReportsCashFlowRoute
+  '/reports/collections': typeof ReportsCollectionsRoute
   '/reports/daily-overdue': typeof ReportsDailyOverdueRoute
   '/reports/day-collection-list': typeof ReportsDayCollectionListRoute
+  '/reports/expenses': typeof ReportsExpensesRoute
   '/reports/fee-collection': typeof ReportsFeeCollectionRoute
+  '/reports/financial-position': typeof ReportsFinancialPositionRoute
+  '/reports/income': typeof ReportsIncomeRoute
   '/reports/lo-wise-group-realizable': typeof ReportsLoWiseGroupRealizableRoute
   '/reports/loan-closure': typeof ReportsLoanClosureRoute
+  '/reports/loan-officer': typeof ReportsLoanOfficerRoute
+  '/reports/loan-portfolio': typeof ReportsLoanPortfolioRoute
   '/reports/master-roll': typeof ReportsMasterRollRoute
   '/reports/outstanding': typeof ReportsOutstandingRoute
   '/reports/overdue-collection-list': typeof ReportsOverdueCollectionListRoute
   '/reports/par': typeof ReportsParRoute
+  '/reports/profit-and-loss': typeof ReportsProfitAndLossRoute
+  '/reports/reconciliation': typeof ReportsReconciliationRoute
   '/reports/reversals': typeof ReportsReversalsRoute
   '/reports/savings': typeof ReportsSavingsRoute
+  '/reports/transaction-audit': typeof ReportsTransactionAuditRoute
   '/transfers/group-interchange': typeof TransfersGroupInterchangeRoute
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
@@ -517,18 +624,33 @@ export interface FileRoutesByTo {
   '/branches/$branchId': typeof BranchesBranchIdRoute
   '/groups/rejected': typeof GroupsRejectedRoute
   '/groups/waiting-approval': typeof GroupsWaitingApprovalRoute
+  '/reports/account-ledger': typeof ReportsAccountLedgerRoute
   '/reports/approvals': typeof ReportsApprovalsRoute
+  '/reports/arrears': typeof ReportsArrearsRoute
+  '/reports/borrower-statement': typeof ReportsBorrowerStatementRoute
+  '/reports/branch-financials': typeof ReportsBranchFinancialsRoute
+  '/reports/capital': typeof ReportsCapitalRoute
+  '/reports/cash-flow': typeof ReportsCashFlowRoute
+  '/reports/collections': typeof ReportsCollectionsRoute
   '/reports/daily-overdue': typeof ReportsDailyOverdueRoute
   '/reports/day-collection-list': typeof ReportsDayCollectionListRoute
+  '/reports/expenses': typeof ReportsExpensesRoute
   '/reports/fee-collection': typeof ReportsFeeCollectionRoute
+  '/reports/financial-position': typeof ReportsFinancialPositionRoute
+  '/reports/income': typeof ReportsIncomeRoute
   '/reports/lo-wise-group-realizable': typeof ReportsLoWiseGroupRealizableRoute
   '/reports/loan-closure': typeof ReportsLoanClosureRoute
+  '/reports/loan-officer': typeof ReportsLoanOfficerRoute
+  '/reports/loan-portfolio': typeof ReportsLoanPortfolioRoute
   '/reports/master-roll': typeof ReportsMasterRollRoute
   '/reports/outstanding': typeof ReportsOutstandingRoute
   '/reports/overdue-collection-list': typeof ReportsOverdueCollectionListRoute
   '/reports/par': typeof ReportsParRoute
+  '/reports/profit-and-loss': typeof ReportsProfitAndLossRoute
+  '/reports/reconciliation': typeof ReportsReconciliationRoute
   '/reports/reversals': typeof ReportsReversalsRoute
   '/reports/savings': typeof ReportsSavingsRoute
+  '/reports/transaction-audit': typeof ReportsTransactionAuditRoute
   '/transfers/group-interchange': typeof TransfersGroupInterchangeRoute
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
@@ -585,18 +707,33 @@ export interface FileRoutesById {
   '/branches/$branchId': typeof BranchesBranchIdRoute
   '/groups/rejected': typeof GroupsRejectedRoute
   '/groups/waiting-approval': typeof GroupsWaitingApprovalRoute
+  '/reports/account-ledger': typeof ReportsAccountLedgerRoute
   '/reports/approvals': typeof ReportsApprovalsRoute
+  '/reports/arrears': typeof ReportsArrearsRoute
+  '/reports/borrower-statement': typeof ReportsBorrowerStatementRoute
+  '/reports/branch-financials': typeof ReportsBranchFinancialsRoute
+  '/reports/capital': typeof ReportsCapitalRoute
+  '/reports/cash-flow': typeof ReportsCashFlowRoute
+  '/reports/collections': typeof ReportsCollectionsRoute
   '/reports/daily-overdue': typeof ReportsDailyOverdueRoute
   '/reports/day-collection-list': typeof ReportsDayCollectionListRoute
+  '/reports/expenses': typeof ReportsExpensesRoute
   '/reports/fee-collection': typeof ReportsFeeCollectionRoute
+  '/reports/financial-position': typeof ReportsFinancialPositionRoute
+  '/reports/income': typeof ReportsIncomeRoute
   '/reports/lo-wise-group-realizable': typeof ReportsLoWiseGroupRealizableRoute
   '/reports/loan-closure': typeof ReportsLoanClosureRoute
+  '/reports/loan-officer': typeof ReportsLoanOfficerRoute
+  '/reports/loan-portfolio': typeof ReportsLoanPortfolioRoute
   '/reports/master-roll': typeof ReportsMasterRollRoute
   '/reports/outstanding': typeof ReportsOutstandingRoute
   '/reports/overdue-collection-list': typeof ReportsOverdueCollectionListRoute
   '/reports/par': typeof ReportsParRoute
+  '/reports/profit-and-loss': typeof ReportsProfitAndLossRoute
+  '/reports/reconciliation': typeof ReportsReconciliationRoute
   '/reports/reversals': typeof ReportsReversalsRoute
   '/reports/savings': typeof ReportsSavingsRoute
+  '/reports/transaction-audit': typeof ReportsTransactionAuditRoute
   '/transfers/group-interchange': typeof TransfersGroupInterchangeRoute
   '/transfers/group-officer': typeof TransfersGroupOfficerRoute
   '/transfers/member': typeof TransfersMemberRoute
@@ -654,18 +791,33 @@ export interface FileRouteTypes {
     | '/branches/$branchId'
     | '/groups/rejected'
     | '/groups/waiting-approval'
+    | '/reports/account-ledger'
     | '/reports/approvals'
+    | '/reports/arrears'
+    | '/reports/borrower-statement'
+    | '/reports/branch-financials'
+    | '/reports/capital'
+    | '/reports/cash-flow'
+    | '/reports/collections'
     | '/reports/daily-overdue'
     | '/reports/day-collection-list'
+    | '/reports/expenses'
     | '/reports/fee-collection'
+    | '/reports/financial-position'
+    | '/reports/income'
     | '/reports/lo-wise-group-realizable'
     | '/reports/loan-closure'
+    | '/reports/loan-officer'
+    | '/reports/loan-portfolio'
     | '/reports/master-roll'
     | '/reports/outstanding'
     | '/reports/overdue-collection-list'
     | '/reports/par'
+    | '/reports/profit-and-loss'
+    | '/reports/reconciliation'
     | '/reports/reversals'
     | '/reports/savings'
+    | '/reports/transaction-audit'
     | '/transfers/group-interchange'
     | '/transfers/group-officer'
     | '/transfers/member'
@@ -719,18 +871,33 @@ export interface FileRouteTypes {
     | '/branches/$branchId'
     | '/groups/rejected'
     | '/groups/waiting-approval'
+    | '/reports/account-ledger'
     | '/reports/approvals'
+    | '/reports/arrears'
+    | '/reports/borrower-statement'
+    | '/reports/branch-financials'
+    | '/reports/capital'
+    | '/reports/cash-flow'
+    | '/reports/collections'
     | '/reports/daily-overdue'
     | '/reports/day-collection-list'
+    | '/reports/expenses'
     | '/reports/fee-collection'
+    | '/reports/financial-position'
+    | '/reports/income'
     | '/reports/lo-wise-group-realizable'
     | '/reports/loan-closure'
+    | '/reports/loan-officer'
+    | '/reports/loan-portfolio'
     | '/reports/master-roll'
     | '/reports/outstanding'
     | '/reports/overdue-collection-list'
     | '/reports/par'
+    | '/reports/profit-and-loss'
+    | '/reports/reconciliation'
     | '/reports/reversals'
     | '/reports/savings'
+    | '/reports/transaction-audit'
     | '/transfers/group-interchange'
     | '/transfers/group-officer'
     | '/transfers/member'
@@ -786,18 +953,33 @@ export interface FileRouteTypes {
     | '/branches/$branchId'
     | '/groups/rejected'
     | '/groups/waiting-approval'
+    | '/reports/account-ledger'
     | '/reports/approvals'
+    | '/reports/arrears'
+    | '/reports/borrower-statement'
+    | '/reports/branch-financials'
+    | '/reports/capital'
+    | '/reports/cash-flow'
+    | '/reports/collections'
     | '/reports/daily-overdue'
     | '/reports/day-collection-list'
+    | '/reports/expenses'
     | '/reports/fee-collection'
+    | '/reports/financial-position'
+    | '/reports/income'
     | '/reports/lo-wise-group-realizable'
     | '/reports/loan-closure'
+    | '/reports/loan-officer'
+    | '/reports/loan-portfolio'
     | '/reports/master-roll'
     | '/reports/outstanding'
     | '/reports/overdue-collection-list'
     | '/reports/par'
+    | '/reports/profit-and-loss'
+    | '/reports/reconciliation'
     | '/reports/reversals'
     | '/reports/savings'
+    | '/reports/transaction-audit'
     | '/transfers/group-interchange'
     | '/transfers/group-officer'
     | '/transfers/member'
@@ -1198,11 +1380,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsIndexRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/account-ledger': {
+      id: '/reports/account-ledger'
+      path: '/account-ledger'
+      fullPath: '/reports/account-ledger'
+      preLoaderRoute: typeof ReportsAccountLedgerRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/approvals': {
       id: '/reports/approvals'
       path: '/approvals'
       fullPath: '/reports/approvals'
       preLoaderRoute: typeof ReportsApprovalsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/arrears': {
+      id: '/reports/arrears'
+      path: '/arrears'
+      fullPath: '/reports/arrears'
+      preLoaderRoute: typeof ReportsArrearsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/borrower-statement': {
+      id: '/reports/borrower-statement'
+      path: '/borrower-statement'
+      fullPath: '/reports/borrower-statement'
+      preLoaderRoute: typeof ReportsBorrowerStatementRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/branch-financials': {
+      id: '/reports/branch-financials'
+      path: '/branch-financials'
+      fullPath: '/reports/branch-financials'
+      preLoaderRoute: typeof ReportsBranchFinancialsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/capital': {
+      id: '/reports/capital'
+      path: '/capital'
+      fullPath: '/reports/capital'
+      preLoaderRoute: typeof ReportsCapitalRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/cash-flow': {
+      id: '/reports/cash-flow'
+      path: '/cash-flow'
+      fullPath: '/reports/cash-flow'
+      preLoaderRoute: typeof ReportsCashFlowRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/collections': {
+      id: '/reports/collections'
+      path: '/collections'
+      fullPath: '/reports/collections'
+      preLoaderRoute: typeof ReportsCollectionsRouteImport
       parentRoute: typeof ReportsRoute
     }
     '/reports/daily-overdue': {
@@ -1219,11 +1450,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsDayCollectionListRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/expenses': {
+      id: '/reports/expenses'
+      path: '/expenses'
+      fullPath: '/reports/expenses'
+      preLoaderRoute: typeof ReportsExpensesRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/fee-collection': {
       id: '/reports/fee-collection'
       path: '/fee-collection'
       fullPath: '/reports/fee-collection'
       preLoaderRoute: typeof ReportsFeeCollectionRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/financial-position': {
+      id: '/reports/financial-position'
+      path: '/financial-position'
+      fullPath: '/reports/financial-position'
+      preLoaderRoute: typeof ReportsFinancialPositionRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/income': {
+      id: '/reports/income'
+      path: '/income'
+      fullPath: '/reports/income'
+      preLoaderRoute: typeof ReportsIncomeRouteImport
       parentRoute: typeof ReportsRoute
     }
     '/reports/lo-wise-group-realizable': {
@@ -1238,6 +1490,20 @@ declare module '@tanstack/react-router' {
       path: '/loan-closure'
       fullPath: '/reports/loan-closure'
       preLoaderRoute: typeof ReportsLoanClosureRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/loan-officer': {
+      id: '/reports/loan-officer'
+      path: '/loan-officer'
+      fullPath: '/reports/loan-officer'
+      preLoaderRoute: typeof ReportsLoanOfficerRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/loan-portfolio': {
+      id: '/reports/loan-portfolio'
+      path: '/loan-portfolio'
+      fullPath: '/reports/loan-portfolio'
+      preLoaderRoute: typeof ReportsLoanPortfolioRouteImport
       parentRoute: typeof ReportsRoute
     }
     '/reports/master-roll': {
@@ -1268,6 +1534,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsParRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/profit-and-loss': {
+      id: '/reports/profit-and-loss'
+      path: '/profit-and-loss'
+      fullPath: '/reports/profit-and-loss'
+      preLoaderRoute: typeof ReportsProfitAndLossRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/reconciliation': {
+      id: '/reports/reconciliation'
+      path: '/reconciliation'
+      fullPath: '/reports/reconciliation'
+      preLoaderRoute: typeof ReportsReconciliationRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/reversals': {
       id: '/reports/reversals'
       path: '/reversals'
@@ -1280,6 +1560,13 @@ declare module '@tanstack/react-router' {
       path: '/savings'
       fullPath: '/reports/savings'
       preLoaderRoute: typeof ReportsSavingsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/transaction-audit': {
+      id: '/reports/transaction-audit'
+      path: '/transaction-audit'
+      fullPath: '/reports/transaction-audit'
+      preLoaderRoute: typeof ReportsTransactionAuditRouteImport
       parentRoute: typeof ReportsRoute
     }
     '/transfers/group-interchange': {
@@ -1335,34 +1622,64 @@ const BranchesRouteWithChildren = BranchesRoute._addFileChildren(
 )
 
 interface ReportsRouteChildren {
+  ReportsAccountLedgerRoute: typeof ReportsAccountLedgerRoute
   ReportsApprovalsRoute: typeof ReportsApprovalsRoute
+  ReportsArrearsRoute: typeof ReportsArrearsRoute
+  ReportsBorrowerStatementRoute: typeof ReportsBorrowerStatementRoute
+  ReportsBranchFinancialsRoute: typeof ReportsBranchFinancialsRoute
+  ReportsCapitalRoute: typeof ReportsCapitalRoute
+  ReportsCashFlowRoute: typeof ReportsCashFlowRoute
+  ReportsCollectionsRoute: typeof ReportsCollectionsRoute
   ReportsDailyOverdueRoute: typeof ReportsDailyOverdueRoute
   ReportsDayCollectionListRoute: typeof ReportsDayCollectionListRoute
+  ReportsExpensesRoute: typeof ReportsExpensesRoute
   ReportsFeeCollectionRoute: typeof ReportsFeeCollectionRoute
+  ReportsFinancialPositionRoute: typeof ReportsFinancialPositionRoute
+  ReportsIncomeRoute: typeof ReportsIncomeRoute
   ReportsLoWiseGroupRealizableRoute: typeof ReportsLoWiseGroupRealizableRoute
   ReportsLoanClosureRoute: typeof ReportsLoanClosureRoute
+  ReportsLoanOfficerRoute: typeof ReportsLoanOfficerRoute
+  ReportsLoanPortfolioRoute: typeof ReportsLoanPortfolioRoute
   ReportsMasterRollRoute: typeof ReportsMasterRollRoute
   ReportsOutstandingRoute: typeof ReportsOutstandingRoute
   ReportsOverdueCollectionListRoute: typeof ReportsOverdueCollectionListRoute
   ReportsParRoute: typeof ReportsParRoute
+  ReportsProfitAndLossRoute: typeof ReportsProfitAndLossRoute
+  ReportsReconciliationRoute: typeof ReportsReconciliationRoute
   ReportsReversalsRoute: typeof ReportsReversalsRoute
   ReportsSavingsRoute: typeof ReportsSavingsRoute
+  ReportsTransactionAuditRoute: typeof ReportsTransactionAuditRoute
   ReportsIndexRoute: typeof ReportsIndexRoute
 }
 
 const ReportsRouteChildren: ReportsRouteChildren = {
+  ReportsAccountLedgerRoute: ReportsAccountLedgerRoute,
   ReportsApprovalsRoute: ReportsApprovalsRoute,
+  ReportsArrearsRoute: ReportsArrearsRoute,
+  ReportsBorrowerStatementRoute: ReportsBorrowerStatementRoute,
+  ReportsBranchFinancialsRoute: ReportsBranchFinancialsRoute,
+  ReportsCapitalRoute: ReportsCapitalRoute,
+  ReportsCashFlowRoute: ReportsCashFlowRoute,
+  ReportsCollectionsRoute: ReportsCollectionsRoute,
   ReportsDailyOverdueRoute: ReportsDailyOverdueRoute,
   ReportsDayCollectionListRoute: ReportsDayCollectionListRoute,
+  ReportsExpensesRoute: ReportsExpensesRoute,
   ReportsFeeCollectionRoute: ReportsFeeCollectionRoute,
+  ReportsFinancialPositionRoute: ReportsFinancialPositionRoute,
+  ReportsIncomeRoute: ReportsIncomeRoute,
   ReportsLoWiseGroupRealizableRoute: ReportsLoWiseGroupRealizableRoute,
   ReportsLoanClosureRoute: ReportsLoanClosureRoute,
+  ReportsLoanOfficerRoute: ReportsLoanOfficerRoute,
+  ReportsLoanPortfolioRoute: ReportsLoanPortfolioRoute,
   ReportsMasterRollRoute: ReportsMasterRollRoute,
   ReportsOutstandingRoute: ReportsOutstandingRoute,
   ReportsOverdueCollectionListRoute: ReportsOverdueCollectionListRoute,
   ReportsParRoute: ReportsParRoute,
+  ReportsProfitAndLossRoute: ReportsProfitAndLossRoute,
+  ReportsReconciliationRoute: ReportsReconciliationRoute,
   ReportsReversalsRoute: ReportsReversalsRoute,
   ReportsSavingsRoute: ReportsSavingsRoute,
+  ReportsTransactionAuditRoute: ReportsTransactionAuditRoute,
   ReportsIndexRoute: ReportsIndexRoute,
 }
 
