@@ -111,6 +111,13 @@ not reinvented — `loanCalculations.ts`, the business-day module, auth, and mig
 
 The seed reproduces production's control totals exactly, so these are what production will produce.
 
+Until the pre-flight verification it did not, quite. The seed built each instalment on an even
+split, where production floors principal and interest to whole hundreds; the backfill splits every
+receipt by its instalment's own ratio, so the harness came out UGX 1,050 away from production on
+Loans Receivable and the same amount the other way on interest income. The seed now reproduces
+production's rounding, and the two agree line for line. §6 was always read off production and was
+always right; this table is what changed.
+
 | Journal type       |  Count |               Value |
 | ------------------ | -----: | ------------------: |
 | Capital injection  |      2 |           2,090,000 |
@@ -124,10 +131,10 @@ Resulting account balances:
 
 | Account                                |                   Balance |
 | -------------------------------------- | ------------------------: |
-| LOANS-RECEIVABLE                       |                 5,890,750 |
+| LOANS-RECEIVABLE                       |                 5,891,800 |
 | SECURITY-HELD (liability)              |                   990,000 |
 | CAPITAL-INTRODUCED (equity)            |                 2,090,000 |
-| INC-INTEREST                           |                   141,850 |
+| INC-INTEREST                           |                   142,900 |
 | INC-FEE-PROCESSING / CRB / GROUP-MAINT | 264,000 / 66,000 / 30,000 |
 | INC-FEE-ADMISSION / PASSBOOK           |         120,000 / 120,000 |
 | **LEGACY-UNCLASSIFIED**                |            **−2,068,900** |
@@ -276,10 +283,13 @@ an Auditor can post nothing; and **even an Administrator cannot write the ledger
   invented. Production's `penalty_rate` is still read by nothing.
 - **Interest is recognised when collected**, not accrued. The balance sheet therefore excludes
   contracted-but-unearned interest; the dashboard shows it separately and names the difference.
-- **The test seed's per-week rounding differs from production's.** Production rounds instalment
-  portions to the nearest 100; the seed divides evenly. The test's principal/interest split is
-  709,250 / 141,850 where production's is 708,200 / 142,900. Both reconcile internally; the
-  production figures are the ones in §6, derived from production.
+- **The test seed's per-week rounding used to differ from production's — it no longer does.**
+  Production floors each instalment and its interest to a whole 100 and hands the leftover
+  hundreds to the earliest weeks; the seed divided evenly, which put the harness at
+  709,250 / 141,850 against production's 708,200 / 142,900. Since the receipts Chetu has taken
+  all land on early instalments, that 1,050 fell straight into the opening Loans Receivable the
+  harness was supposed to be proving. The seed now reproduces production's rule, and the harness
+  reports 5,891,800 receivable and 142,900 interest — the §6 figures exactly.
 - **Savings remains unwired.** All 25 accounts are zero and the module is unused, so savings
   transactions do not yet post to the ledger. Straightforward to add when Chetu uses it.
 - **Supabase branching was unavailable** through this session's tooling, so testing ran against a

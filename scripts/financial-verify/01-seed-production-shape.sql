@@ -147,8 +147,24 @@ FROM _seed_loans
 ON CONFLICT (id) DO NOTHING;
 
 -- --- instalment schedule ---------------------------------------------------
--- Even split, with the final week absorbing any rounding remainder so the
--- portions sum exactly to the loan's principal and interest.
+-- Production rounds to whole hundreds of shillings, which matters more than it
+-- looks: the repayment-allocation backfill splits each receipt by its
+-- instalment's principal/interest ratio, so a schedule built on an exact
+-- even split (ratio a flat 1/1.2) hands the backfill a different ratio from
+-- the one production holds. Seeding the even split understated interest
+-- income by UGX 1,050 across the 26 receipts and overstated Loans Receivable
+-- by the same, which made the harness disagree with production on the very
+-- opening balances it exists to prove.
+--
+-- The rule, read back off production and reproduced here exactly:
+--
+--   * the instalment and the interest are each floored to a whole 100;
+--   * the leftover hundreds are handed to the EARLIEST weeks, one each;
+--   * principal is whatever the instalment has left after interest.
+--
+-- So the earliest weeks — the only ones Chetu's 26 receipts have reached —
+-- carry the higher interest and the lower principal, exactly as production
+-- does, and each column still sums to the loan's own total.
 INSERT INTO public.loan_repayment_schedule
   (id, loan_id, week_number, due_date, installment_amount, principal_portion,
    interest_portion, paid_amount, remaining_balance, status)
@@ -156,15 +172,22 @@ SELECT
   format('SCH-TEST-%s-%s', lpad(s.seq::text, 3, '0'), lpad(w::text, 2, '0')),
   format('LN-TEST-%s', lpad(s.seq::text, 3, '0')),
   w, s.first_due + (w - 1) * 7,
-  CASE WHEN w < s.weeks THEN round(s.principal * 1.20 / s.weeks, 2)
-       ELSE s.principal * 1.20 - round(s.principal * 1.20 / s.weeks, 2) * (s.weeks - 1) END,
-  CASE WHEN w < s.weeks THEN round(s.principal / s.weeks, 2)
-       ELSE s.principal - round(s.principal / s.weeks, 2) * (s.weeks - 1) END,
-  CASE WHEN w < s.weeks THEN round(s.principal * 1.20 / s.weeks, 2) - round(s.principal / s.weeks, 2)
-       ELSE (s.principal * 1.20 - round(s.principal * 1.20 / s.weeks, 2) * (s.weeks - 1))
-          - (s.principal - round(s.principal / s.weeks, 2) * (s.weeks - 1)) END,
+  b.inst,
+  b.inst - b.intr,
+  b.intr,
   0, 0, 'Pending'
-FROM _seed_loans s, LATERAL generate_series(1, s.weeks) w
+FROM _seed_loans s,
+     LATERAL generate_series(1, s.weeks) w,
+     LATERAL (SELECT
+       floor(s.principal * 1.20 / s.weeks / 100) * 100 AS inst_base,
+       (s.principal * 1.20 - floor(s.principal * 1.20 / s.weeks / 100) * 100 * s.weeks) / 100 AS inst_extra,
+       floor(s.principal * 0.20 / s.weeks / 100) * 100 AS int_base,
+       (s.principal * 0.20 - floor(s.principal * 0.20 / s.weeks / 100) * 100 * s.weeks) / 100 AS int_extra
+     ) r,
+     LATERAL (SELECT
+       r.inst_base + CASE WHEN w <= r.inst_extra THEN 100 ELSE 0 END AS inst,
+       r.int_base  + CASE WHEN w <= r.int_extra  THEN 100 ELSE 0 END AS intr
+     ) b
 ON CONFLICT (id) DO NOTHING;
 
 -- --- receipts --------------------------------------------------------------

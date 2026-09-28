@@ -309,12 +309,20 @@ DECLARE
   v_recv_before NUMERIC; v_recv_after NUMERIC;
   v_int_before NUMERIC; v_int_after NUMERIC;
   v_prin NUMERIC; v_intr NUMERIC;
+  v_inst NUMERIC; v_sched_prin NUMERIC; v_sched_intr NUMERIC;
 BEGIN
   SELECT id INTO v_cash FROM financial_accounts WHERE account_code = 'CASH-HO';
 
-  -- A full instalment on loan 14 (500,000 / 16 weeks: 37,500 = 31,250 + 6,250).
+  -- A full instalment on loan 14. The expected split is read off the
+  -- instalment rather than written in, because production rounds to whole
+  -- hundreds: week 1 of a 37,500 instalment is 31,200 + 6,300, not an even
+  -- 31,250 + 6,250. Asserting the rule keeps this test honest whatever the
+  -- rounding does.
   SELECT id INTO v_sched FROM loan_repayment_schedule
    WHERE loan_id = 'LN-TEST-014' ORDER BY week_number LIMIT 1;
+  SELECT installment_amount, principal_portion, interest_portion
+    INTO v_inst, v_sched_prin, v_sched_intr
+    FROM loan_repayment_schedule WHERE id = v_sched;
 
   INSERT INTO loan_repayments (id, loan_id, schedule_id, client_id, amount_paid,
     payment_date, payment_method, collection_type, recorded_by, repayment_number, receipt_number)
@@ -324,7 +332,9 @@ BEGIN
   SELECT principal_portion, interest_portion INTO v_prin, v_intr
     FROM loan_repayments WHERE id = 'RP-TEST-FULL';
   PERFORM _check('allocation', '11. principal/interest split on a full instalment',
-                 v_prin = 31250 AND v_intr = 6250, format('%s / %s', v_prin, v_intr));
+                 v_prin = v_sched_prin AND v_intr = v_sched_intr,
+                 format('%s / %s (instalment holds %s / %s)',
+                        v_prin, v_intr, v_sched_prin, v_sched_intr));
   PERFORM _check('allocation', '11. the split sums back to the amount paid',
                  v_prin + v_intr = 37500, NULL);
 
@@ -341,9 +351,11 @@ BEGIN
   PERFORM _check('repayment', '8. cash rises by the full amount received',
                  v_cash_after - v_cash_before = 37500, NULL);
   PERFORM _check('repayment', '8. loans receivable falls by the principal portion only',
-                 v_recv_before - v_recv_after = 31250, format('fell by %s', v_recv_before - v_recv_after));
+                 v_recv_before - v_recv_after = v_sched_prin,
+                 format('fell by %s, principal portion is %s', v_recv_before - v_recv_after, v_sched_prin));
   PERFORM _check('repayment', '8. interest income rises by the interest portion',
-                 v_int_after - v_int_before = 6250, NULL);
+                 v_int_after - v_int_before = v_sched_intr,
+                 format('rose by %s, interest portion is %s', v_int_after - v_int_before, v_sched_intr));
   PERFORM _check('repayment', '8. returned principal is not income',
                  v_int_after - v_int_before <> 37500, NULL);
 END $$;
@@ -351,10 +363,13 @@ END $$;
 -- Partial payment (workflow 9).
 DO $$
 DECLARE v_cash TEXT; v_sched TEXT; v_prin NUMERIC; v_intr NUMERIC; v_tx TEXT;
+        v_inst NUMERIC; v_sched_prin NUMERIC;
 BEGIN
   SELECT id INTO v_cash FROM financial_accounts WHERE account_code = 'CASH-HO';
   SELECT id INTO v_sched FROM loan_repayment_schedule
    WHERE loan_id = 'LN-TEST-015' ORDER BY week_number LIMIT 1;
+  SELECT installment_amount, principal_portion INTO v_inst, v_sched_prin
+    FROM loan_repayment_schedule WHERE id = v_sched;
 
   INSERT INTO loan_repayments (id, loan_id, schedule_id, client_id, amount_paid,
     payment_date, payment_method, collection_type, recorded_by, repayment_number, receipt_number)
@@ -363,10 +378,11 @@ BEGIN
 
   SELECT principal_portion, interest_portion INTO v_prin, v_intr
     FROM loan_repayments WHERE id = 'RP-TEST-PART';
-  -- 20,000 of a 37,500 instalment splits in the same 31,250 : 6,250 ratio.
+  -- A part payment splits in the instalment's own ratio, whatever it is.
   PERFORM _check('allocation', '9. a partial payment splits pro rata',
-                 v_prin = round(20000 * 31250.0 / 37500, 2) AND v_prin + v_intr = 20000,
-                 format('%s / %s', v_prin, v_intr));
+                 v_prin = round(20000 * v_sched_prin / v_inst, 2) AND v_prin + v_intr = 20000,
+                 format('%s / %s (instalment %s holds %s principal)',
+                        v_prin, v_intr, v_inst, v_sched_prin));
 
   v_tx := post_repayment('RP-TEST-PART', v_cash);
   PERFORM _check('repayment', '9. partial repayment journal balances',

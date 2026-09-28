@@ -3,17 +3,19 @@
 Audit, baseline and plan for rebuilding the Financial Ledger, Money Management, Dashboard Financial
 Position and Reports on the existing production data.
 
-**Status: Phases 1–12 complete against a test database. Production is untouched and awaits the
-manual cut-over steps in the readiness report.**
+**Status: Phases 1–14 complete against a test database. Production is untouched and awaits the
+manual cut-over steps in the readiness report. Production's schema has been proven byte-identical
+to a clean replay of migrations 000000–001200, so all 13 can be recorded in migration history.**
 
-| Document                                                         | Phase    | What it is                                                                                                                                                          |
-| ---------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`01-BASELINE-CONTROL-TOTALS.md`](01-BASELINE-CONTROL-TOTALS.md) | 4        | Every control total as at 2026-09-28, with the identities that tie them together                                                                                    |
-| [`baseline-controls.sql`](baseline-controls.sql)                 | 4 / 11   | Re-runnable read-only query producing those totals plus four integrity assertions                                                                                   |
-| [`02-AUDIT.md`](02-AUDIT.md)                                     | 1–3, 5–6 | Root cause of the ledger failure, current architecture, repo-vs-production drift, money-flow traces, risk register, historical-data limitations                     |
-| [`03-TARGET-ARCHITECTURE.md`](03-TARGET-ARCHITECTURE.md)         | 7        | Chart of accounts, ledger model, posting functions, views, cut-over strategy, UI, reports, permissions                                                              |
-| [`04-IMPLEMENTATION-PLAN.md`](04-IMPLEMENTATION-PLAN.md)         | 8        | The plan as reviewed. Nine migrations were built in the end, not eight — the ninth welds disbursement and its posting into one transaction                          |
-| [`05-PRODUCTION-READINESS.md`](05-PRODUCTION-READINESS.md)       | 9–13     | What was built, migrations, schema, files, backfill results, before/after totals, reconciliation, 138 tests, RLS changes, limitations and the manual cut-over steps |
+| Document                                                         | Phase    | What it is                                                                                                                                                              |
+| ---------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`01-BASELINE-CONTROL-TOTALS.md`](01-BASELINE-CONTROL-TOTALS.md) | 4        | Every control total as at 2026-09-28, with the identities that tie them together                                                                                        |
+| [`baseline-controls.sql`](baseline-controls.sql)                 | 4 / 11   | Re-runnable read-only query producing those totals plus four integrity assertions                                                                                       |
+| [`02-AUDIT.md`](02-AUDIT.md)                                     | 1–3, 5–6 | Root cause of the ledger failure, current architecture, repo-vs-production drift, money-flow traces, risk register, historical-data limitations                         |
+| [`03-TARGET-ARCHITECTURE.md`](03-TARGET-ARCHITECTURE.md)         | 7        | Chart of accounts, ledger model, posting functions, views, cut-over strategy, UI, reports, permissions                                                                  |
+| [`04-IMPLEMENTATION-PLAN.md`](04-IMPLEMENTATION-PLAN.md)         | 8        | The plan as reviewed. Nine migrations were built in the end, not eight — the ninth welds disbursement and its posting into one transaction                              |
+| [`05-PRODUCTION-READINESS.md`](05-PRODUCTION-READINESS.md)       | 9–13     | What was built, migrations, schema, files, backfill results, before/after totals, reconciliation, 138 tests, RLS changes, limitations and the manual cut-over steps     |
+| [`06-PREFLIGHT-VERIFICATION.md`](06-PREFLIGHT-VERIFICATION.md)   | 14       | Migration-history reconciliation against live production, schema-drift proof, PR review findings, remaining test limitations and what Chetu must supply before cut-over |
 
 ## The short version
 
