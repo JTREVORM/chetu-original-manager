@@ -3,8 +3,8 @@
 Phase 7. This describes what the system becomes and, critically, **how it sits on top of the data
 that already exists**. Nothing here requires reinterpreting a single historical record.
 
-The question management must be able to answer in one glance is *"where is Chetu's money right
-now?"* — and the answer has to survive being checked.
+The question management must be able to answer in one glance is _"where is Chetu's money right
+now?"_ — and the answer has to survive being checked.
 
 ---
 
@@ -12,15 +12,15 @@ now?"* — and the answer has to survive being checked.
 
 ### The choice
 
-| | A. Two-column transfers | B. **Balanced ledger (recommended)** |
-| --- | --- | --- |
-| Shape | one row with `from_account_id` / `to_account_id` | header + 2..n lines that must sum to zero |
-| Disbursement | needs 3 linked rows to express cash + fee income + security liability | one transaction, four lines |
-| Split repayment | needs 3 linked rows | one transaction, four lines |
-| Reversal | reverse each row and hope none is missed | reverse the header; lines follow |
-| P&L / Balance Sheet / Cash Flow | hand-assembled per report | fall out of the account classes |
-| "Internal transfers must not inflate income" | enforced by convention | **structurally impossible** — a transfer touches no income account |
-| Cost | lower | one extra table, one balance constraint |
+|                                              | A. Two-column transfers                                               | B. **Balanced ledger (recommended)**                               |
+| -------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Shape                                        | one row with `from_account_id` / `to_account_id`                      | header + 2..n lines that must sum to zero                          |
+| Disbursement                                 | needs 3 linked rows to express cash + fee income + security liability | one transaction, four lines                                        |
+| Split repayment                              | needs 3 linked rows                                                   | one transaction, four lines                                        |
+| Reversal                                     | reverse each row and hope none is missed                              | reverse the header; lines follow                                   |
+| P&L / Balance Sheet / Cash Flow              | hand-assembled per report                                             | fall out of the account classes                                    |
+| "Internal transfers must not inflate income" | enforced by convention                                                | **structurally impossible** — a transfer touches no income account |
+| Cost                                         | lower                                                                 | one extra table, one balance constraint                            |
 
 **Recommendation: B.** A disbursement is genuinely a four-legged event and the brief asks for a
 Balance Sheet, a P&L and a Cash Flow that excludes internal transfers. Option A can be made to
@@ -58,20 +58,20 @@ recognised. A 45,000 obligation to the member is created. **All four facts are a
 Accounts are **configured, not hard-coded**. The seed below is a starting set; Administrators add
 branches, banks and wallets through the UI.
 
-| Column | Notes |
-| --- | --- |
-| `id`, `account_code`, `account_name` | code unique, e.g. `CASH-BUYENDE`, `BANK-STANBIC-01` |
-| `account_type` | `cash_at_hand`, `cashier_till`, `branch_cash`, `bank`, `mobile_money`, `merchant`, `loans_receivable`, `interest_receivable`, `penalty_receivable`, `security_held`, `capital`, `income`, `expense`, `other` |
-| `account_class` | `asset_liquid`, `asset_receivable`, `liability`, `equity`, `income`, `expense` — **this is what the reports group by** |
-| `branch_id` | nullable = institution-wide |
-| `institution`, `account_reference` | bank name / wallet provider, account or wallet number |
-| `opening_balance`, `opening_balance_date` | set once at cut-over from a physical count or statement |
-| `currency` | default `UGX` |
-| `status` | `active`, `dormant`, `closed` |
-| `is_system` | true for control accounts the UI must not delete |
-| `is_legacy` | true only for `LEGACY-UNCLASSIFIED` |
-| `allow_manual_posting` | false on control accounts — you cannot hand-journal Loans Receivable |
-| `sort_order`, `created_*`, `updated_*` | |
+| Column                                    | Notes                                                                                                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`, `account_code`, `account_name`      | code unique, e.g. `CASH-BUYENDE`, `BANK-STANBIC-01`                                                                                                                                                          |
+| `account_type`                            | `cash_at_hand`, `cashier_till`, `branch_cash`, `bank`, `mobile_money`, `merchant`, `loans_receivable`, `interest_receivable`, `penalty_receivable`, `security_held`, `capital`, `income`, `expense`, `other` |
+| `account_class`                           | `asset_liquid`, `asset_receivable`, `liability`, `equity`, `income`, `expense` — **this is what the reports group by**                                                                                       |
+| `branch_id`                               | nullable = institution-wide                                                                                                                                                                                  |
+| `institution`, `account_reference`        | bank name / wallet provider, account or wallet number                                                                                                                                                        |
+| `opening_balance`, `opening_balance_date` | set once at cut-over from a physical count or statement                                                                                                                                                      |
+| `currency`                                | default `UGX`                                                                                                                                                                                                |
+| `status`                                  | `active`, `dormant`, `closed`                                                                                                                                                                                |
+| `is_system`                               | true for control accounts the UI must not delete                                                                                                                                                             |
+| `is_legacy`                               | true only for `LEGACY-UNCLASSIFIED`                                                                                                                                                                          |
+| `allow_manual_posting`                    | false on control accounts — you cannot hand-journal Loans Receivable                                                                                                                                         |
+| `sort_order`, `created_*`, `updated_*`    |                                                                                                                                                                                                              |
 
 **There is no `current_balance` column.** Balance is `opening_balance + Σ lines`, served by a view.
 That is the whole point: no stored total can drift if no stored total exists.
@@ -127,18 +127,18 @@ All money writes go through `SECURITY DEFINER` functions with `SET search_path =
 pg_temp`, each re-checking the caller's role and the business-day guard, each writing header and
 lines in one statement. Direct `INSERT` into the ledger tables is denied to `authenticated` by RLS.
 
-| Function | Legs |
-| --- | --- |
-| `post_capital_injection(account, amount, date, ref, note)` | Dr account · Cr `CAPITAL-INTRODUCED` |
-| `post_disbursement(loan_id, funding_account_id)` | Dr `LOANS-RECEIVABLE` (principal) · Cr funding (net) · Cr the three fee-income accounts · Cr `SECURITY-HELD` |
-| `post_repayment(repayment_id, receiving_account_id)` | Dr receiving (full amount) · Cr `LOANS-RECEIVABLE` (principal part) · Cr `INC-INTEREST` (interest part) · Cr `INC-PENALTY` (penalty part, when penalties exist) |
-| `post_member_fee(member_fee_id, receiving_account_id)` | Dr receiving · Cr `INC-FEE-ADMISSION` / `INC-FEE-PASSBOOK` |
-| `post_expense(expense_id, source_account_id)` | Dr `EXP-<category>` · Cr source account |
-| `post_internal_transfer(from, to, amount, date, ref, note)` | Dr to · Cr from — **touches no income or expense account, so it cannot inflate either** |
-| `post_security_refund(security_return_id, source_account_id)` | Dr `SECURITY-HELD` · Cr source |
-| `post_writeoff(loan_id)` | Dr `WRITEOFF-LOSS` · Cr `LOANS-RECEIVABLE` (+ `INTEREST-RECEIVABLE`) |
-| `post_reconciliation_adjustment(account, amount, reason)` | Administrator only, always visible in reports as an adjustment |
-| `reverse_financial_transaction(tx_id, reason)` | mirrors every line of the original |
+| Function                                                      | Legs                                                                                                                                                            |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `post_capital_injection(account, amount, date, ref, note)`    | Dr account · Cr `CAPITAL-INTRODUCED`                                                                                                                            |
+| `post_disbursement(loan_id, funding_account_id)`              | Dr `LOANS-RECEIVABLE` (principal) · Cr funding (net) · Cr the three fee-income accounts · Cr `SECURITY-HELD`                                                    |
+| `post_repayment(repayment_id, receiving_account_id)`          | Dr receiving (full amount) · Cr `LOANS-RECEIVABLE` (principal part) · Cr `INC-INTEREST` (interest part) · Cr `INC-PENALTY` (penalty part, when penalties exist) |
+| `post_member_fee(member_fee_id, receiving_account_id)`        | Dr receiving · Cr `INC-FEE-ADMISSION` / `INC-FEE-PASSBOOK`                                                                                                      |
+| `post_expense(expense_id, source_account_id)`                 | Dr `EXP-<category>` · Cr source account                                                                                                                         |
+| `post_internal_transfer(from, to, amount, date, ref, note)`   | Dr to · Cr from — **touches no income or expense account, so it cannot inflate either**                                                                         |
+| `post_security_refund(security_return_id, source_account_id)` | Dr `SECURITY-HELD` · Cr source                                                                                                                                  |
+| `post_writeoff(loan_id)`                                      | Dr `WRITEOFF-LOSS` · Cr `LOANS-RECEIVABLE` (+ `INTEREST-RECEIVABLE`)                                                                                            |
+| `post_reconciliation_adjustment(account, amount, reason)`     | Administrator only, always visible in reports as an adjustment                                                                                                  |
+| `reverse_financial_transaction(tx_id, reason)`                | mirrors every line of the original                                                                                                                              |
 
 **This is also the fix for R1.** `post_disbursement` is `SECURITY DEFINER`, so a Loan Officer who is
 permitted to disburse can post the ledger entry without being an Administrator — and because the
@@ -150,25 +150,25 @@ ledger entry.
 
 ## 5. Views — one source of truth for every screen
 
-| View | Purpose |
-| --- | --- |
-| `v_account_balances` | per account: opening, inflows, outflows, **current balance**, last transaction, reconciliation state |
-| `v_money_position` | Cash at Hand · Cash at Bank · Mobile Money/Merchant · **Total Available Liquidity** · Outstanding Principal · Interest Receivable · Penalties Receivable · **Total Loan Portfolio** · Overdue Portfolio · Security Held · **Total Financial Position** |
-| `v_loan_portfolio` | per loan: principal outstanding, interest outstanding, days past due, PAR bucket, branch, officer, product |
-| `v_repayment_allocation` | per receipt: principal / interest / penalty / fee split |
-| `v_cash_flow` | opening → capital → collections (split) → other income → disbursements → expenses → **transfers shown separately and netted to nil** → closing |
-| `v_trial_balance` | every account, debits, credits, balance — the thing you check when a report looks wrong |
-| `v_income_statement` | income accounts − expense accounts = net result, principal movement structurally excluded |
-| `v_financial_position` | assets / liabilities / equity by `account_class` |
-| `v_par_ageing` | 1–7 · 8–30 · 31–60 · 61–90 · 90+ with loan counts, overdue principal, overdue interest, PAR% |
-| `v_branch_financials` | liquidity, disbursements, collections, portfolio, arrears, income, expenses per branch |
-| `v_officer_performance` | portfolio, disbursed, expected, actual, overdue, borrowers, collection rate |
-| `v_borrower_statement` | full member history across loans, schedule, receipts, splits, balances |
+| View                     | Purpose                                                                                                                                                                                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `v_account_balances`     | per account: opening, inflows, outflows, **current balance**, last transaction, reconciliation state                                                                                                                                                   |
+| `v_money_position`       | Cash at Hand · Cash at Bank · Mobile Money/Merchant · **Total Available Liquidity** · Outstanding Principal · Interest Receivable · Penalties Receivable · **Total Loan Portfolio** · Overdue Portfolio · Security Held · **Total Financial Position** |
+| `v_loan_portfolio`       | per loan: principal outstanding, interest outstanding, days past due, PAR bucket, branch, officer, product                                                                                                                                             |
+| `v_repayment_allocation` | per receipt: principal / interest / penalty / fee split                                                                                                                                                                                                |
+| `v_cash_flow`            | opening → capital → collections (split) → other income → disbursements → expenses → **transfers shown separately and netted to nil** → closing                                                                                                         |
+| `v_trial_balance`        | every account, debits, credits, balance — the thing you check when a report looks wrong                                                                                                                                                                |
+| `v_income_statement`     | income accounts − expense accounts = net result, principal movement structurally excluded                                                                                                                                                              |
+| `v_financial_position`   | assets / liabilities / equity by `account_class`                                                                                                                                                                                                       |
+| `v_par_ageing`           | 1–7 · 8–30 · 31–60 · 61–90 · 90+ with loan counts, overdue principal, overdue interest, PAR%                                                                                                                                                           |
+| `v_branch_financials`    | liquidity, disbursements, collections, portfolio, arrears, income, expenses per branch                                                                                                                                                                 |
+| `v_officer_performance`  | portfolio, disbursed, expected, actual, overdue, borrowers, collection rate                                                                                                                                                                            |
+| `v_borrower_statement`   | full member history across loans, schedule, receipts, splits, balances                                                                                                                                                                                 |
 
 Every view is RLS-respecting (`security_invoker`), so a Loan Officer reading `v_money_position`
 sees their scope and nothing more.
 
-**Application side:** one new `src/lib/financial/` service reads these views and is the *only*
+**Application side:** one new `src/lib/financial/` service reads these views and is the _only_
 place the UI gets a financial number. `DatabaseContext`'s aggregates, `branchMetrics.ts`'s `cash`
 and `portfolio` blocks, and `Reports.tsx`'s inline reduces all delegate to it. That retires R9 (three
 divergent period definitions) by deleting two of the three engines rather than reconciling them.
@@ -180,11 +180,11 @@ divergent period definitions) by deleting two of the three engines rather than r
 This is the part that must not be fudged.
 
 1. **Backfill to `LEGACY-UNCLASSIFIED`.** Every historical event is posted with its real amount,
-   date, actor, branch, reference and source link — but its *cash* leg points at the legacy account,
+   date, actor, branch, reference and source link — but its _cash_ leg points at the legacy account,
    because the system never recorded where the cash was. All non-cash legs (loans receivable, fee
    income, security held, capital) are **fully accurate**, because those were always derivable.
 2. **After backfill, `LEGACY-UNCLASSIFIED` will show a large negative balance** (roughly
-   −2,068,900: 2,090,000 + 851,100 + 240,000 in, 5,250,000 out). *That is the correct output.* It is
+   −2,068,900: 2,090,000 + 851,100 + 240,000 in, 5,250,000 out). _That is the correct output._ It is
    the honest measure of how much cash movement was never located. It must be displayed, not hidden.
 3. **Management performs a physical count** — cash in the till, bank statement balance, mobile-money
    float — on a chosen cut-over date.
@@ -263,16 +263,16 @@ transaction type, loan status, payment status. Existing PDF/Excel/CSV/Print expo
 
 ## 10. Permissions
 
-| Action | Who |
-| --- | --- |
-| Read own-branch accounts and ledger | Administrator, **Branch Manager** (closes R7), Auditor (read-only) |
-| Read all accounts | Administrator, Auditor |
-| Post disbursement / repayment ledger entries | whoever may perform the operation — via the posting function, not direct insert |
-| Post expense, capital, internal transfer | Administrator (Branch Manager for own-branch expenses, if you want it — **your call**) |
-| Create/edit accounts | Administrator |
-| Reverse a transaction | Administrator |
-| Reconcile | Administrator, Branch Manager for own branch |
-| Any write at all | never an Auditor — `NOT private.is_auditor()` on every policy |
+| Action                                       | Who                                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Read own-branch accounts and ledger          | Administrator, **Branch Manager** (closes R7), Auditor (read-only)                     |
+| Read all accounts                            | Administrator, Auditor                                                                 |
+| Post disbursement / repayment ledger entries | whoever may perform the operation — via the posting function, not direct insert        |
+| Post expense, capital, internal transfer     | Administrator (Branch Manager for own-branch expenses, if you want it — **your call**) |
+| Create/edit accounts                         | Administrator                                                                          |
+| Reverse a transaction                        | Administrator                                                                          |
+| Reconcile                                    | Administrator, Branch Manager for own branch                                           |
+| Any write at all                             | never an Auditor — `NOT private.is_auditor()` on every policy                          |
 
 New `private.*` helpers (`can_see_account`, `can_post_financial`) follow the existing pattern, in the
 schema PostgREST does not expose. New functions pin `search_path` and have `EXECUTE` revoked from
