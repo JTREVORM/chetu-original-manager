@@ -1953,31 +1953,37 @@ BEGIN
   SELECT id INTO v_cash FROM financial_accounts WHERE account_code = 'CASH-HO';
   SELECT current_balance INTO v_legacy FROM v_account_balances WHERE account_code = 'LEGACY-UNCLASSIFIED';
 
-  PERFORM _check('reclassification', 'there is somewhere honest for it to go',
+  PERFORM _check('reclassification', 'the suspense account is a liability, not equity',
     EXISTS (SELECT 1 FROM financial_accounts
-             WHERE account_code = 'CAPITAL-UNRECORDED' AND account_class = 'equity'), NULL);
+             WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE'
+               AND account_class = 'liability' AND account_type = 'suspense'),
+    (SELECT account_class||'/'||account_type FROM financial_accounts
+      WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE'));
+  PERFORM _check('reclassification', 'and is not counted as cash',
+    NOT EXISTS (SELECT 1 FROM financial_accounts
+                 WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE' AND account_class = 'asset_liquid'), NULL);
 
   PERFORM _as('33333333-3333-3333-3333-333333333333');
   PERFORM _check_raises('reclassification', 'a Loan Officer cannot reclassify the legacy balance',
-    $q$SELECT reclassify_legacy_funds('CAPITAL-UNRECORDED', 'x', 'y')$q$, 'Only an Administrator');
+    $q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', 'x', 'y')$q$, 'Only an Administrator');
   PERFORM _as('22222222-2222-2222-2222-222222222222');
   PERFORM _check_raises('reclassification', 'nor can a Branch Manager',
-    $q$SELECT reclassify_legacy_funds('CAPITAL-UNRECORDED', 'x', 'y')$q$, 'Only an Administrator');
+    $q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', 'x', 'y')$q$, 'Only an Administrator');
   PERFORM _as('44444444-4444-4444-4444-444444444444');
   PERFORM _check_raises('reclassification', 'nor an Auditor',
-    $q$SELECT reclassify_legacy_funds('CAPITAL-UNRECORDED', 'x', 'y')$q$, 'Only an Administrator');
+    $q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', 'x', 'y')$q$, 'Only an Administrator');
   PERFORM _as(NULL);
 
   PERFORM _check_raises('reclassification', 'a reclassification must say why',
-    $q$SELECT reclassify_legacy_funds('CAPITAL-UNRECORDED', '  ', 'management')$q$, 'record why');
+    $q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', '  ', 'management')$q$, 'record why');
   PERFORM _check_raises('reclassification', 'and who authorised it',
-    $q$SELECT reclassify_legacy_funds('CAPITAL-UNRECORDED', 'a reason', '  ')$q$, 'who authorised');
+    $q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', 'a reason', '  ')$q$, 'who authorised');
   PERFORM _check_raises('reclassification', 'it cannot be reclassified to a cash account',
     format($q$SELECT reclassify_legacy_funds('CASH-HO', 'a reason', 'management')$q$), 'never to cash');
   PERFORM _check_raises('reclassification', 'nor to an account that does not exist',
     $q$SELECT reclassify_legacy_funds('NOPE', 'a reason', 'management')$q$, 'does not exist');
   PERFORM _check_raises('reclassification', 'and not for more than the balance holds',
-    format($q$SELECT reclassify_legacy_funds('CAPITAL-UNRECORDED', 'a reason', 'management', %s)$q$,
+    format($q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', 'a reason', 'management', %s)$q$,
            abs(v_legacy) + 1), 'holds');
 
   PERFORM _check('reclassification', 'none of those refusals moved the balance',
@@ -1992,11 +1998,11 @@ DECLARE
   v_intro NUMERIC;
 BEGIN
   SELECT current_balance  INTO v_before     FROM v_account_balances WHERE account_code = 'LEGACY-UNCLASSIFIED';
-  SELECT natural_balance  INTO v_cap_before FROM v_account_balances WHERE account_code = 'CAPITAL-UNRECORDED';
+  SELECT natural_balance  INTO v_cap_before FROM v_account_balances WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE';
   SELECT natural_balance  INTO v_intro      FROM v_account_balances WHERE account_code = 'CAPITAL-INTRODUCED';
 
   SELECT * INTO v_part FROM reclassify_legacy_funds(
-    'CAPITAL-UNRECORDED', 'Partial, to prove the arithmetic', 'Chetu management', 1000,
+    'HISTORICAL-FUNDING-SUSPENSE', 'Partial, to prove the arithmetic', 'Chetu management', 1000,
     'Board minute 1');
   PERFORM _check('reclassification', 'a partial reclassification moves exactly its amount',
     (SELECT current_balance FROM v_account_balances WHERE account_code = 'LEGACY-UNCLASSIFIED')
@@ -2006,16 +2012,16 @@ BEGIN
                  format('%s then %s', v_part.original_legacy_balance, v_part.residual_after));
 
   SELECT * INTO v_rest FROM reclassify_legacy_funds(
-    'CAPITAL-UNRECORDED',
+    'HISTORICAL-FUNDING-SUSPENSE',
     'Management instructed that this historical unexplained balance be cleared. Source not identified.',
     'Chetu Microfinance management', NULL, 'Management instruction');
 
-  SELECT natural_balance INTO v_cap_after FROM v_account_balances WHERE account_code = 'CAPITAL-UNRECORDED';
+  SELECT natural_balance INTO v_cap_after FROM v_account_balances WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE';
 
   PERFORM _check('reclassification', 'the legacy balance is cleared to exactly zero',
     (SELECT round(current_balance, 2) FROM v_account_balances WHERE account_code = 'LEGACY-UNCLASSIFIED') = 0,
     format('%s', (SELECT current_balance FROM v_account_balances WHERE account_code = 'LEGACY-UNCLASSIFIED')));
-  PERFORM _check('reclassification', 'every shilling of it landed in equity',
+  PERFORM _check('reclassification', 'every shilling of it landed in the suspense liability',
                  v_cap_after - v_cap_before = abs(v_before),
                  format('%s moved, %s expected', v_cap_after - v_cap_before, abs(v_before)));
   PERFORM _check('reclassification', 'documented capital was left alone',
@@ -2040,7 +2046,52 @@ BEGIN
     (SELECT count(DISTINCT reclassification_ref) FROM legacy_reclassifications) = 2, NULL);
 
   PERFORM _check_raises('reclassification', 'nothing is left to reclassify once it is zero',
-    $q$SELECT reclassify_legacy_funds('CAPITAL-UNRECORDED', 'again', 'management')$q$, 'already zero');
+    $q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', 'again', 'management')$q$, 'already zero');
+END $$;
+
+-- The second hop: the day Chetu identifies the source, the same function moves
+-- it on. Proved here and then put back, so the suspense balance the cut-over
+-- actually produces is what the rest of the suite sees.
+DO $$
+DECLARE v_susp NUMERIC; v_hop RECORD; v_intro_before NUMERIC; v_intro_after NUMERIC;
+BEGIN
+  SELECT natural_balance INTO v_susp        FROM v_account_balances WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE';
+  SELECT natural_balance INTO v_intro_before FROM v_account_balances WHERE account_code = 'CAPITAL-INTRODUCED';
+
+  PERFORM _check('reclassification', 'the suspense account holds the whole amount',
+                 v_susp > 0, format('%s', v_susp));
+
+  SELECT * INTO v_hop FROM reclassify_legacy_funds(
+    'CAPITAL-INTRODUCED',
+    'Chetu confirmed the funding was an undocumented owner contribution.',
+    'Chetu Microfinance management', NULL, 'Board confirmation', CURRENT_DATE,
+    'HISTORICAL-FUNDING-SUSPENSE');
+
+  SELECT natural_balance INTO v_intro_after FROM v_account_balances WHERE account_code = 'CAPITAL-INTRODUCED';
+
+  PERFORM _check('reclassification', 'suspense can be reclassified onward once the source is known',
+                 v_hop.source_code = 'HISTORICAL-FUNDING-SUSPENSE'
+                 AND v_hop.residual_after = 0
+                 AND v_intro_after - v_intro_before = v_susp,
+                 format('%s moved to capital', v_intro_after - v_intro_before));
+  PERFORM _check('reclassification', 'the onward move has its own audit row and journal',
+    (SELECT count(*) FROM legacy_reclassifications WHERE source_code = 'HISTORICAL-FUNDING-SUSPENSE') = 1
+    AND (SELECT sum(signed_amount) FROM financial_transaction_lines WHERE transaction_id = v_hop.transaction_id) = 0,
+    NULL);
+
+  -- Put it back where the cut-over leaves it: reversing the hop, not deleting it.
+  PERFORM reverse_financial_transaction(v_hop.transaction_id, 'Proving the hop; restoring suspense');
+  PERFORM _check('reclassification', 'and reversing it returns the balance to suspense',
+    (SELECT natural_balance FROM v_account_balances WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE') = v_susp
+    AND (SELECT natural_balance FROM v_account_balances WHERE account_code = 'CAPITAL-INTRODUCED') = v_intro_before,
+    NULL);
+
+  PERFORM _check_raises('reclassification', 'only unidentified-funding accounts can be a source',
+    $q$SELECT reclassify_legacy_funds('CAPITAL-INTRODUCED', 'x', 'y', NULL, NULL, CURRENT_DATE, 'CASH-HO')$q$,
+    'not an account holding unidentified');
+  PERFORM _check_raises('reclassification', 'and source and destination must differ',
+    $q$SELECT reclassify_legacy_funds('HISTORICAL-FUNDING-SUSPENSE', 'x', 'y', NULL, NULL, CURRENT_DATE, 'HISTORICAL-FUNDING-SUSPENSE')$q$,
+    'must differ');
 END $$;
 
 -- The audit trail is append-only, and not writable from a session.
@@ -2051,9 +2102,9 @@ BEGIN
     '11111111-1111-1111-1111-111111111111',
     $q$INSERT INTO legacy_reclassifications (reclassification_ref, original_legacy_balance, amount,
         residual_after, destination_account_id, destination_code, reason, authorised_by, transaction_id)
-       SELECT 'FORGED', 1, 1, 0, id, 'CAPITAL-UNRECORDED', 'x', 'y',
+       SELECT 'FORGED', 1, 1, 0, id, 'HISTORICAL-FUNDING-SUSPENSE', 'x', 'y',
               (SELECT id FROM financial_transactions LIMIT 1)
-         FROM financial_accounts WHERE account_code = 'CAPITAL-UNRECORDED'$q$,
+         FROM financial_accounts WHERE account_code = 'HISTORICAL-FUNDING-SUSPENSE'$q$,
     NULL);
   PERFORM _direct_write_refused_msg('reclassification',
     'an audit row cannot be altered',
@@ -2063,8 +2114,9 @@ BEGIN
     'an audit row cannot be deleted',
     '11111111-1111-1111-1111-111111111111',
     $q$DELETE FROM legacy_reclassifications$q$, NULL);
-  PERFORM _check('reclassification', 'both audit rows survived that',
-    (SELECT count(*) FROM legacy_reclassifications) = 2, NULL);
+  PERFORM _check('reclassification', 'every audit row survived that',
+    (SELECT count(*) FROM legacy_reclassifications) = 3,
+    format('%s rows', (SELECT count(*) FROM legacy_reclassifications)));
 END $$;
 
 -- And once cut-over is complete, a legacy balance cannot drift back unseen.
@@ -2079,7 +2131,7 @@ BEGIN
   PERFORM private.write_journal('reconciliation_adjustment', 'drift probe',
     jsonb_build_array(
       jsonb_build_object('account_code', 'LEGACY-UNCLASSIFIED', 'direction', 'credit', 'amount', 1, 'memo', 'probe'),
-      jsonb_build_object('account_code', 'CAPITAL-UNRECORDED',  'direction', 'debit',  'amount', 1, 'memo', 'probe')),
+      jsonb_build_object('account_code', 'HISTORICAL-FUNDING-SUSPENSE',  'direction', 'debit',  'amount', 1, 'memo', 'probe')),
     CURRENT_DATE, NULL, 'DRIFT-PROBE');
   SELECT count(*) INTO v_rows FROM v_ledger_health WHERE check_name = 'legacy_unresolved_after_cutover';
   PERFORM _check('reclassification', 'an unresolved legacy balance after cut-over is reported',

@@ -86,6 +86,7 @@ const TYPE_LABELS: Record<FinancialAccountType, string> = {
   income: "Income",
   expense: "Expense",
   writeoff: "Write-off",
+  suspense: "Suspense",
   other: "Other",
 };
 
@@ -1053,6 +1054,12 @@ const ReportsTab: React.FC<{
           <Row label="Loans receivable" value={position.outstanding_principal} />
           <Row label="Total assets (ledger)" value={position.total_assets_ledger} strong />
           <Row label="Member security held" value={-position.security_held} />
+          {Number(position.unidentified_funding) !== 0 && (
+            <Row
+              label="Unidentified historical funding"
+              value={-position.unidentified_funding}
+            />
+          )}
           <Row label="Capital introduced" value={position.capital_introduced} />
           <Row label="Retained result" value={position.net_result} />
           <Row label="Net worth (ledger)" value={position.net_worth_ledger} strong />

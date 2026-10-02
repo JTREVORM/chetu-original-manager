@@ -575,6 +575,8 @@ export type FinancialAccountType =
   | "income"
   | "expense"
   | "writeoff"
+  // an amount whose proper classification is not yet determined
+  | "suspense"
   | "other";
 
 /** What the reports group by. */
@@ -724,6 +726,10 @@ export interface MoneyPosition {
   total_expenses: number;
   net_result: number;
   security_held: number;
+  /** Historical funding whose source is unidentified. Not members' money, not capital. */
+  unidentified_funding: number;
+  /** Member security plus unidentified funding. What the net-worth figures subtract. */
+  total_liabilities: number;
   /** Ledger-only assets: liquidity plus receivable control accounts. */
   total_assets_ledger: number;
   /** Ties exactly to the trial balance: capital + net result. */

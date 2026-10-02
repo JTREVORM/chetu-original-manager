@@ -22,34 +22,65 @@
 --     IS zero, so the cut-over could not have recorded it.
 --
 -- ---------------------------------------------------------------------------
--- Where the legacy balance goes, and why not into Capital Introduced
+-- Where the legacy balance goes: a liability, not equity
 -- ---------------------------------------------------------------------------
 -- The balance measures funding that reached the business from a source the
 -- records never captured. Management has asked for it to be resolved but has
--- not said where it came from, and the honest treatment of money whose origin
--- is unknown is not to merge it with money whose origin is documented.
+-- NOT said where it came from.
 --
--- So it moves to its own equity account, `CAPITAL-UNRECORDED`. The balance
--- sheet then shows Capital Introduced 2,090,000 and Unrecorded Historical
--- Funding separately, permanently, and a reader can see at a glance how much
--- of the funding was never documented. The balance is resolved — it is
--- classified, it is in equity, it is no longer a dangling control account —
--- without anyone having had to invent a story about it.
+-- Booking it to equity would assert that the owners put it in. Nobody knows
+-- that. If the money turns out to have come from a director, a shareholder or
+-- anyone else on terms, the business owes it, and an equity line would have
+-- hidden a real obligation inside owners' funds — overstating equity and
+-- understating what is owed, which is the wrong error to make.
 --
--- If Chetu later identifies the source, the same function moves it on to the
--- right account with its own audit row, and the chain stays readable.
+-- So it goes to `HISTORICAL-FUNDING-SUSPENSE`, classified as a **liability**.
+-- That is the conservative reading and the conventional one: a suspense
+-- account is exactly the instrument for an amount whose proper classification
+-- is not yet determined, and prudence says recognise the obligation until the
+-- source is known rather than the other way round.
+--
+-- What this achieves:
+--
+--   * LEGACY-UNCLASSIFIED becomes zero — the control account is resolved;
+--   * the 2,452,500 stays whole, on its own line, named for what it is;
+--   * it is not counted as documented owner capital;
+--   * it is not income and it is not an expense;
+--   * it sits on the balance sheet where a reader will see it;
+--   * and it can be moved again, by the same function with its own audit row,
+--     the day Chetu says whether it was capital, a director's loan or
+--     something else. Liability → equity is one controlled journal away.
+--
+-- `CAPITAL-INTRODUCED` is left alone at 2,090,000 throughout: documented
+-- capital and unidentified funding never share a line.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------
 -- 1. Somewhere honest for it to go
 -- ---------------------------------------------------------------------------
+-- `account_type` is constrained to a fixed list, and 'suspense' is not on it.
+-- Adding it rather than reusing 'other' is worth the two lines: the type shows
+-- in the chart of accounts and in exports, and "suspense" tells a reader what
+-- the account is for where "other" tells them nothing. Nothing switches
+-- exhaustively on the column — the views filter on `account_class`, and
+-- `defaultAccountFor` only looks for liquid types and falls through.
+ALTER TABLE public.financial_accounts DROP CONSTRAINT IF EXISTS financial_accounts_type_check;
+ALTER TABLE public.financial_accounts ADD CONSTRAINT financial_accounts_type_check
+  CHECK (account_type = ANY (ARRAY[
+    'cash_at_hand', 'cashier_till', 'branch_cash', 'bank', 'mobile_money', 'merchant',
+    'loans_receivable', 'interest_receivable', 'penalty_receivable', 'security_held',
+    'capital', 'income', 'expense', 'writeoff', 'suspense', 'other']));
+
+-- A liability, and a suspense account: an obligation recognised because the
+-- source is unknown, held apart until it is identified. Not asset_liquid, so
+-- it is never counted as cash; not equity, so it is never counted as capital.
 INSERT INTO public.financial_accounts
   (account_code, account_name, account_type, account_class,
    allow_manual_posting, is_system, sort_order, status, description)
 VALUES
-  ('CAPITAL-UNRECORDED', 'Unrecorded Historical Funding', 'capital', 'equity',
-   FALSE, TRUE, 755, 'Active',
-   'Funding that reached the business before the ledger existed and whose source the records never captured. Reclassified from Legacy / Unclassified under management authority. Kept apart from Capital Introduced so the documented and the undocumented are never confused.')
+  ('HISTORICAL-FUNDING-SUSPENSE', 'Unidentified Historical Funding', 'suspense', 'liability',
+   FALSE, TRUE, 615, 'Active',
+   'Funding that reached the business before the ledger existed and whose source the records never captured. Held as a liability because the source is unidentified: until Chetu confirms whether it was capital, a director or shareholder loan, or something else, the prudent assumption is that the business may owe it. Reclassified out of Legacy / Unclassified under management authority, and reclassifiable again through reclassify_legacy_funds once the source is known. Never merged with Capital Introduced.')
 ON CONFLICT (account_code) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
@@ -61,6 +92,8 @@ ON CONFLICT (account_code) DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.legacy_reclassifications (
   id                      TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
   reclassification_ref    TEXT UNIQUE NOT NULL,
+  source_account_id       TEXT NOT NULL REFERENCES public.financial_accounts(id),
+  source_code             TEXT NOT NULL,
   original_legacy_balance NUMERIC(14,2) NOT NULL,
   amount                  NUMERIC(14,2) NOT NULL,
   residual_after          NUMERIC(14,2) NOT NULL,
@@ -78,7 +111,7 @@ CREATE TABLE IF NOT EXISTS public.legacy_reclassifications (
 );
 
 COMMENT ON TABLE public.legacy_reclassifications IS
-  'One row per reclassification out of Legacy / Unclassified: the balance before, the amount moved, where it went, why, on whose authority, by whom and when. Append-only.';
+  'One row per reclassification of unidentified historical funding: which account it came out of, the balance before, the amount moved, where it went, why, on whose authority, by whom and when. Covers the move out of Legacy / Unclassified and any later move out of suspense once the source is identified. Append-only.';
 
 CREATE SEQUENCE IF NOT EXISTS public.legacy_reclassification_seq START 1;
 
@@ -125,25 +158,33 @@ CREATE TRIGGER trg_guard_legacy_reclassification
 -- ---------------------------------------------------------------------------
 -- Administrator only. The journal and the audit row are written together, and
 -- the destination must be an equity or liability control account — never a
--- cash account, because this moves a classification, not money. Nothing
--- leaves the building and nothing arrives.
+-- cash account, because this moves a classification, not money. Nothing leaves
+-- the building and nothing arrives.
+--
+-- `_source_code` exists so the same mechanism, the same audit table and the
+-- same reference series carry the second move too: out of Legacy /
+-- Unclassified now, and out of suspense into capital or a director's loan on
+-- the day Chetu identifies the source. The source is restricted by name to the
+-- two accounts that hold unidentified funding, so this can never be used to
+-- shuffle anything else.
 CREATE OR REPLACE FUNCTION public.reclassify_legacy_funds(
   _destination_code        TEXT,
   _reason                  TEXT,
   _authorised_by           TEXT,
   _amount                  NUMERIC DEFAULT NULL,
   _authorisation_reference TEXT DEFAULT NULL,
-  _transaction_date        DATE DEFAULT CURRENT_DATE
+  _transaction_date        DATE DEFAULT CURRENT_DATE,
+  _source_code             TEXT DEFAULT 'LEGACY-UNCLASSIFIED'
 )
 RETURNS TABLE (reclassification_ref TEXT, transaction_id TEXT, transaction_number TEXT,
-               original_legacy_balance NUMERIC, amount_reclassified NUMERIC,
+               source_code TEXT, original_legacy_balance NUMERIC, amount_reclassified NUMERIC,
                residual_after NUMERIC, destination_code TEXT)
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, private, pg_temp
 AS $$
 DECLARE
-  v_legacy_id  TEXT;
+  v_src        public.financial_accounts%ROWTYPE;
   v_balance    NUMERIC(14,2);
   v_dest       public.financial_accounts%ROWTYPE;
   v_amount     NUMERIC(14,2);
@@ -153,7 +194,7 @@ DECLARE
   v_lines      JSONB;
 BEGIN
   IF auth.uid() IS NOT NULL AND NOT private.is_admin() THEN
-    RAISE EXCEPTION 'Only an Administrator may reclassify the legacy balance'
+    RAISE EXCEPTION 'Only an Administrator may reclassify unidentified historical funding'
       USING ERRCODE = 'insufficient_privilege';
   END IF;
   IF _reason IS NULL OR btrim(_reason) = '' THEN
@@ -163,17 +204,22 @@ BEGIN
     RAISE EXCEPTION 'A reclassification must record who authorised it' USING ERRCODE = 'check_violation';
   END IF;
 
-  SELECT id INTO v_legacy_id FROM public.financial_accounts
-   WHERE account_code = 'LEGACY-UNCLASSIFIED';
-  IF v_legacy_id IS NULL THEN
-    RAISE EXCEPTION 'The Legacy / Unclassified account does not exist' USING ERRCODE = 'check_violation';
+  IF _source_code NOT IN ('LEGACY-UNCLASSIFIED', 'HISTORICAL-FUNDING-SUSPENSE') THEN
+    RAISE EXCEPTION
+      '% is not an account holding unidentified historical funding. Only Legacy / Unclassified and the historical funding suspense account can be reclassified this way.',
+      _source_code USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_src FROM public.financial_accounts WHERE account_code = _source_code;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Source account % does not exist', _source_code USING ERRCODE = 'check_violation';
   END IF;
 
   SELECT COALESCE(current_balance, 0) INTO v_balance
-    FROM public.v_account_balances WHERE account_id = v_legacy_id;
+    FROM public.v_account_balances WHERE account_id = v_src.id;
 
   IF round(COALESCE(v_balance, 0), 2) = 0 THEN
-    RAISE EXCEPTION 'Legacy / Unclassified is already zero. There is nothing to reclassify.'
+    RAISE EXCEPTION '% is already zero. There is nothing to reclassify.', v_src.account_name
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -181,9 +227,12 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Destination account % does not exist', _destination_code USING ERRCODE = 'check_violation';
   END IF;
+  IF _destination_code = _source_code THEN
+    RAISE EXCEPTION 'Source and destination must differ' USING ERRCODE = 'check_violation';
+  END IF;
   IF v_dest.account_class NOT IN ('equity', 'liability') THEN
     RAISE EXCEPTION
-      'Destination % is a % account. A legacy balance is reclassified to equity or to a liability, never to cash — this moves a classification, not money.',
+      'Destination % is a % account. Unidentified funding is reclassified to equity or to a liability, never to cash — this moves a classification, not money.',
       v_dest.account_name, v_dest.account_class
       USING ERRCODE = 'check_violation';
   END IF;
@@ -197,58 +246,61 @@ BEGIN
     RAISE EXCEPTION 'The amount reclassified must be greater than zero' USING ERRCODE = 'check_violation';
   END IF;
   IF round(v_amount, 2) > round(abs(v_balance), 2) THEN
-    RAISE EXCEPTION 'Legacy / Unclassified holds % — cannot reclassify %', abs(v_balance), v_amount
+    RAISE EXCEPTION '% holds % — cannot reclassify %', v_src.account_name, abs(v_balance), v_amount
       USING ERRCODE = 'check_violation';
   END IF;
 
   v_ref := 'CM-RECLASS-' || to_char(now(), 'YYYY') || '-' ||
            lpad(nextval('public.legacy_reclassification_seq')::TEXT, 4, '0');
 
-  -- A credit balance on this asset account (the usual case: more cash left the
-  -- building than the records explain) is cleared by debiting it, with the
-  -- contra credited to equity. A debit balance clears the other way round.
+  -- The source is cleared towards zero whichever side it sits on, and the
+  -- destination takes the other leg. A credit balance on the legacy asset
+  -- account — the usual case, more cash out than the records explain — is
+  -- cleared by debiting it and crediting the liability.
   IF v_balance < 0 THEN
     v_lines := jsonb_build_array(
-      jsonb_build_object('account_id',   v_legacy_id, 'direction', 'debit',  'amount', v_amount,
-                         'memo', 'Legacy / Unclassified cleared'),
-      jsonb_build_object('account_id',   v_dest.id,   'direction', 'credit', 'amount', v_amount,
+      jsonb_build_object('account_id', v_src.id,  'direction', 'debit',  'amount', v_amount,
+                         'memo', format('%s cleared', v_src.account_name)),
+      jsonb_build_object('account_id', v_dest.id, 'direction', 'credit', 'amount', v_amount,
                          'memo', _reason));
     v_residual := v_balance + v_amount;
   ELSE
     v_lines := jsonb_build_array(
-      jsonb_build_object('account_id',   v_dest.id,   'direction', 'debit',  'amount', v_amount,
+      jsonb_build_object('account_id', v_dest.id, 'direction', 'debit',  'amount', v_amount,
                          'memo', _reason),
-      jsonb_build_object('account_id',   v_legacy_id, 'direction', 'credit', 'amount', v_amount,
-                         'memo', 'Legacy / Unclassified cleared'));
+      jsonb_build_object('account_id', v_src.id,  'direction', 'credit', 'amount', v_amount,
+                         'memo', format('%s cleared', v_src.account_name)));
     v_residual := v_balance - v_amount;
   END IF;
 
   v_tx := private.write_journal(
     'reconciliation_adjustment',
-    format('Legacy reclassification %s: %s', v_ref, _reason),
+    format('Reclassification %s: %s to %s — %s',
+           v_ref, v_src.account_name, v_dest.account_name, _reason),
     v_lines, _transaction_date, NULL, v_ref);
 
   INSERT INTO public.legacy_reclassifications
-    (reclassification_ref, original_legacy_balance, amount, residual_after,
-     destination_account_id, destination_code, reason, authorised_by,
+    (reclassification_ref, source_account_id, source_code, original_legacy_balance, amount,
+     residual_after, destination_account_id, destination_code, reason, authorised_by,
      authorisation_reference, transaction_id, performed_by)
   VALUES
-    (v_ref, v_balance, v_amount, v_residual, v_dest.id, _destination_code,
-     _reason, _authorised_by, _authorisation_reference, v_tx, auth.uid());
+    (v_ref, v_src.id, _source_code, v_balance, v_amount, v_residual, v_dest.id,
+     _destination_code, _reason, _authorised_by, _authorisation_reference, v_tx, auth.uid());
 
   RETURN QUERY
-    SELECT v_ref, v_tx, t.transaction_number, v_balance, v_amount, v_residual, _destination_code
+    SELECT v_ref, v_tx, t.transaction_number, _source_code, v_balance, v_amount,
+           v_residual, _destination_code
       FROM public.financial_transactions t WHERE t.id = v_tx;
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.reclassify_legacy_funds(TEXT, TEXT, TEXT, NUMERIC, TEXT, DATE)
+REVOKE ALL ON FUNCTION public.reclassify_legacy_funds(TEXT, TEXT, TEXT, NUMERIC, TEXT, DATE, TEXT)
   FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.reclassify_legacy_funds(TEXT, TEXT, TEXT, NUMERIC, TEXT, DATE)
+GRANT EXECUTE ON FUNCTION public.reclassify_legacy_funds(TEXT, TEXT, TEXT, NUMERIC, TEXT, DATE, TEXT)
   TO authenticated, service_role;
 
-COMMENT ON FUNCTION public.reclassify_legacy_funds(TEXT, TEXT, TEXT, NUMERIC, TEXT, DATE) IS
-  'Moves the Legacy / Unclassified balance to an equity or liability account under recorded authority. Administrator only. Writes the journal and the audit row together; reversed through reverse_financial_transaction, never deleted.';
+COMMENT ON FUNCTION public.reclassify_legacy_funds(TEXT, TEXT, TEXT, NUMERIC, TEXT, DATE, TEXT) IS
+  'Moves unidentified historical funding out of Legacy / Unclassified, or later out of the suspense account, to an equity or liability account under recorded authority. Administrator only. Writes the journal and the audit row together; reversed through reverse_financial_transaction, never deleted.';
 
 -- ---------------------------------------------------------------------------
 -- 4. A transfer cannot spend money the account does not hold
@@ -500,3 +552,96 @@ COMMENT ON VIEW public.v_ledger_health IS
   'Standing integrity check. Any row is a financial fact the ledger has lost track of. Should always be empty.';
 
 GRANT SELECT ON public.v_ledger_health TO authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- 7. `security_held` has to stop meaning "every liability"
+-- ---------------------------------------------------------------------------
+-- `v_money_position` exposed `sum(liability)` under the alias `security_held`.
+-- That was harmless while SECURITY-HELD was the only liability on the books,
+-- and it becomes a lie the moment a second one exists: with the suspense
+-- account holding 2,452,500, three reports would have told staff Chetu holds
+-- 3,442,500 of members' deposits when it holds 990,000.
+--
+-- So the member security figure now comes from the member security account,
+-- the unidentified funding gets its own line, and the total is published
+-- alongside them. `net_worth_ledger` and `total_financial_position` still
+-- subtract the TOTAL liabilities — they were right all along, and must not
+-- change.
+CREATE OR REPLACE VIEW public.v_money_position
+WITH (security_invoker = on) AS
+WITH liquid AS (
+  SELECT account_type, current_balance FROM public.v_account_balances
+   WHERE account_class = 'asset_liquid' AND status <> 'Closed'
+),
+book AS (
+  SELECT
+    COALESCE(sum(total_outstanding - interest_outstanding), 0) AS principal_outstanding,
+    COALESCE(sum(interest_outstanding), 0)                    AS interest_outstanding,
+    COALESCE(sum(total_outstanding) FILTER (WHERE days_past_due > 0), 0)   AS overdue_portfolio,
+    COALESCE(sum(total_outstanding - interest_outstanding)
+             FILTER (WHERE days_past_due > 0), 0)                          AS overdue_principal,
+    COALESCE(sum(total_outstanding) FILTER (WHERE days_past_due > 30), 0)  AS par30_value,
+    count(*) FILTER (WHERE days_past_due > 30)  AS par30_count,
+    count(*)                                     AS active_loans,
+    count(DISTINCT client_id)                    AS active_borrowers
+  FROM public.v_loan_portfolio
+  WHERE status IN ('Active', 'Partially Paid', 'Overdue')
+),
+equity AS (
+  SELECT
+    COALESCE(sum(natural_balance) FILTER (WHERE account_class = 'equity'),    0) AS capital_introduced,
+    COALESCE(sum(natural_balance) FILTER (WHERE account_class = 'income'),    0) AS total_income,
+    COALESCE(sum(natural_balance) FILTER (WHERE account_class = 'expense'),   0) AS total_expenses,
+    COALESCE(sum(natural_balance) FILTER (WHERE account_class = 'liability'), 0) AS total_liabilities,
+    COALESCE(sum(natural_balance) FILTER (WHERE account_type  = 'security_held'), 0) AS member_security,
+    COALESCE(sum(natural_balance) FILTER (WHERE account_type  = 'suspense'), 0)      AS unidentified_funding,
+    COALESCE(sum(natural_balance) FILTER (WHERE account_class = 'asset_receivable'), 0) AS ledger_receivable
+  FROM public.v_account_balances
+)
+SELECT
+  COALESCE((SELECT sum(current_balance) FROM liquid
+             WHERE account_type IN ('cash_at_hand', 'cashier_till', 'branch_cash')), 0) AS cash_at_hand,
+  COALESCE((SELECT sum(current_balance) FROM liquid WHERE account_type = 'bank'), 0)    AS cash_at_bank,
+  COALESCE((SELECT sum(current_balance) FROM liquid
+             WHERE account_type IN ('mobile_money', 'merchant')), 0)                    AS mobile_money,
+  COALESCE((SELECT sum(current_balance) FROM liquid WHERE account_type = 'other'), 0)   AS unclassified_legacy,
+  COALESCE((SELECT sum(current_balance) FROM liquid), 0)                                AS total_available_liquidity,
+  book.principal_outstanding      AS outstanding_principal,
+  book.interest_outstanding       AS interest_receivable,
+  0::NUMERIC                      AS penalties_receivable,
+  book.principal_outstanding + book.interest_outstanding AS total_loan_portfolio,
+  book.overdue_portfolio,
+  book.overdue_principal,
+  book.par30_value,
+  book.par30_count,
+  book.active_loans,
+  book.active_borrowers,
+  equity.capital_introduced,
+  equity.total_income,
+  equity.total_expenses,
+  equity.total_income - equity.total_expenses            AS net_result,
+  -- Members' money, and only members' money. This column kept its name and its
+  -- position; what changed is that it no longer quietly means "every liability".
+  equity.member_security                                 AS security_held,
+  COALESCE((SELECT sum(current_balance) FROM liquid), 0)
+    + equity.ledger_receivable                                             AS total_assets_ledger,
+  COALESCE((SELECT sum(current_balance) FROM liquid), 0)
+    + equity.ledger_receivable - equity.total_liabilities                  AS net_worth_ledger,
+  COALESCE((SELECT sum(current_balance) FROM liquid), 0)
+    + book.principal_outstanding + book.interest_outstanding               AS total_assets,
+  COALESCE((SELECT sum(current_balance) FROM liquid), 0)
+    + book.principal_outstanding + book.interest_outstanding
+    - equity.total_liabilities                                             AS total_financial_position,
+  -- Appended, not inserted: CREATE OR REPLACE VIEW can add columns at the end
+  -- but cannot reorder or rename the ones already there.
+  --
+  -- Funding on the books whose source nobody has identified. Its own line, so
+  -- it is never read as members' deposits and never as capital.
+  equity.unidentified_funding                            AS unidentified_funding,
+  equity.total_liabilities                               AS total_liabilities
+FROM book, equity;
+
+COMMENT ON VIEW public.v_money_position IS
+  'One row: where the money is, what the loan book holds, and what Chetu owes and is worth. security_held is member deposits alone; unidentified_funding is historical funding whose source is unknown; total_liabilities is both together, and is what the net-worth figures subtract.';
+
+GRANT SELECT ON public.v_money_position TO authenticated, service_role;

@@ -32,7 +32,7 @@ node scripts/verify-financials.mjs --project <ref> --migrate --seed
 
 It rebuilds a throwaway database, applies the base migrations, seeds production's exact control
 totals, applies the financial migrations so the backfills run over realistic data, then asserts
-266 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
+273 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
 overdue, penalty, capital, expense, transfer, reversal, immutability, reconciliation, closure,
 write-off, branch scoping, permissions, report reconciliation, the direct-write guards, the savings closure, internal transfers and the legacy reclassification. Both scripts refuse to run
 against production — they post and reverse real journals.
@@ -215,8 +215,19 @@ function refuses a control account — rightly. It is Administrator-only, moves 
 equity or liability account (never to cash: this moves a classification, not money), and writes the
 journal and a row in `legacy_reclassifications` together — the balance before, the amount, where it
 went, why, on whose authority, by whom and when. That table is append-only and not writable by
-`authenticated` at all. The destination is `CAPITAL-UNRECORDED`, kept apart from
-`CAPITAL-INTRODUCED` so money of unknown origin is never merged with money of documented origin.
+`authenticated` at all.
+
+The destination is `HISTORICAL-FUNDING-SUSPENSE`, a **liability** of type `suspense` — not equity.
+Equity would assert the owners put the money in, which nobody knows; if it came from a director or
+anyone else on terms the business owes it, and an equity line would hide a real obligation inside
+owners' funds. `CAPITAL-INTRODUCED` is never merged with it. `_source_code` lets the same function
+make the second move, suspense to capital or to a director's loan, once Chetu identifies the source.
+
+One trap that came with the second liability: `v_money_position` used to expose `sum(liability)`
+under the alias `security_held`, which was harmless while member security was the only liability and
+a lie the moment it was not. `security_held` now means member deposits alone; `unidentified_funding`
+and `total_liabilities` are their own columns, appended because `CREATE OR REPLACE VIEW` cannot
+reorder. Anything that reports a liability total must read `total_liabilities`.
 
 `post_internal_transfer` moves money between two liquid accounts: one balanced journal, no income,
 no expense, and since `…002400` it refuses to spend more than the source holds. A blanket

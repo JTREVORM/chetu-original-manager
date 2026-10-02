@@ -27,7 +27,7 @@ SQL is run through the Supabase SQL editor or the Management API
 (`POST /v1/projects/{ref}/database/query`). There is no Supabase CLI in this environment.
 
 **Stop at the first step whose result does not match.** Every figure below was derived from
-production read-only and reproduced by the 266-assertion harness against a seed that matches
+production read-only and reproduced by the 273-assertion harness against a seed that matches
 production to the shilling.
 
 **Chetu's figures are in, and the cut-over has been simulated end to end against them.** Cash at
@@ -283,16 +283,24 @@ refuse it — correctly, because nobody should be able to adjust a control accou
 audit row in one transaction, and it refuses a cash destination outright, because this moves a
 classification and not money.
 
-**It goes to `CAPITAL-UNRECORDED`, not `CAPITAL-INTRODUCED`.** The balance measures funding whose
-source the records never captured, and management has not identified it. Merging money of unknown
-origin with money of documented origin would lose the distinction permanently. On its own equity
-line the balance is resolved — classified, in equity, no longer a dangling control account — while a
-reader can still see how much of the funding was never documented. If Chetu later identifies the
-source, the same function moves it on, with its own audit row, and the chain stays readable.
+**It goes to `HISTORICAL-FUNDING-SUSPENSE`, classified as a LIABILITY.** Not equity. Booking it to
+equity would assert that the owners put the money in, and nobody knows that. If it came from a
+director, a shareholder or anyone else on terms, the business owes it, and an equity line would have
+hidden a real obligation inside owners' funds — overstating equity and understating what is owed,
+which is the wrong error to make with someone else's money. A suspense account is the conventional
+instrument for an amount whose classification is not yet determined, and prudence says recognise the
+obligation until the source is known rather than the other way round.
+
+`CAPITAL-INTRODUCED` stays at 2,090,000 throughout. Documented capital and unidentified funding never
+share a line.
+
+When Chetu identifies the source, the **same function** moves it on — liability to equity if it was
+capital, or to a director's-loan liability if it was lending — with its own audit row in the same
+series. Pass `_source_code => 'HISTORICAL-FUNDING-SUSPENSE'`. That second hop is tested.
 
 ```sql
 SELECT * FROM reclassify_legacy_funds(
-  _destination_code        => 'CAPITAL-UNRECORDED',
+  _destination_code        => 'HISTORICAL-FUNDING-SUSPENSE',
   _reason                  => 'Management instructed that this historical unexplained balance be cleared. The source of the funding was not identified, so it is classified as unrecorded historical funding rather than merged with documented capital.',
   _authorised_by           => 'Chetu Microfinance management',
   _amount                  => NULL,          -- NULL = the whole balance
@@ -302,12 +310,12 @@ SELECT * FROM reclassify_legacy_funds(
 
 Expected, with Chetu's figures:
 
-| Returned                  |                Value |
-| ------------------------- | -------------------: |
-| `original_legacy_balance` |        −2,452,500.00 |
-| `amount_reclassified`     |         2,452,500.00 |
-| `residual_after`          |             **0.00** |
-| `destination_code`        | `CAPITAL-UNRECORDED` |
+| Returned                  |                         Value |
+| ------------------------- | ----------------------------: |
+| `original_legacy_balance` |                 −2,452,500.00 |
+| `amount_reclassified`     |                  2,452,500.00 |
+| `residual_after`          |                      **0.00** |
+| `destination_code`        | `HISTORICAL-FUNDING-SUSPENSE` |
 
 Then confirm the audit trail and that nothing was destroyed:
 
@@ -322,8 +330,8 @@ SELECT a.account_code, l.direction, l.amount, l.memo
  WHERE l.transaction_id = '<transaction_id from above>' ORDER BY l.line_no;
 ```
 
-The journal must be `LEGACY-UNCLASSIFIED` debit 2,452,500.00 and `CAPITAL-UNRECORDED` credit
-2,452,500.00, summing to zero. No historical journal is edited or deleted by any of this — the
+The journal must be `LEGACY-UNCLASSIFIED` debit 2,452,500.00 and `HISTORICAL-FUNDING-SUSPENSE`
+credit 2,452,500.00, summing to zero. No historical journal is edited or deleted by any of this — the
 backfilled entries stay exactly as posted, and this is a new entry on top of them. If it is ever
 wrong, it is reversed with `reverse_financial_transaction`, never removed.
 
@@ -400,14 +408,14 @@ Measured by replaying all twelve financial migrations over a seed carrying produ
 control totals, then applying the renames, the counted balances and the reclassification in the
 order above. Not a hand calculation.
 
-|                                                      |                                                                          UGX |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------: |
-| **1. Opening Cash at Hand**                          |                                                               **383,600.00** |
-| **2. Opening Centenary Bank ••••4875**               |                                                                     **0.00** |
-| **3. Total opening available liquidity**             |                                                               **383,600.00** |
-| **4. Legacy / Unclassified before reclassification** |                                                            **−2,452,500.00** |
-| 5. Reclassification journal                          | Dr `LEGACY-UNCLASSIFIED` 2,452,500.00 / Cr `CAPITAL-UNRECORDED` 2,452,500.00 |
-|                                                      |                                                       Legacy after: **0.00** |
+|                                                      |                                                                                   UGX |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------: |
+| **1. Opening Cash at Hand**                          |                                                                        **383,600.00** |
+| **2. Opening Centenary Bank ••••4875**               |                                                                              **0.00** |
+| **3. Total opening available liquidity**             |                                                                        **383,600.00** |
+| **4. Legacy / Unclassified before reclassification** |                                                                     **−2,452,500.00** |
+| 5. Reclassification journal                          | Dr `LEGACY-UNCLASSIFIED` 2,452,500.00 / Cr `HISTORICAL-FUNDING-SUSPENSE` 2,452,500.00 |
+|                                                      |                                                                Legacy after: **0.00** |
 
 How the legacy figure arises: −2,068,900 after the backfill, then −383,600 as the counted cash is
 released from it and −0 for the bank, giving −2,452,500. Posting counted money against the legacy
@@ -422,9 +430,9 @@ not less.
 | Centenary Bank ••••4875                   | asset · liquid     |                      0.00 |
 | Loans Receivable                          | asset · receivable |              5,891,800.00 |
 | Legacy / Unclassified                     | asset · liquid     |                      0.00 |
-| Member Security Deposits                  | liability          |                990,000.00 |
+| Member Security Deposits                  | **liability**      |                990,000.00 |
+| Unidentified Historical Funding           | **liability**      |              2,452,500.00 |
 | Capital Introduced                        | equity             |              2,090,000.00 |
-| Unrecorded Historical Funding             | equity             |              2,452,500.00 |
 | Interest Income                           | income             |                142,900.00 |
 | Processing / CRB / Group maintenance fees | income             | 264,000 / 66,000 / 30,000 |
 | Admission / Passbook fees                 | income             |         120,000 / 120,000 |
@@ -432,20 +440,24 @@ not less.
 | Totals      |              UGX |
 | ----------- | ---------------: |
 | Assets      | **6,275,400.00** |
-| Liabilities |       990,000.00 |
-| Equity      |     4,542,500.00 |
+| Liabilities |     3,442,500.00 |
+| Equity      |     2,090,000.00 |
 | Income      |       742,900.00 |
 | Expenses    |             0.00 |
 
-**Assets 6,275,400 = liabilities 990,000 + equity 4,542,500 + income 742,900.** Verified balanced,
-with zero unbalanced journals and `v_ledger_health` empty.
+**Assets 6,275,400 = liabilities 3,442,500 + equity 2,090,000 + income 742,900.** Verified balanced,
+zero unbalanced journals, `v_ledger_health` empty.
 
 ### What this says about the business
 
-Available cash is **383,600** against a loan book of **5,891,800** and **990,000** of members'
-security money held on their behalf. The security deposits are a real obligation and the cash on hand
-does not cover them — that is a liquidity fact the old system could not show at all, and it is worth
-putting in front of management before go-live rather than after.
+Available cash is **383,600**. Against it the balance sheet now shows **3,442,500** of liabilities:
+990,000 of members' security money held on their behalf, and 2,452,500 whose owner is unknown and
+which therefore has to be treated as potentially repayable. Equity stands at the 2,090,000 that is
+actually documented.
+
+That is a harder picture than an equity treatment would have painted, and it is the honest one. It is
+worth putting in front of management before go-live rather than after, together with the question
+that resolves it: where did the 2,452,500 come from?
 
 ---
 
