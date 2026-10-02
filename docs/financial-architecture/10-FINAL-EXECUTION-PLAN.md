@@ -555,3 +555,57 @@ SELECT * FROM reclassify_legacy_funds(
 
 **Savings** stays closed until a migration integrates it. **Penalties** remain architecture, not
 feature. **Interest** is recognised when collected, not accrued.
+
+---
+
+## Execution log — attempt 1, 2026-10-02, halted at stage 4
+
+Stages 1–3 passed. Stage 1 could take no snapshot (no tool on the current plan; the
+Management API was denied by the egress proxy), and the user authorised proceeding without
+one. Stage 3's gate returned `PROCEED` at 07:36:55 UTC — every posting input matched.
+
+**Stage 4 could not be executed, and nothing was applied.** Every attempt to commit a write
+to production hung for 60 seconds and rolled back whole.
+
+| Attempt                                        | Result               | Production after      |
+| ---------------------------------------------- | -------------------- | --------------------- |
+| `execute_sql`, `001300`                        | timed out after 60 s | unchanged, verified   |
+| `execute_sql`, `001300` (retry)                | timed out after 60 s | unchanged, verified   |
+| `apply_migration`, `001300`                    | timed out after 60 s | unchanged, verified   |
+
+Diagnosis, established by probe rather than assumption:
+
+- A read returns in well under a second.
+- `create temp table … ; insert … ; select …` succeeds instantly — the SQL itself is fine.
+- `begin; create table public._cutover_probe(x int); … ; rollback;` succeeds instantly, which
+  also proves the session is **not** a Postgres read-only transaction.
+- The same `create table` **without** the rollback times out.
+
+So the gate is on **commit**: a statement that would persist a change waits on an interactive
+confirmation that a cloud session cannot surface, and the client gives up at 60 s. It is not
+a timeout in Postgres, not a lock, and not the size of the migration.
+
+No alternative channel exists from this container:
+
+- `api.supabase.com` — CONNECT denied 403 by the environment's network policy.
+- `db.xfkuptxrrnzumzmulblg.supabase.co` — AAAA only, and the container has no IPv6.
+- `aws-0/aws-1-eu-west-1.pooler.supabase.com:5432` — resolves over IPv4, raw TCP egress blocked.
+
+`psql` and `SUPABASE_DB_PASSWORD`/`SUPABASE_ACCESS_TOKEN` are all present; only the network
+stands in the way.
+
+### State after the halt — verified at 07:48:30 UTC
+
+`financial_accounts` absent · `guard_financial_account_change` absent · probe table absent ·
+`supabase_migrations.schema_migrations` 13 rows, latest `20260101001200` · 18 loans ·
+26 repayments · 24 member fees · 2 bank transactions totalling 2,090,000.00 · 0 expenses ·
+0 savings transactions.
+
+Identical to the stage 3 baseline. **Lending remains frozen**, because the ledger is not in
+place and the cut-over has not happened.
+
+### To resume
+
+Either widen the environment's network access to reach `api.supabase.com`, then re-run from
+stage 3 (re-derive the baseline first — it is a gate, not a formality), or apply
+`001300`–`002400` from a machine with database access, in order, one at a time.
