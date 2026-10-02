@@ -236,6 +236,14 @@ other path are reported by `v_ledger_health` (`liquid_account_overdrawn`) instea
 `post_opening_balance` accepts zero: it stamps the date and posts no journal, because a journal of
 zero would have no lines.
 
+**Member security is a liability and nothing else.** At disbursement `SECURITY-HELD` is credited
+while only the _net_ cash leaves the funding account, so the money stays in the loan book —
+management has confirmed it is deployed in operations rather than ring-fenced. It is debited only
+when `return_loan_security` pays a member back. The liability therefore legitimately exceeds
+available cash, and the three position reports each carry a note saying so. Never create a cash or
+bank account for security, and never post a balancing adjustment to close the gap: the obligation and
+the liquidity gap are both facts.
+
 `bank_transactions` is a closed legacy register: read-only, superseded, backfilled.
 
 **The tables underneath are closed too.** Migration `…002200` puts a guard trigger on `loans`,

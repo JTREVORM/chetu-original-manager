@@ -390,6 +390,10 @@ export const Reports: React.FC = () => {
             ["Total Assets (ledger)", formatUGX(Number(p.total_assets_ledger))],
             ["Member Security Deposits (liability)", formatUGX(Number(p.security_held))],
             [
+              "   — note: deployed in operations, not ring-fenced as cash",
+              "Owed to members; paid from operating cash as each loan closes",
+            ],
+            [
               "Unidentified Historical Funding (liability)",
               formatUGX(Number(p.unidentified_funding)),
             ],
