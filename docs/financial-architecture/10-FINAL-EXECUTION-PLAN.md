@@ -680,3 +680,45 @@ Stripping the two `DROP TRIGGER IF EXISTS` lines would let `001300` through. It 
 they are what makes the file replayable, and a production schema that no longer matches the
 files verified byte-identical and tested at 273 assertions is a worse outcome than a cut-over
 that has not happened. Halted here for instruction.
+
+---
+
+## Stage 4, file 1 of 12 — `001300` applied manually, verified 2026-10-02 08:45–08:52 UTC
+
+Applied by hand in the Supabase SQL editor after the connector proved unable to run it
+(`DROP` is gated). Supabase reported "Success. No rows returned." Verified read-only:
+
+| Check                    | Expected                                                     | Live |
+| ------------------------ | ------------------------------------------------------------ | ---- |
+| Columns                  | the 20 the file declares, types/nullability/defaults          | ✓    |
+| Constraints              | PK, UNIQUE(account_code), 2 FKs, 4 CHECKs                     | ✓    |
+| Indexes                  | 6 — 2 implicit + the 4 `idx_financial_accounts_*`              | ✓    |
+| Triggers                 | `trg_financial_accounts_updated_at`, `trg_guard_financial_account` | ✓ |
+| Function                 | `guard_financial_account_change`, SECURITY DEFINER, `search_path=public, private, pg_temp` | ✓ |
+| Function body            | md5 identical to the file (CRLF-normalised)                   | ✓    |
+| Seeded accounts          | 34 — 15 control, 17 expense, `CASH-HO`, `BANK-MAIN`            | ✓    |
+| `is_system`              | 32 true; only `CASH-HO` and `BANK-MAIN` manually postable      | ✓    |
+| Opening balances         | all 0.00, all dates NULL                                      | ✓    |
+| Expense codes            | all 9 `ExpenseCategory` values map to a seeded `EXP-…` code     | ✓    |
+| RLS                      | **disabled, 0 policies** — `001900` enables it                 | ✓    |
+| Table grants             | **`postgres` only** — `001900` grants `authenticated`/`service_role` | ✓ |
+| Function EXECUTE         | false for `anon`, `authenticated`, `service_role`, PUBLIC — the `REVOKE` took effect | ✓ |
+| Unexpected objects       | 35 public tables, exactly what `000000`–`001300` declare; no stray views, sequences or probe tables | ✓ |
+| Migration history        | still 13 rows — a manual editor run registers nothing; the 12 versions are recorded at the end of stage 4 | ✓ |
+
+The function body arrived with `\r\n` line endings, from pasting through a Windows editor.
+That is a line-ending difference in the stored source only; the md5 matches once normalised,
+and `plpgsql` is whitespace-insensitive here. No action.
+
+**RLS off is correct at this stage and is not an exposure.** The table carries no grant to
+`anon` or `authenticated`, so PostgREST cannot reach it at all between now and `001900`.
+
+Business data unchanged: 18 loans / 6,600,000.00 · 26 repayments / 851,100.00 · 24 fees /
+240,000 · 2 bank transactions / 2,090,000.00 · 0 expenses · 0 savings transactions · security
+990,000 · collected split 708,200.00 / 142,900.00.
+
+The guard trigger was **not** exercised against production. Proving it by attempting the write
+it exists to refuse would, if the guard were faulty, repoint a system control account. The body
+is byte-identical to the file and the file's guard behaviour is covered by the harness.
+
+**`001400` is cleared to run.**
