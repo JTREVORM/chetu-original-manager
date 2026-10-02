@@ -628,3 +628,55 @@ place and the cut-over has not happened.
 Either widen the environment's network access to reach `api.supabase.com`, then re-run from
 stage 3 (re-derive the baseline first — it is a gate, not a formality), or apply
 `001300`–`002400` from a machine with database access, in order, one at a time.
+
+---
+
+## Execution log — attempt 2, 2026-10-02 08:11–08:16 UTC, connected Supabase connector
+
+The project was reconnected through the Claude Supabase connector, bypassing the blocked
+Management API. Identity confirmed: `xfkuptxrrnzumzmulblg` / CHETU MICROFINANCE, eu-west-1,
+PostgreSQL 17.6. A second project, `fxuhcpqntborxqelybay` / BAKENYE SACCO, is visible in the
+same organisation — every call passes the project id explicitly so nothing can land on it.
+
+**Stage 3 re-run: PROCEED.** Every control matched at 08:11:53 UTC — 18 loans / 15 disbursed /
+6,600,000.00 · 26 repayments / 851,100.00 · 24 fees / 240,000 · 2 bank transactions /
+2,090,000.00 · 0 expenses · 0 savings transactions · security withheld 990,000 · principal and
+interest collected 708,200.00 / 142,900.00 · 13 registered migrations, `…000000`–`…001200`.
+
+**Lending still frozen.** Newest write to `loans` 2026-10-01 13:35:39 (the two Pending
+applications), to `loan_repayments` 2026-09-25 13:11:58, to `member_fees` 2026-09-22 12:03:10.
+No money has moved.
+
+**`001300` still completely unapplied.** None of the four financial tables exist;
+`financial_accounts` has 0 columns; `guard_financial_account_change` is absent.
+
+### The connector carries the same limitation
+
+`001300`, run through the connector exactly as written, timed out after 60 s. Production
+re-verified unchanged at 08:13:48 UTC.
+
+Three minimal probes narrow the limitation further than attempt 1 managed:
+
+| Probe                                                                   | Result   |
+| ----------------------------------------------------------------------- | -------- |
+| `create temp table …; insert …; select …` — commits                      | instant  |
+| `begin; drop trigger if exists trg_does_not_exist_zzz on loans; rollback;` | **times out** |
+| `begin; revoke all on function public.set_updated_at() from anon; rollback;` | instant  |
+
+So the gate is narrower than recorded in attempt 1: **`REVOKE` passes. `DROP` alone is gated.**
+A `DROP TRIGGER IF EXISTS` naming a trigger that does not exist, inside a transaction that is
+rolled back — an operation that cannot change anything whatsoever — still waits on a
+confirmation that no cloud session can surface, and the client gives up at 60 s.
+
+`001300` contains two `DROP TRIGGER IF EXISTS`. That is the whole reason it cannot run.
+
+The rolled-back `REVOKE` probe touched a real grant, so it was checked afterwards:
+`anon` and `authenticated` both have no EXECUTE on `public.set_updated_at()`, the same as
+sibling roles, so the probe was a no-op and was rolled back regardless.
+
+### Not attempted, deliberately
+
+Stripping the two `DROP TRIGGER IF EXISTS` lines would let `001300` through. It is not done:
+they are what makes the file replayable, and a production schema that no longer matches the
+files verified byte-identical and tested at 273 assertions is a worse outcome than a cut-over
+that has not happened. Halted here for instruction.
