@@ -564,26 +564,41 @@ Stages 1–3 passed. Stage 1 could take no snapshot (no tool on the current plan
 Management API was denied by the egress proxy), and the user authorised proceeding without
 one. Stage 3's gate returned `PROCEED` at 07:36:55 UTC — every posting input matched.
 
-**Stage 4 could not be executed, and nothing was applied.** Every attempt to commit a write
-to production hung for 60 seconds and rolled back whole.
+**Stage 4 could not be executed, and nothing was applied.** Every attempt hung for 60 seconds
+and rolled back whole.
 
 | Attempt                                        | Result               | Production after      |
 | ---------------------------------------------- | -------------------- | --------------------- |
 | `execute_sql`, `001300`                        | timed out after 60 s | unchanged, verified   |
 | `execute_sql`, `001300` (retry)                | timed out after 60 s | unchanged, verified   |
 | `apply_migration`, `001300`                    | timed out after 60 s | unchanged, verified   |
+| `execute_sql`, `001300` (retry, 08:03 UTC)     | timed out after 60 s | unchanged, verified   |
 
-Diagnosis, established by probe rather than assumption:
+Diagnosis, established by probe rather than assumption. **The first reading of this, that the
+gate was on commit, was wrong**; one further probe settled it:
 
 - A read returns in well under a second.
-- `create temp table … ; insert … ; select …` succeeds instantly — the SQL itself is fine.
-- `begin; create table public._cutover_probe(x int); … ; rollback;` succeeds instantly, which
-  also proves the session is **not** a Postgres read-only transaction.
-- The same `create table` **without** the rollback times out.
+- `create temp table … ; insert … ; select …` **commits** and returns instantly.
+- `begin; create table public._cutover_probe(x int); … ; rollback;` returns instantly.
+- `create table … ; insert … ; drop table … ;` times out.
+- `begin; drop table if exists public._nonexistent_zzz; rollback;` — a rollback of a drop of a
+  table that does not exist, which can change nothing at all — **times out**.
 
-So the gate is on **commit**: a statement that would persist a change waits on an interactive
-confirmation that a cloud session cannot surface, and the client gives up at 60 s. It is not
-a timeout in Postgres, not a lock, and not the size of the migration.
+That last one rules out the commit. The gate is a **destructive-keyword classifier on the SQL
+text**: a statement containing `DROP` (and by the same mechanism `REVOKE`, `TRUNCATE`, `DELETE`)
+waits on an interactive confirmation that a cloud session cannot surface, and the client gives
+up at 60 s. `CREATE` and `INSERT` pass and commit normally. It is not a Postgres timeout, not a
+lock, and not the size of the migration.
+
+`001300` contains two `DROP TRIGGER IF EXISTS` and one `REVOKE ALL ON FUNCTION`, so it is
+gated. So are ten of the twelve files — only `001700` (views) and `001800` (the backfill) are
+free of `DROP` and `REVOKE`, and neither can run until the gated files before them have.
+
+**The migrations must not be edited to route around this.** The `DROP TRIGGER IF EXISTS` lines
+are what makes each file replayable, and the `REVOKE`s are the security control that stops
+`anon` and `authenticated` reaching a posting function directly — `002200` exists almost
+entirely to revoke. Splitting a file to apply only its non-destructive half would apply half a
+migration and leave the grants wide open, which is worse than not applying it.
 
 No alternative channel exists from this container:
 
@@ -594,12 +609,16 @@ No alternative channel exists from this container:
 `psql` and `SUPABASE_DB_PASSWORD`/`SUPABASE_ACCESS_TOKEN` are all present; only the network
 stands in the way.
 
-### State after the halt — verified at 07:48:30 UTC
+### State after the halt — re-verified at 08:04:25 UTC
 
 `financial_accounts` absent · `guard_financial_account_change` absent · probe table absent ·
 `supabase_migrations.schema_migrations` 13 rows, latest `20260101001200` · 18 loans ·
 26 repayments · 24 member fees · 2 bank transactions totalling 2,090,000.00 · 0 expenses ·
 0 savings transactions.
+
+`financial_accounts` has 0 columns, 0 indexes and 0 triggers — it does not exist in any form —
+and no probe table survives. The one non-idle backend is Supabase Realtime's permanent WAL
+sender, not a migration still running.
 
 Identical to the stage 3 baseline. **Lending remains frozen**, because the ledger is not in
 place and the cut-over has not happened.
