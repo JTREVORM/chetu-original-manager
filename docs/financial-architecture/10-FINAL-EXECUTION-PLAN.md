@@ -87,6 +87,17 @@ SELECT count(*) AS expenses FROM expenses;
 
 Expect: 18 / 15 / **6,600,000** · 26 / **851,100** · 24 / **240,000** · 2 / **2,090,000** · 0.
 
+> **Re-checked live on 2 October.** Every posting input is identical — principal disbursed
+> 6,600,000, net cash to members 5,250,000, security withheld 990,000, collected 851,100, principal
+> collected 708,200, member fees 240,000, capital 2,090,000, expenses 0, savings transactions 0,
+> 13 registered migrations, no financial tables.
+>
+> **One derived figure has moved: arrears.** Ten instalments totalling **UGX 311,100** across ten
+> loans fell due between 29 September and 1 October. No payment was recorded and no instalment was
+> marked paid — time simply passed while collections were paused. Nothing was posted, so no backfill
+> input changed and every cut-over figure below is unaffected. The stage 6 arrears expectation is
+> corrected accordingly; PAR 30 is still 0, because the oldest arrear is three days old.
+
 **STOP if:** `principal_disbursed` is not 6,600,000 · collected is not 851,100 · fees are not 240,000
 · capital is not 2,090,000 · expenses are not 0. Any of those means business activity has moved the
 backfill's inputs since they were derived. Do not continue: re-derive every expected figure in stages
@@ -206,7 +217,12 @@ Then run `docs/financial-architecture/baseline-controls.sql` and check every lin
 disbursed 15 · repayments 26 · member fees 24 · expenses 0 · capital 2,090,000 · principal disbursed
 6,600,000 · net cash to members 5,250,000 · collected 851,100 · **principal collected 708,200** ·
 **interest collected 142,900** · receivable 5,891,800 · security 990,000 · fee income 360,000 ·
-arrears 0.
+arrears **10 instalments / UGX 311,100** (re-derived 2 October; **PAR 30 still 0**).
+
+Arrears is the one control that will keep moving while lending is frozen, because instalments keep
+falling due. Re-derive it immediately before this stage rather than trusting the number above, and
+do not treat a larger figure as a reason to stop — it is a consequence of the freeze, not a fault.
+Every _posting_ input must still match exactly.
 
 **STOP if:** the journal count is not 67 · any entry-type count differs · any balance differs ·
 any control line differs. **Restore.**
