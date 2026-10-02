@@ -365,22 +365,38 @@ SELECT cash_at_hand, cash_at_bank, outstanding_principal, security_held,
   FROM v_money_position;
 ```
 
-|                                     |                              Expected |
-| ----------------------------------- | ------------------------------------: |
-| Cash at Hand                        |                            383,600.00 |
-| Bank                                |                                  0.00 |
-| Loans Receivable                    |                          5,891,800.00 |
-| **Member security held**            | **990,000.00** — members' money alone |
-| **Unidentified historical funding** |                      **2,452,500.00** |
-| Total liabilities                   |                          3,442,500.00 |
-| Capital introduced                  |                          2,090,000.00 |
-| Income                              |                            742,900.00 |
+|                                     |                                                    Expected |
+| ----------------------------------- | ----------------------------------------------------------: |
+| Cash at Hand                        |                                                  383,600.00 |
+| Bank                                |                                                        0.00 |
+| Loans Receivable                    |                                                5,891,800.00 |
+| **Member security held**            | **990,000.00** — members' money alone, and a liability only |
+| **Unidentified historical funding** |                                            **2,452,500.00** |
+| Total liabilities                   |                                                3,442,500.00 |
+| Capital introduced                  |                                                2,090,000.00 |
+| Income                              |                                                  742,900.00 |
 
 **Assets 6,275,400 = liabilities 3,442,500 + equity 2,090,000 + income 742,900.**
 
 **STOP if:** Legacy is not 0.00 · Suspense is not 2,452,500.00 · Capital Introduced has moved off
 2,090,000 · `security_held` reads anything but 990,000 (if it reads 3,442,500 the view fix did not
 apply, and three reports will misdescribe members' deposits) · the statement does not balance.
+
+### Member security exceeds available cash, and that is correct
+
+Management has confirmed the 990,000 of member security is **deployed in operations** — it is working
+in the loan book, not ring-fenced in cash or at the bank. The ledger already records it that way and
+always has: at disbursement the security is credited to the liability while only the _net_ cash
+leaves the funding account, so the money stays in the business. It is debited only when
+`return_loan_security` actually pays a member back.
+
+So the books will show 990,000 owed to members against 383,600 of cash, and **that is the true
+position, not an error**. Do not create a cash or bank account for the security, do not post a
+balancing adjustment, and do not touch any historical transaction to make the two numbers meet. The
+obligation is real and the liquidity gap is real; both belong on the statement.
+
+The Financial Position report, the printed statement and the Financial Ledger panel each now carry a
+note saying so, so a reader does not mistake it for a fault.
 
 ---
 
@@ -448,6 +464,7 @@ Ledger screen throughout.
 |   2 | Financial Ledger → account balances                             | Cash 383,600 · Bank 0 · Receivable 5,891,800                                           |
 |   3 | Financial Ledger → ledger health panel                          | empty                                                                                  |
 |   4 | Reports → Financial Position                                    | member security **990,000**, unidentified funding **2,452,500**, capital **2,090,000** |
+|  4b | Reports → Financial Position, read the liabilities note         | states that member security is deployed in operations and not ring-fenced as cash      |
 |   5 | Reports → Profit & Loss                                         | loan principal does **not** appear as revenue                                          |
 |   6 | Disburse one small test loan, choosing a funding account        | loan Active **and** a disbursement journal, together                                   |
 |   7 | Undo that disbursement                                          | reversing journal; balances return exactly                                             |

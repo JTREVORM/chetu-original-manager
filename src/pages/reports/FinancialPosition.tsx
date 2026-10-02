@@ -129,6 +129,27 @@ export const FinancialPositionReport: React.FC = () => {
             <Line label="Expenses to date" value={moneyPosition.total_expenses} />
             <Line label="Net result" value={moneyPosition.net_result} />
             <Line label="Net worth (ledger)" value={moneyPosition.net_worth_ledger} strong />
+            {/*
+              Management has confirmed the security deposits are deployed in
+              operations rather than held aside. Saying so here matters: a
+              reader who sees 990,000 owed against 383,600 of cash would
+              otherwise reasonably conclude the books were wrong. They are not
+              — the money is lent out, which is a real obligation and a real
+              liquidity fact, and both deserve to be stated rather than
+              reconciled away.
+            */}
+            <p className="mt-3 border-t border-slate-200 pt-2.5 text-[11px] leading-relaxed text-slate-600">
+              <span className="font-semibold text-slate-800">
+                Member security is deployed in operations.
+              </span>{" "}
+              The {formatUGX(Number(moneyPosition.security_held))} of refundable security withheld
+              at disbursement is not ring-fenced in cash or at the bank — it is working in the loan
+              book alongside Chetu&apos;s own funds. It stays on this statement as a liability
+              because Chetu still owes it to members, and it will be paid from operating cash as
+              each loan closes. That is why it can exceed the{" "}
+              {formatUGX(Number(moneyPosition.cash_at_hand) + Number(moneyPosition.cash_at_bank))}{" "}
+              currently available in cash and at the bank.
+            </p>
           </Card>
         </div>
       )}

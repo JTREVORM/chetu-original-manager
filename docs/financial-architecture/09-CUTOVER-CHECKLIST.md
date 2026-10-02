@@ -450,14 +450,18 @@ zero unbalanced journals, `v_ledger_health` empty.
 
 ### What this says about the business
 
-Available cash is **383,600**. Against it the balance sheet now shows **3,442,500** of liabilities:
-990,000 of members' security money held on their behalf, and 2,452,500 whose owner is unknown and
-which therefore has to be treated as potentially repayable. Equity stands at the 2,090,000 that is
-actually documented.
+Available cash is **383,600**. Against it the balance sheet shows **3,442,500** of liabilities:
+990,000 of member security and 2,452,500 whose owner is unknown. Equity stands at the 2,090,000 that
+is actually documented.
 
-That is a harder picture than an equity treatment would have painted, and it is the honest one. It is
-worth putting in front of management before go-live rather than after, together with the question
-that resolves it: where did the 2,452,500 come from?
+**The security exceeding available cash is correct, not a defect.** Management has confirmed the
+990,000 is deployed in operations rather than held aside, and the ledger has always recorded it that
+way: at disbursement the security is credited to the liability while only the net cash leaves the
+funding account. It is paid from operating cash as each loan closes. No cash account is created for
+it and no balancing adjustment is posted — the obligation is real, the liquidity gap is real, and
+both belong on the statement. All three position reports now carry a note saying so.
+
+What remains genuinely open is the 2,452,500: where it came from.
 
 ---
 

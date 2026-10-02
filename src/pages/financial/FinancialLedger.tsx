@@ -1067,6 +1067,13 @@ const ReportsTab: React.FC<{
         contracted to pay but have not yet is deliberately excluded: it is real, and it is shown on
         the dashboard, but it is not yet income.
       </p>
+      {position && Number(position.security_held) !== 0 && (
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+          Member security is deployed in operations, not ring-fenced in cash or at the bank. It
+          remains a liability because Chetu owes it back, and it is paid from operating cash as each
+          loan closes — so it can exceed the cash currently available.
+        </p>
+      )}
     </div>
 
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-xs">
