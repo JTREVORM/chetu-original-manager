@@ -789,3 +789,104 @@ Stages 9 and 11 write audit fields the plan leaves as placeholders — the cut-o
 counted the cash, and the authorisation reference for the reclassification. These are not
 Claude's to invent: an authorisation reference is the evidence that a UGX 2,452,500
 reclassification was sanctioned, and a fabricated one would make the audit trail a lie.
+
+---
+
+# Production Cut-over Completion Report
+
+**Chetu Microfinance Ltd · project `xfkuptxrrnzumzmulblg` · 2026-10-02, 09:28–09:34 UTC**
+
+Stages 1–13 complete. Every expected value matched on the first attempt; nothing was adjusted,
+forced or worked around.
+
+## Stage 9 — Opening balances
+
+| Account                   |     Amount | Journal                  | `opening_balance_date` |
+| ------------------------- | ---------: | ------------------------ | ---------------------- |
+| Cash at Hand (`CASH-HO`)  | 383,600.00 | `0fe9bf7d…` posted       | 2026-10-02             |
+| Centenary Bank ••••4875   |       0.00 | **NULL — no journal**    | 2026-10-02             |
+
+Counted at cut-over by MUSANA RAPHAEL. The bank's NULL is correct: a counted zero stamps the date
+and posts nothing, because a journal of zero would have no lines.
+
+## Stage 10 — Legacy before reclassification
+
+**−2,452,500.00**, exactly as derived: −2,068,900 from the backfill, less 383,600 released as
+counted cash, less 0 for the bank.
+
+## Stage 11 — The controlled reclassification
+
+| Field                     | Value                                                     |
+| ------------------------- | --------------------------------------------------------- |
+| `reclassification_ref`    | `CM-RECLASS-2026-0001`                                    |
+| `transaction_number`      | `CM-FT-2026-0069`                                         |
+| `source_code`             | `LEGACY-UNCLASSIFIED`                                     |
+| `original_legacy_balance` | −2,452,500.00                                             |
+| `amount_reclassified`     | 2,452,500.00                                              |
+| `residual_after`          | **0.00**                                                  |
+| `destination_code`        | `HISTORICAL-FUNDING-SUSPENSE`                             |
+| `authorised_by`           | Chetu Microfinance management                             |
+| `authorisation_reference` | Chetu management WhatsApp instruction dated 2026-10-02     |
+| `performed_at`            | 2026-10-02 09:32:41 UTC                                   |
+
+Journal: `LEGACY-UNCLASSIFIED` **debit** 2,452,500.00, `HISTORICAL-FUNDING-SUSPENSE` **credit**
+2,452,500.00. Two lines, balanced, status `posted`.
+
+`performed_by` is NULL because the cut-over ran through the SQL editor with no app session. The
+authorisation is carried by `authorised_by` and `authorisation_reference`, which is where it
+belongs; the WhatsApp instruction is the evidence of record and should be filed with the
+cut-over papers.
+
+**No historical journal was deleted, edited or rewritten.** The balance was moved by one new
+journal that references its own audit row, and `legacy_reclassifications` is append-only and not
+writable by `authenticated` at all.
+
+## Stage 12 — Position after reclassification
+
+| Account                       | Class          |      Balance |
+| ----------------------------- | -------------- | -----------: |
+| `LEGACY-UNCLASSIFIED`         | asset · liquid |     **0.00** |
+| `HISTORICAL-FUNDING-SUSPENSE` | **liability**  | 2,452,500.00 |
+| `CAPITAL-INTRODUCED`          | equity         | 2,090,000.00 (**unchanged**) |
+| `SECURITY-HELD`               | liability      |   990,000.00 |
+| Cash at Hand                  | asset · liquid |   383,600.00 |
+| Centenary Bank ••••4875       | asset · liquid |         0.00 |
+| `LOANS-RECEIVABLE`            | asset          | 5,891,800.00 |
+
+**Statement of Financial Position balances exactly.**
+
+Assets 383,600 + 0 + 0 + 5,891,800 = **6,275,400.00**
+Claims: liabilities 3,442,500 + equity 2,090,000 + income 742,900 − expenses 0 = **6,275,400.00**
+Difference **0.00**.
+
+`security_held` reads **990,000.00** — members' deposits alone, not the 3,442,500 total. The
+view fix held.
+
+Member security of 990,000 stands against 383,600 of cash. That is the true position, not a
+fault: management has confirmed the security is deployed in operations rather than ring-fenced.
+No cash or bank account was created for it and no balancing adjustment was posted.
+
+## Stage 13 — Cut-over marked complete
+
+`financial_cutover_date` = 2026-10-02 · `financial_cutover_completed` = **true**.
+
+This permanently disables `reset_operational_data()` — the guard reading
+`financial_cutover_completed` is confirmed present in the function — and arms
+`legacy_unresolved_after_cutover`.
+
+## Final integrity
+
+**`v_ledger_health`: 0 rows**, with all 15 checks live and the post-cut-over check now armed.
+
+69 journals · 248 lines · 0 unbalanced · signed total 0.00 · 1 reclassification audit row ·
+25 registered migrations.
+
+Business data untouched throughout: 18 loans · repayments 851,100.00 · fees 240,000 ·
+bank transactions 2,090,000.00.
+
+## Remaining, and still the user's
+
+Stages 14–18: regenerate `src/types/database.types.ts` from the live database, deploy the
+frontend, staff smoke tests, **then reopen lending**. Lending stayed frozen for the whole
+cut-over and the final health check is clean, so the gate to reopening is passed — but the
+frontend deploy should land first, because the running bundle predates the ledger.
