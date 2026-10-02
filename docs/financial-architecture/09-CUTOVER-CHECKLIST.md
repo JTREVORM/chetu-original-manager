@@ -2,9 +2,26 @@
 
 For `xfkuptxrrnzumzmulblg` (CHETU MICROFINANCE, PostgreSQL 17.6). Execution order is strict.
 
-Code merged to `main` as `8d41d90`. **Nothing in this file has been run.** The production database is
-unchanged: 1,407 object definitions, hash `56463181be153145bce52b2974446439`, byte-identical to a
-clean replay of migrations `000000`–`001200`.
+Code merged to `main`. **No migration in this file has been run.** The schema is undrifted: 1,407
+object definitions, hash `56463181be153145bce52b2974446439`, byte-identical to a clean replay of
+migrations `000000`–`001200`, re-checked 2 October.
+
+Two things in production have changed since the figures were first derived, neither of them a schema
+change:
+
+- **Step 2 has already been done.** `supabase_migrations.schema_migrations` exists and holds the
+  thirteen versions `20260101000000`–`20260101001200`, exactly as the registration script writes
+  them. Step 2 is now a verification, not an execution.
+- **The system is live and in use.** Two loan applications were approved on 1 October —
+  `CM-LN-2026-0018` (400,000) and `CM-LN-2026-0019` (500,000) — both **Pending**, neither disbursed.
+  Loans are therefore 18, not 16. Every figure the backfill depends on is unchanged, which was
+  verified by re-running the whole cut-over against a seed carrying all 18.
+
+> **Freeze lending before step 3.** The backfill's expected notices are derived from the 15 loans
+> disbursed so far. If one of the three Pending loans is disbursed between now and step 3, principal
+> disbursed moves off 6,600,000, the notices in step 3 will not match, and the cut-over will — quite
+> correctly — stop. Either hold disbursement until step 9 is done, or re-derive §4 immediately before
+> step 3 and use the new numbers.
 
 SQL is run through the Supabase SQL editor or the Management API
 (`POST /v1/projects/{ref}/database/query`). There is no Supabase CLI in this environment.
@@ -42,23 +59,22 @@ Confirm it is listed as complete. Do not proceed on a backup that is still runni
 
 ---
 
-### 2 — Register migrations 000000–001200 as already applied
+### 2 — Confirm migrations 000000–001200 are registered
 
-Run `supabase/REGISTER_APPLIED_MIGRATIONS.sql` **exactly as it is**, once.
+**Already done.** Someone ran `supabase/REGISTER_APPLIED_MIGRATIONS.sql` on or before 2 October, and
+the thirteen rows are present and correct. Do not run it again — it is guarded by
+`ON CONFLICT DO NOTHING`, so a second run is harmless, but there is nothing for it to do.
 
-It creates `supabase_migrations.schema_migrations` in the CLI's shape and inserts thirteen version
-rows with `statements` NULL. It records only — it cannot re-run anything — and it aborts unless
-exactly thirteen rows land. Several of those migrations are not idempotent (`…000000_core_schema`
-creates 27 tables unconditionally), so this must never be used to replay them.
-
-Expected: `NOTICE: Migration history now records 13 applied migrations.` followed by the thirteen
-`version | name` pairs, `20260101000000 core_schema` through `20260101001200 schedule_integrity`.
-
-Verify:
+Verify rather than execute:
 
 ```sql
 SELECT count(*) FROM supabase_migrations.schema_migrations;   -- 13
+SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;
 ```
+
+Expected: exactly thirteen rows, `20260101000000 core_schema` through
+`20260101001200 schedule_integrity`. If the count is anything but 13, stop and find out why before
+applying anything.
 
 ---
 
@@ -159,7 +175,7 @@ Then run `docs/financial-architecture/baseline-controls.sql` and compare every l
 
 | Control                 |  Expected |
 | ----------------------- | --------: |
-| Loans / disbursed loans |   16 / 15 |
+| Loans / disbursed loans |   18 / 15 |
 | Repayments              |        26 |
 | Member fee records      |        24 |
 | Expenses                |         0 |
