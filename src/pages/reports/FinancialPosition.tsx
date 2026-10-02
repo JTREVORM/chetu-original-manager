@@ -117,6 +117,13 @@ export const FinancialPositionReport: React.FC = () => {
 
           <Card title="Liabilities, capital and result">
             <Line label="Member security held" value={moneyPosition.security_held} />
+            {Number(moneyPosition.unidentified_funding) !== 0 && (
+              <Line
+                label="Unidentified historical funding"
+                value={moneyPosition.unidentified_funding}
+              />
+            )}
+            <Line label="Total liabilities" value={moneyPosition.total_liabilities} />
             <Line label="Capital introduced" value={moneyPosition.capital_introduced} />
             <Line label="Income to date" value={moneyPosition.total_income} />
             <Line label="Expenses to date" value={moneyPosition.total_expenses} />

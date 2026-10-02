@@ -2,16 +2,37 @@
 
 For `xfkuptxrrnzumzmulblg` (CHETU MICROFINANCE, PostgreSQL 17.6). Execution order is strict.
 
-Code merged to `main` as `8d41d90`. **Nothing in this file has been run.** The production database is
-unchanged: 1,407 object definitions, hash `56463181be153145bce52b2974446439`, byte-identical to a
-clean replay of migrations `000000`–`001200`.
+Code merged to `main`. **No migration in this file has been run.** The schema is undrifted: 1,407
+object definitions, hash `56463181be153145bce52b2974446439`, byte-identical to a clean replay of
+migrations `000000`–`001200`, re-checked 2 October.
+
+Two things in production have changed since the figures were first derived, neither of them a schema
+change:
+
+- **Step 2 has already been done.** `supabase_migrations.schema_migrations` exists and holds the
+  thirteen versions `20260101000000`–`20260101001200`, exactly as the registration script writes
+  them. Step 2 is now a verification, not an execution.
+- **The system is live and in use.** Two loan applications were approved on 1 October —
+  `CM-LN-2026-0018` (400,000) and `CM-LN-2026-0019` (500,000) — both **Pending**, neither disbursed.
+  Loans are therefore 18, not 16. Every figure the backfill depends on is unchanged, which was
+  verified by re-running the whole cut-over against a seed carrying all 18.
+
+> **Freeze lending before step 3.** The backfill's expected notices are derived from the 15 loans
+> disbursed so far. If one of the three Pending loans is disbursed between now and step 3, principal
+> disbursed moves off 6,600,000, the notices in step 3 will not match, and the cut-over will — quite
+> correctly — stop. Either hold disbursement until step 9 is done, or re-derive §4 immediately before
+> step 3 and use the new numbers.
 
 SQL is run through the Supabase SQL editor or the Management API
 (`POST /v1/projects/{ref}/database/query`). There is no Supabase CLI in this environment.
 
 **Stop at the first step whose result does not match.** Every figure below was derived from
-production read-only and reproduced by the 222-assertion harness against a seed that matches
+production read-only and reproduced by the 273-assertion harness against a seed that matches
 production to the shilling.
+
+**Chetu's figures are in, and the cut-over has been simulated end to end against them.** Cash at
+Hand UGX 383,600; Centenary Bank ••••4875 holding UGX 0; no mobile money or merchant float. §D
+carries the computed result, and §A now names the real values rather than placeholders.
 
 ---
 
@@ -38,29 +59,28 @@ Confirm it is listed as complete. Do not proceed on a backup that is still runni
 
 ---
 
-### 2 — Register migrations 000000–001200 as already applied
+### 2 — Confirm migrations 000000–001200 are registered
 
-Run `supabase/REGISTER_APPLIED_MIGRATIONS.sql` **exactly as it is**, once.
+**Already done.** Someone ran `supabase/REGISTER_APPLIED_MIGRATIONS.sql` on or before 2 October, and
+the thirteen rows are present and correct. Do not run it again — it is guarded by
+`ON CONFLICT DO NOTHING`, so a second run is harmless, but there is nothing for it to do.
 
-It creates `supabase_migrations.schema_migrations` in the CLI's shape and inserts thirteen version
-rows with `statements` NULL. It records only — it cannot re-run anything — and it aborts unless
-exactly thirteen rows land. Several of those migrations are not idempotent (`…000000_core_schema`
-creates 27 tables unconditionally), so this must never be used to replay them.
-
-Expected: `NOTICE: Migration history now records 13 applied migrations.` followed by the thirteen
-`version | name` pairs, `20260101000000 core_schema` through `20260101001200 schedule_integrity`.
-
-Verify:
+Verify rather than execute:
 
 ```sql
 SELECT count(*) FROM supabase_migrations.schema_migrations;   -- 13
+SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;
 ```
+
+Expected: exactly thirteen rows, `20260101000000 core_schema` through
+`20260101001200 schedule_integrity`. If the count is anything but 13, stop and find out why before
+applying anything.
 
 ---
 
-### 3 — Apply 001300 → 002300, in order, one at a time
+### 3 — Apply 001300 → 002400, in order, one at a time
 
-Eleven files, from `main`. Each validates itself and aborts rather than leaving a wrong ledger.
+Twelve files, from `main`. Each validates itself and aborts rather than leaving a wrong ledger.
 
 |   # | File                                            |
 | --: | ----------------------------------------------- |
@@ -75,6 +95,7 @@ Eleven files, from `main`. Each validates itself and aborts rather than leaving 
 |   9 | `20260101002100_atomic_disbursement.sql`        |
 |  10 | `20260101002200_financial_hardening.sql`        |
 |  11 | `20260101002300_savings_financial_guard.sql`    |
+|  12 | `20260101002400_legacy_reclassification.sql`    |
 
 `NOTICE: … does not exist, skipping` is normal — the migrations are written to be re-runnable.
 
@@ -107,9 +128,10 @@ INSERT INTO supabase_migrations.schema_migrations (version, name, statements) VA
   ('20260101002000','financial_integrity',NULL),
   ('20260101002100','atomic_disbursement',NULL),
   ('20260101002200','financial_hardening',NULL),
-  ('20260101002300','savings_financial_guard',NULL)
+  ('20260101002300','savings_financial_guard',NULL),
+  ('20260101002400','legacy_reclassification',NULL)
 ON CONFLICT (version) DO NOTHING;
--- 24 rows in total afterwards
+-- 25 rows in total afterwards
 ```
 
 ---
@@ -153,7 +175,7 @@ Then run `docs/financial-architecture/baseline-controls.sql` and compare every l
 
 | Control                 |  Expected |
 | ----------------------- | --------: |
-| Loans / disbursed loans |   16 / 15 |
+| Loans / disbursed loans |   18 / 15 |
 | Repayments              |        26 |
 | Member fee records      |        24 |
 | Expenses                |         0 |
@@ -188,25 +210,15 @@ row here is real.
 bank Chetu uses, so inventing one would be a fabrication in a financial record.
 
 ```sql
-UPDATE financial_accounts
-   SET account_name = :'real_bank_account_name'      -- from §B item 3
- WHERE account_code = 'BANK-MAIN';
-
-UPDATE financial_accounts
-   SET account_name = :'real_cash_location_name'     -- e.g. 'Buyende Branch Till'
+UPDATE financial_accounts SET account_name = 'Cash at Hand'
  WHERE account_code = 'CASH-HO';
+UPDATE financial_accounts SET account_name = 'Centenary Bank ••••4875'
+ WHERE account_code = 'BANK-MAIN';
 ```
 
-Then add any till, mobile-money or merchant account Chetu actually uses (§B item 4). One row per
-real place money sits — not per payment method:
-
-```sql
-INSERT INTO financial_accounts
-  (account_code, account_name, account_type, account_class, branch_id, allow_manual_posting, status)
-VALUES
-  ('MM-MTN',   'MTN Mobile Money float', 'mobile_money', 'asset_liquid', :branch_id, true, 'Active'),
-  ('TILL-BUY', 'Buyende cashier till',   'cashier_till', 'asset_liquid', :branch_id, true, 'Active');
-```
+**No mobile money or merchant accounts are to be created.** Chetu has confirmed none is in use, so
+step 6 is those two renames and nothing else. If a float is opened later it gets its own account
+then, not now.
 
 `payment_method` is not an account. "Cash" says the member handed over notes; it does not say where
 those notes went. Do not create an account per payment method.
@@ -224,24 +236,24 @@ SELECT account_code, account_name, account_type, branch_id, allow_manual_posting
 
 **This is the point of no return.** Do not start without §B items 1 and 2 in writing.
 
-One call per real account, using the counted figure and the date it was counted:
+Two calls, with Chetu's counted figures:
 
 ```sql
+-- Cash at Hand: UGX 383,600
 SELECT post_opening_balance(
   (SELECT id FROM financial_accounts WHERE account_code = 'CASH-HO'),
-  :actual_cash_at_hand,          -- §B item 1
-  DATE :cutover_date,
-  'Counted at cut-over by <name>');
+  383600, DATE '<cut-over date>', 'Counted at cut-over by <name>');
 
+-- Centenary Bank ••••4875: UGX 0 on the statement
 SELECT post_opening_balance(
   (SELECT id FROM financial_accounts WHERE account_code = 'BANK-MAIN'),
-  :actual_bank_balance,          -- §B item 2
-  DATE :cutover_date,
-  'Statement closing balance at cut-over');
+  0, DATE '<cut-over date>', 'Centenary Bank statement closing balance');
 ```
 
-Repeat for every till, wallet and merchant account added in step 6, including ones holding zero —
-a counted zero is a fact worth recording.
+The bank call returns **NULL**, and that is correct: migration 002400 records a counted zero by
+stamping `opening_balance_date` and posting no journal. A journal of zero would have no lines, which
+`v_ledger_health` rightly reports as a fault. The zero is a fact; it is recorded as a date, not as a
+movement.
 
 Each account accepts an opening balance **once**. A later correction goes through
 `post_reconciliation_adjustment`, not a second opening balance.
@@ -249,63 +261,79 @@ Each account accepts an opening balance **once**. A later correction goes throug
 Verify:
 
 ```sql
-SELECT account_code, current_balance FROM v_account_balances
+SELECT account_code, account_name, current_balance, opening_balance_date
+  FROM v_account_balances v JOIN financial_accounts a USING (id)
  WHERE account_class = 'asset_liquid' ORDER BY account_code;
 SELECT * FROM v_ledger_health;   -- still zero rows
 ```
 
+Expected: `CASH-HO` 383,600.00, `BANK-MAIN` 0.00, `LEGACY-UNCLASSIFIED` −2,452,500.00, both real
+accounts stamped with the cut-over date.
+
 ---
 
-### 8 — The Legacy / Unclassified residual
+### 8 — Clear the Legacy / Unclassified balance
 
-**Read this before acting. The step as described in the earlier readiness report is not executable,
-and this supersedes it.**
+Management has instructed that this historical balance should no longer sit unresolved. It cannot be
+cleared with anything that shipped before migration 002400: `LEGACY-UNCLASSIFIED` is a control
+account, so `post_reconciliation_adjustment`, `post_capital_injection` and `post_opening_balance` all
+refuse it — correctly, because nobody should be able to adjust a control account from a screen.
 
-After step 7, `LEGACY-UNCLASSIFIED` reads:
+`reclassify_legacy_funds` is the controlled way. Administrator only. It writes the journal and the
+audit row in one transaction, and it refuses a cash destination outright, because this moves a
+classification and not money.
 
-```
-−(2,068,900 + Cash at Hand + Bank balance)
-```
+**It goes to `HISTORICAL-FUNDING-SUSPENSE`, classified as a LIABILITY.** Not equity. Booking it to
+equity would assert that the owners put the money in, and nobody knows that. If it came from a
+director, a shareholder or anyone else on terms, the business owes it, and an equity line would have
+hidden a real obligation inside owners' funds — overstating equity and understating what is owed,
+which is the wrong error to make with someone else's money. A suspense account is the conventional
+instrument for an amount whose classification is not yet determined, and prudence says recognise the
+obligation until the source is known rather than the other way round.
 
-It gets _larger_, not smaller. That is correct and it is the point: the account measures how much
-funding reached the business from a source the historical records never captured. Counted cash you
-cannot explain is more unexplained funding, not less.
+`CAPITAL-INTRODUCED` stays at 2,090,000 throughout. Documented capital and unidentified funding never
+share a line.
 
-**Every shipped posting function refuses this account.** It is a control account
-(`allow_manual_posting = false`), so `post_reconciliation_adjustment`, `post_capital_injection` and
-`post_opening_balance` all fail on it with _"Account Legacy / Unclassified Funds is a control
-account and cannot be used as a source or destination"_. That is deliberate — nobody should be able
-to adjust a control account from the interface — and it was verified against the real functions, not
-inferred.
-
-So the residual **cannot be cleared during cut-over**, and it does not need to be. The balance sheet
-balances with it in place. Verified:
-
-```
-assets 3,822,900 = liabilities 990,000 + equity 2,090,000 + income 742,900
-```
-
-with `v_ledger_health` empty. Go-live is not blocked by it.
-
-**Do this instead:** leave the residual where it is, record its value, and reclassify it later once
-Chetu answers §B item 5. That answer decides the destination — unrecorded capital, a director's
-loan, or something else — and a short follow-up migration
-(`20260101002400_legacy_reclassification.sql`) supplies a function to move it, since no shipped one
-can. Doing it in that order means the number is explained before it is moved, rather than being
-tidied away into whichever account looked plausible on the day.
-
-Record it:
+When Chetu identifies the source, the **same function** moves it on — liability to equity if it was
+capital, or to a director's-loan liability if it was lending — with its own audit row in the same
+series. Pass `_source_code => 'HISTORICAL-FUNDING-SUSPENSE'`. That second hop is tested.
 
 ```sql
-SELECT current_balance AS legacy_residual FROM v_account_balances
- WHERE account_code = 'LEGACY-UNCLASSIFIED';
+SELECT * FROM reclassify_legacy_funds(
+  _destination_code        => 'HISTORICAL-FUNDING-SUSPENSE',
+  _reason                  => 'Management instructed that this historical unexplained balance be cleared. The source of the funding was not identified, so it is classified as unrecorded historical funding rather than merged with documented capital.',
+  _authorised_by           => 'Chetu Microfinance management',
+  _amount                  => NULL,          -- NULL = the whole balance
+  _authorisation_reference => '<minute, email or instruction reference>',
+  _transaction_date        => DATE '<cut-over date>');
 ```
 
-```
-Residual at cut-over: ______________________
+Expected, with Chetu's figures:
+
+| Returned                  |                         Value |
+| ------------------------- | ----------------------------: |
+| `original_legacy_balance` |                 −2,452,500.00 |
+| `amount_reclassified`     |                  2,452,500.00 |
+| `residual_after`          |                      **0.00** |
+| `destination_code`        | `HISTORICAL-FUNDING-SUSPENSE` |
+
+Then confirm the audit trail and that nothing was destroyed:
+
+```sql
+SELECT reclassification_ref, original_legacy_balance, amount, residual_after,
+       destination_code, reason, authorised_by, authorisation_reference,
+       performed_by, performed_at, transaction_id
+  FROM legacy_reclassifications ORDER BY performed_at;
+
+SELECT a.account_code, l.direction, l.amount, l.memo
+  FROM financial_transaction_lines l JOIN financial_accounts a ON a.id = l.account_id
+ WHERE l.transaction_id = '<transaction_id from above>' ORDER BY l.line_no;
 ```
 
----
+The journal must be `LEGACY-UNCLASSIFIED` debit 2,452,500.00 and `HISTORICAL-FUNDING-SUSPENSE`
+credit 2,452,500.00, summing to zero. No historical journal is edited or deleted by any of this — the
+backfilled entries stay exactly as posted, and this is a new entry on top of them. If it is ever
+wrong, it is reversed with `reverse_financial_transaction`, never removed.
 
 ### 9 — Mark the cut-over complete
 
@@ -371,6 +399,65 @@ use small amounts and reverse what you can.
 Then brief the operators, in person. Disbursement, collection and expense now require an account,
 and a wrong account now _fails_ where it used to silently succeed. That is the intended behaviour
 and staff should hear it from a person rather than from an error message.
+
+---
+
+## D. The computed cut-over result
+
+Measured by replaying all twelve financial migrations over a seed carrying production's exact
+control totals, then applying the renames, the counted balances and the reclassification in the
+order above. Not a hand calculation.
+
+|                                                      |                                                                                   UGX |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------: |
+| **1. Opening Cash at Hand**                          |                                                                        **383,600.00** |
+| **2. Opening Centenary Bank ••••4875**               |                                                                              **0.00** |
+| **3. Total opening available liquidity**             |                                                                        **383,600.00** |
+| **4. Legacy / Unclassified before reclassification** |                                                                     **−2,452,500.00** |
+| 5. Reclassification journal                          | Dr `LEGACY-UNCLASSIFIED` 2,452,500.00 / Cr `HISTORICAL-FUNDING-SUSPENSE` 2,452,500.00 |
+|                                                      |                                                                Legacy after: **0.00** |
+
+How the legacy figure arises: −2,068,900 after the backfill, then −383,600 as the counted cash is
+released from it and −0 for the bank, giving −2,452,500. Posting counted money against the legacy
+account makes it _more_ negative, because cash nobody can account for is more unexplained funding,
+not less.
+
+### 6. Final financial position
+
+| Account                                   | Class              |                       UGX |
+| ----------------------------------------- | ------------------ | ------------------------: |
+| Cash at Hand                              | asset · liquid     |                383,600.00 |
+| Centenary Bank ••••4875                   | asset · liquid     |                      0.00 |
+| Loans Receivable                          | asset · receivable |              5,891,800.00 |
+| Legacy / Unclassified                     | asset · liquid     |                      0.00 |
+| Member Security Deposits                  | **liability**      |                990,000.00 |
+| Unidentified Historical Funding           | **liability**      |              2,452,500.00 |
+| Capital Introduced                        | equity             |              2,090,000.00 |
+| Interest Income                           | income             |                142,900.00 |
+| Processing / CRB / Group maintenance fees | income             | 264,000 / 66,000 / 30,000 |
+| Admission / Passbook fees                 | income             |         120,000 / 120,000 |
+
+| Totals      |              UGX |
+| ----------- | ---------------: |
+| Assets      | **6,275,400.00** |
+| Liabilities |     3,442,500.00 |
+| Equity      |     2,090,000.00 |
+| Income      |       742,900.00 |
+| Expenses    |             0.00 |
+
+**Assets 6,275,400 = liabilities 3,442,500 + equity 2,090,000 + income 742,900.** Verified balanced,
+zero unbalanced journals, `v_ledger_health` empty.
+
+### What this says about the business
+
+Available cash is **383,600**. Against it the balance sheet now shows **3,442,500** of liabilities:
+990,000 of members' security money held on their behalf, and 2,452,500 whose owner is unknown and
+which therefore has to be treated as potentially repayable. Equity stands at the 2,090,000 that is
+actually documented.
+
+That is a harder picture than an equity treatment would have painted, and it is the honest one. It is
+worth putting in front of management before go-live rather than after, together with the question
+that resolves it: where did the 2,452,500 come from?
 
 ---
 
