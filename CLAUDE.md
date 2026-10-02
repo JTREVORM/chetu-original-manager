@@ -32,9 +32,9 @@ node scripts/verify-financials.mjs --project <ref> --migrate --seed
 
 It rebuilds a throwaway database, applies the base migrations, seeds production's exact control
 totals, applies the financial migrations so the backfills run over realistic data, then asserts
-222 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
+266 checks across journal balance, duplicate prevention, disbursement, repayment, allocation,
 overdue, penalty, capital, expense, transfer, reversal, immutability, reconciliation, closure,
-write-off, branch scoping, permissions, report reconciliation, the direct-write guards and the savings closure. Both scripts refuse to run
+write-off, branch scoping, permissions, report reconciliation, the direct-write guards, the savings closure, internal transfers and the legacy reclassification. Both scripts refuse to run
 against production — they post and reverse real journals.
 
 ### Typechecking
@@ -68,7 +68,7 @@ public.
 
 ### Migrations
 
-`supabase/migrations/` holds twenty-four files that are replayable in order against an empty
+`supabase/migrations/` holds twenty-five files that are replayable in order against an empty
 database. The first four build the system and **must run in sequence**, because each depends on
 the one before:
 
@@ -81,7 +81,7 @@ the one before:
 
 `…000400` through `…001200` add transfers, frozen loan fees, sequence-backed reference numbers,
 real-email login, business-day control, the branch network, staff management and schedule
-integrity. `…001300` through `…002300` are the financial ledger — see below.
+integrity. `…001300` through `…002400` are the financial ledger — see below.
 
 Production carries **no migration history**: the `supabase_migrations` schema does not exist at
 all, because everything was applied by hand through the SQL editor. Migrations 000000–001200 have
@@ -209,6 +209,21 @@ and `Reports.tsx` came to define "this month" three different ways.
 whether a shilling was in a till, a bank or a wallet. **`payment_method` is not an account** —
 "Cash" says the member handed over notes, not where those notes went. Do not promote one to the
 other. The legacy balance is resolved once, at cut-over, against a real count.
+
+Clearing it needs `reclassify_legacy_funds` (migration `…002400`), because every other posting
+function refuses a control account — rightly. It is Administrator-only, moves the balance only to an
+equity or liability account (never to cash: this moves a classification, not money), and writes the
+journal and a row in `legacy_reclassifications` together — the balance before, the amount, where it
+went, why, on whose authority, by whom and when. That table is append-only and not writable by
+`authenticated` at all. The destination is `CAPITAL-UNRECORDED`, kept apart from
+`CAPITAL-INTRODUCED` so money of unknown origin is never merged with money of documented origin.
+
+`post_internal_transfer` moves money between two liquid accounts: one balanced journal, no income,
+no expense, and since `…002400` it refuses to spend more than the source holds. A blanket
+non-negative rule would block disbursement on a day the bank is empty, so overdrafts arriving by any
+other path are reported by `v_ledger_health` (`liquid_account_overdrawn`) instead of being blocked.
+`post_opening_balance` accepts zero: it stamps the date and posts no journal, because a journal of
+zero would have no lines.
 
 `bank_transactions` is a closed legacy register: read-only, superseded, backfilled.
 
