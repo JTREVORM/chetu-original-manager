@@ -722,3 +722,70 @@ it exists to refuse would, if the guard were faulty, repoint a system control ac
 is byte-identical to the file and the file's guard behaviour is covered by the harness.
 
 **`001400` is cleared to run.**
+
+---
+
+## Stages 4–8 complete — verified 2026-10-02 09:20–09:35 UTC
+
+`001300`–`002400` all applied by hand in the SQL editor. Full verification pass, read-only
+except where noted.
+
+**Objects.** 5 financial tables · 16 `v_*` views · all 8 `private` helpers
+(`is_api_write`, `refuse_unjournalled`, `savings_ledger_ready`, `can_post_financial`,
+`can_see_account`, `account_by_code`, `assert_postable_account`, `write_journal`) · every guard
+trigger from `002200`–`002400` present · 35 accounts, the 35th being
+`HISTORICAL-FUNDING-SUSPENSE` (`suspense` / `liability` / `allow_manual_posting=false`).
+
+**Journals.** 67 journals, all flagged legacy, 244 lines, 2–6 lines each, none without lines.
+`signed_amount` is a generated column (`direction='debit' → amount, else −amount`); summed over
+it, **0 unbalanced journals and a total of 0.00**. Debits 9,781,100.00 = credits 9,781,100.00.
+By type: 2 capital / 2,090,000 · 15 disbursements / 6,600,000 · 26 repayments / 851,100 ·
+24 fees / 240,000 · 0 expenses.
+
+**Control totals, every one exact.**
+
+| Account                       |    Balance | Check                            |
+| ----------------------------- | ---------: | -------------------------------- |
+| `LOANS-RECEIVABLE`            | 5,891,800.00 | 6,600,000 − 708,200            |
+| `LEGACY-UNCLASSIFIED`         | −2,068,900.00 | 3,181,100 in − 5,250,000 out  |
+| `SECURITY-HELD` (liability)   |   990,000.00 | 15% of principal                |
+| `CAPITAL-INTRODUCED` (equity) | 2,090,000.00 | the 2 bank transactions         |
+| `INC-INTEREST`                |   142,900.00 | interest collected              |
+| `INC-FEE-PROCESSING`          |   264,000.00 | 4% of 6,600,000                 |
+| `INC-FEE-CRB`                 |    66,000.00 | 1% of 6,600,000                 |
+| `INC-FEE-GROUP-MAINT`         |    30,000.00 | 2,000 × 15 loans                |
+| `INC-FEE-ADMISSION`           |   120,000.00 | 5,000 × 24 members              |
+| `INC-FEE-PASSBOOK`            |   120,000.00 | 5,000 × 24 members              |
+
+Total income 742,900.00. `CASH-HO`, `BANK-MAIN` and `HISTORICAL-FUNDING-SUSPENSE` all 0.00.
+
+**`v_ledger_health`: 0 rows**, and it is empty because it is clean, not because it is broken —
+the view carries all **15** named checks, `legacy_unresolved_after_cutover`,
+`liquid_account_overdrawn`, `savings_transaction_without_journal` and
+`savings_balance_without_ledger` among them.
+
+**Security.** RLS enabled on all 12 relevant tables, policies present on all 5 financial tables.
+The six single-step functions — `post_disbursement`, `post_repayment`, `post_expense`,
+`post_member_fee`, `post_security_refund`, `post_writeoff` — are **not executable by
+`authenticated`**; every atomic function is, and none by `anon`. All are `SECURITY DEFINER`.
+`private.savings_ledger_ready()` returns false. `settings.financial_cutover_completed` false.
+
+**`v_money_position`** carries `security_held` = 990,000.00 (members' deposits alone),
+`unidentified_funding` = 0.00 and `total_liabilities` = 990,000.00 — the alias trap is fixed.
+
+**Business data unchanged**: 18 loans / 6,600,000.00 · 26 repayments / 851,100.00 · 24 fees /
+240,000 · 2 bank transactions / 2,090,000.00 · 0 expenses · 0 savings · security 990,000 ·
+collected split 708,200.00 / 142,900.00. Allocation: 0 unallocated, 0 receipts whose portions
+fail to sum to `amount_paid`.
+
+**Migration history** now **25 rows**, latest `20260101002400`.
+
+**Stage 8 done.** `CASH-HO` → "Cash at Hand"; `BANK-MAIN` → "Centenary Bank ••••4875", with
+`institution` and `account_reference` set. No mobile-money or merchant account created.
+
+### Halted before stage 9, awaiting three values
+
+Stages 9 and 11 write audit fields the plan leaves as placeholders — the cut-over date, who
+counted the cash, and the authorisation reference for the reclassification. These are not
+Claude's to invent: an authorisation reference is the evidence that a UGX 2,452,500
+reclassification was sanctioned, and a fabricated one would make the audit trail a lie.
