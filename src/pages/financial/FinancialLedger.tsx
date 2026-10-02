@@ -1055,10 +1055,7 @@ const ReportsTab: React.FC<{
           <Row label="Total assets (ledger)" value={position.total_assets_ledger} strong />
           <Row label="Member security held" value={-position.security_held} />
           {Number(position.unidentified_funding) !== 0 && (
-            <Row
-              label="Unidentified historical funding"
-              value={-position.unidentified_funding}
-            />
+            <Row label="Unidentified historical funding" value={-position.unidentified_funding} />
           )}
           <Row label="Capital introduced" value={position.capital_introduced} />
           <Row label="Retained result" value={position.net_result} />
